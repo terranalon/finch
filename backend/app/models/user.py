@@ -11,8 +11,14 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.email_otp_code import EmailOtpCode
+    from app.models.email_verification_token import EmailVerificationToken
+    from app.models.mfa_temp_session import MfaTempSession
+    from app.models.password_reset_token import PasswordResetToken
     from app.models.portfolio import Portfolio
     from app.models.session import Session
+    from app.models.user_mfa import UserMfa
+    from app.models.user_recovery_code import UserRecoveryCode
 
 
 class User(Base):
@@ -28,6 +34,8 @@ class User(Base):
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_service_account: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     show_combined_view: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -39,6 +47,24 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     sessions: Mapped[list["Session"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    email_verification_tokens: Mapped[list["EmailVerificationToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    mfa: Mapped["UserMfa | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    email_otp_codes: Mapped[list["EmailOtpCode"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    recovery_codes: Mapped[list["UserRecoveryCode"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    mfa_temp_sessions: Mapped[list["MfaTempSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
