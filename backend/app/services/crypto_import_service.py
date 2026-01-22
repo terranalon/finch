@@ -263,6 +263,7 @@ class CryptoImportService:
                         date=cash_txn.date,
                         type=cash_txn.transaction_type,
                         amount=cash_txn.amount,
+                        fees=cash_txn.fees,
                         notes=cash_txn.notes,
                     )
                 )

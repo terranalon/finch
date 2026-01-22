@@ -605,7 +605,8 @@ class KrakenClient:
                         transaction_type="Deposit",
                         amount=net_amount,
                         currency=asset,
-                        notes=f"Kraken deposit - {entry.get('refid', '')} (fee: {fee})",
+                        fees=fee,
+                        notes=f"Kraken deposit - {entry.get('refid', '')}",
                         raw_data=entry,
                     ),
                 )
@@ -639,7 +640,8 @@ class KrakenClient:
                         transaction_type="Withdrawal",
                         amount=net_amount,  # Total withdrawn including fee
                         currency=asset,
-                        notes=f"Kraken withdrawal - fee: {fee}",
+                        fees=fee,
+                        notes=f"Kraken withdrawal - {entry.get('refid', '')}",
                         raw_data=entry,
                     ),
                 )
