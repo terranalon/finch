@@ -1,0 +1,11 @@
+# Astro Runtime includes the following pre-installed providers packages: https://www.astronomer.io/docs/astro/runtime-image-architecture#provider-packages
+
+# Additional dependencies for DAGs
+# Note: Astro runtime includes sqlalchemy 1.4 and psycopg2
+yfinance>=0.2.32
+python-dotenv>=1.0.0
+pydantic-settings>=2.0.0
+requests>=2.31.0
+
+# Development tools
+ruff>=0.1.11

@@ -1,0 +1,151 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Backgrounds */
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-tertiary: #F1F5F9;
+
+    /* Text */
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-tertiary: #94A3B8;
+
+    /* Borders */
+    --border-primary: #E2E8F0;
+    --border-secondary: #CBD5E1;
+
+    /* Accent */
+    --accent-primary: #2563EB;
+    --accent-hover: #1D4ED8;
+    --accent-light: #DBEAFE;
+
+    /* Semantic */
+    --positive: #059669;
+    --positive-bg: #D1FAE5;
+    --negative: #DC2626;
+    --negative-bg: #FEE2E2;
+  }
+
+  .dark {
+    /* Backgrounds - Deep/darker theme */
+    --bg-primary: #030712;
+    --bg-secondary: #111827;
+    --bg-tertiary: #1F2937;
+
+    /* Text */
+    --text-primary: #F8FAFC;
+    --text-secondary: #CBD5E1;
+    --text-tertiary: #64748B;
+
+    /* Borders */
+    --border-primary: #334155;
+    --border-secondary: #475569;
+
+    /* Accent */
+    --accent-primary: #3B82F6;
+    --accent-hover: #60A5FA;
+    --accent-light: #1E3A5F;
+
+    /* Semantic */
+    --positive: #10B981;
+    --positive-bg: #064E3B;
+    --negative: #EF4444;
+    --negative-bg: #7F1D1D;
+  }
+
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+@layer utilities {
+  /* Numeric display */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Text wrapping */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Financial data styling */
+  .font-numeric {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center font-medium rounded-md transition-colors duration-150 cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover px-4 py-2;
+  }
+
+  .btn-secondary {
+    @apply btn bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-slate-200 dark:hover:bg-slate-600 px-4 py-2;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] px-4 py-2;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-[var(--bg-secondary)] rounded-lg p-6 border border-[var(--border-primary)] shadow-sm;
+  }
+
+  /* Remove shadow in dark mode where contrast is sufficient */
+  .dark .card {
+    @apply shadow-none;
+  }
+
+  /* Badge variants */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-buy {
+    @apply badge bg-positive-bg text-positive dark:bg-positive-bg-dark dark:text-positive-dark;
+  }
+
+  .badge-sell {
+    @apply badge bg-negative-bg text-negative dark:bg-negative-bg-dark dark:text-negative-dark;
+  }
+
+  .badge-neutral {
+    @apply badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300;
+  }
+
+  /* Table styles */
+  .table-header {
+    @apply text-left font-medium text-sm text-[var(--text-secondary)] px-4 py-3 border-b border-[var(--border-primary)];
+  }
+
+  .table-cell {
+    @apply px-4 py-3 border-b border-[var(--border-primary)];
+  }
+
+  .table-row-hover {
+    @apply hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors;
+  }
+}

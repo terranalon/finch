@@ -1,0 +1,6 @@
+project:
+    name: airflow
+
+# Use port 5433 for postgres to avoid conflict with backend postgres
+postgres:
+    port: 5433

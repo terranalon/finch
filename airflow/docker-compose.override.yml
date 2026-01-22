@@ -1,0 +1,13 @@
+# Override to mount backend code for DAG imports
+services:
+  scheduler:
+    volumes:
+      - ../backend:/opt/airflow/backend:ro
+
+  triggerer:
+    volumes:
+      - ../backend:/opt/airflow/backend:ro
+
+  dag-processor:
+    volumes:
+      - ../backend:/opt/airflow/backend:ro
