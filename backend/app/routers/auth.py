@@ -1,6 +1,7 @@
 """Authentication router."""
 
 import logging
+import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -9,30 +10,34 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.portfolio import Portfolio
 from app.models.session import Session as UserSession
 from app.models.user import User
 from app.rate_limiter import limiter
 from app.schemas.auth import (
     MessageResponse,
+    ResendVerificationRequest,
     TokenRefresh,
     TokenResponse,
     UserInfo,
     UserLogin,
     UserPreferencesUpdate,
     UserRegister,
+    VerifyEmailRequest,
 )
 from app.services.auth_service import AuthService
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def register(request: Request, data: UserRegister, db: Session = Depends(get_db)) -> dict:
-    """Register a new user and return tokens."""
+    """Register a new user and send verification email."""
     # Check if email already exists
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
@@ -41,10 +46,11 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
             detail="Email already registered",
         )
 
-    # Create user
+    # Create user with email_verified=False
     user = User(
         email=data.email,
         password_hash=AuthService.hash_password(data.password),
+        email_verified=False,
     )
     db.add(user)
     db.commit()
@@ -58,28 +64,22 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
         is_default=True,
     )
     db.add(default_portfolio)
-    db.commit()
 
-    # Create tokens
-    access_token = AuthService.create_access_token(user.id)
-    refresh_token = AuthService.create_refresh_token(user.id)
-
-    # Store refresh token hash in session
-    session = UserSession(
+    # Generate verification token
+    token = secrets.token_urlsafe(32)
+    verification = EmailVerificationToken(
         user_id=user.id,
-        refresh_token_hash=AuthService.hash_token(refresh_token),
-        expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
+        token_hash=AuthService.hash_token(token),
+        expires_at=datetime.now(UTC) + timedelta(hours=24),
     )
-    db.add(session)
+    db.add(verification)
     db.commit()
 
-    logger.info(f"User registered: {user.email}")
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": UserInfo.model_validate(user),
-    }
+    # Send verification email
+    EmailService.send_verification_email(user.email, token)
+
+    logger.info(f"User registered (pending verification): {user.email}")
+    return {"message": "Registration successful. Please check your email to verify your account."}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -106,6 +106,13 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
+        )
+
+    # Check if email is verified
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="email_not_verified",
         )
 
     # Create tokens
@@ -222,6 +229,66 @@ def logout(data: TokenRefresh, db: Session = Depends(get_db)) -> dict:
         db.commit()
 
     return {"message": "Successfully logged out"}
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)) -> dict:
+    """Verify email with token from email link."""
+    token_hash = AuthService.hash_token(data.token)
+    verification = (
+        db.query(EmailVerificationToken)
+        .filter(
+            EmailVerificationToken.token_hash == token_hash,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.expires_at > datetime.now(UTC),
+        )
+        .first()
+    )
+    if not verification:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    # Mark token as used and verify user
+    verification.used_at = datetime.now(UTC)
+    verification.user.email_verified = True
+    db.commit()
+
+    # Send welcome email
+    EmailService.send_welcome_email(verification.user.email)
+
+    logger.info(f"Email verified for user: {verification.user.email}")
+    return {"message": "Email verified successfully. You can now log in."}
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+@limiter.limit("1/minute")
+def resend_verification(
+    request: Request, data: ResendVerificationRequest, db: Session = Depends(get_db)
+) -> dict:
+    """Resend verification email."""
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if user and not user.email_verified:
+        # Invalidate existing tokens
+        db.query(EmailVerificationToken).filter(EmailVerificationToken.user_id == user.id).delete()
+
+        # Create new token
+        token = secrets.token_urlsafe(32)
+        verification = EmailVerificationToken(
+            user_id=user.id,
+            token_hash=AuthService.hash_token(token),
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
+        )
+        db.add(verification)
+        db.commit()
+
+        EmailService.send_verification_email(user.email, token)
+        logger.info(f"Verification email resent to: {user.email}")
+
+    # Always return success (don't reveal if email exists)
+    return {"message": "If that email exists and is unverified, we sent a new verification link."}
 
 
 @router.get("/me", response_model=UserInfo)

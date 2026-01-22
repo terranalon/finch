@@ -82,3 +82,15 @@ class UserPreferencesUpdate(BaseModel):
 
     show_combined_view: bool | None = None
     name: str | None = Field(None, max_length=100)
+
+
+class VerifyEmailRequest(BaseModel):
+    """Schema for email verification."""
+
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    """Schema for resending verification email."""
+
+    email: EmailStr
