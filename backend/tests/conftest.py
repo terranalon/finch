@@ -8,11 +8,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import get_db
 from app.main import app
+from app.models.email_otp_code import EmailOtpCode
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.mfa_temp_session import MfaTempSession
 from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
 from app.models.session import Session
 from app.models.user import User
+from app.models.user_mfa import UserMfa
+from app.models.user_recovery_code import UserRecoveryCode
 from app.rate_limiter import limiter
 
 
@@ -36,6 +40,10 @@ def auth_client():
     Portfolio.__table__.create(engine, checkfirst=True)
     EmailVerificationToken.__table__.create(engine, checkfirst=True)
     PasswordResetToken.__table__.create(engine, checkfirst=True)
+    UserMfa.__table__.create(engine, checkfirst=True)
+    EmailOtpCode.__table__.create(engine, checkfirst=True)
+    UserRecoveryCode.__table__.create(engine, checkfirst=True)
+    MfaTempSession.__table__.create(engine, checkfirst=True)
 
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

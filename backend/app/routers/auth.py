@@ -30,6 +30,7 @@ from app.schemas.auth import (
     UserRegister,
     VerifyEmailRequest,
 )
+from app.models.user_mfa import UserMfa
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 
@@ -109,7 +110,7 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     return {"message": "Registration successful. Please check your email to verify your account."}
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 @limiter.limit("5/minute")
 def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> dict:
     """Login and get access/refresh tokens."""
@@ -142,7 +143,24 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
             detail="email_not_verified",
         )
 
-    # Create tokens
+    # Check if MFA is enabled
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == user.id).first()
+    if mfa and (mfa.totp_enabled or mfa.email_otp_enabled):
+        # MFA is enabled - return temp token instead of full tokens
+        from app.routers.mfa import create_mfa_temp_session, get_mfa_methods
+
+        temp_token = create_mfa_temp_session(db, user.id)
+        methods = get_mfa_methods(mfa)
+        db.commit()
+
+        logger.info(f"MFA required for user: {user.email}")
+        return {
+            "mfa_required": True,
+            "temp_token": temp_token,
+            "methods": methods,
+        }
+
+    # No MFA - create full tokens
     access_token = AuthService.create_access_token(user.id)
     refresh_token = AuthService.create_refresh_token(user.id)
 
