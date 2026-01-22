@@ -46,6 +46,7 @@ class ParsedCashTransaction:
     transaction_type: str  # 'Deposit', 'Withdrawal', 'Forex Conversion', etc.
     amount: Decimal
     currency: str
+    fees: Decimal = field(default_factory=lambda: Decimal("0"))
     notes: str | None = None
     raw_data: dict | None = None
 
