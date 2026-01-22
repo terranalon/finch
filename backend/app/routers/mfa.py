@@ -16,9 +16,8 @@ from app.models.session import Session as UserSession
 from app.models.user import User
 from app.models.user_mfa import UserMfa
 from app.models.user_recovery_code import UserRecoveryCode
-from app.schemas.auth import TokenResponse, UserInfo
+from app.schemas.auth import MessageResponse, TokenResponse, UserInfo
 from app.schemas.mfa import (
-    MessageResponse,
     MfaDisableRequest,
     MfaEnabledResponse,
     MfaVerifyRequest,
@@ -381,10 +380,8 @@ def get_mfa_methods(mfa: UserMfa | None) -> list[str]:
     """Get list of enabled MFA methods for a user."""
     if not mfa:
         return []
-
-    methods = []
-    if mfa.totp_enabled:
-        methods.append("totp")
-    if mfa.email_otp_enabled:
-        methods.append("email")
-    return methods
+    return [
+        method
+        for method, enabled in [("totp", mfa.totp_enabled), ("email", mfa.email_otp_enabled)]
+        if enabled
+    ]

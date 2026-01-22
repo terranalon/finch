@@ -6,27 +6,7 @@ from unittest.mock import patch
 
 from app.models.mfa_temp_session import MfaTempSession
 from app.models.user import User
-
-
-def register_and_verify_user(test_client, db_session_maker, email: str, password: str) -> dict:
-    """Helper to register and verify a user, then login to get tokens."""
-    with patch("app.routers.auth.EmailService.send_verification_email"):
-        test_client.post(
-            "/api/auth/register",
-            json={"email": email, "password": password},
-        )
-
-    db = db_session_maker()
-    user = db.query(User).filter(User.email == email).first()
-    user.email_verified = True
-    db.commit()
-    db.close()
-
-    response = test_client.post(
-        "/api/auth/login",
-        json={"email": email, "password": password},
-    )
-    return response.json()
+from tests.conftest import register_and_verify_user
 
 
 class TestTotpSetup:

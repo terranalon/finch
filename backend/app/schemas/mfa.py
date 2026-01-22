@@ -64,9 +64,3 @@ class SendEmailOtpRequest(BaseModel):
     """Request to send email OTP code."""
 
     temp_token: str
-
-
-class MessageResponse(BaseModel):
-    """Simple message response."""
-
-    message: str

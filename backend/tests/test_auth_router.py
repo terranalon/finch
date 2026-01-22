@@ -3,31 +3,7 @@
 from unittest.mock import patch
 
 from app.models.user import User
-
-
-def register_and_verify_user(
-    test_auth_client, db_session_maker, email: str, password: str
-) -> dict:
-    """Helper to register and verify a user, then login to get tokens."""
-    with patch("app.routers.auth.EmailService.send_verification_email"):
-        test_auth_client.post(
-            "/api/auth/register",
-            json={"email": email, "password": password},
-        )
-
-    # Manually verify the user
-    db = db_session_maker()
-    user = db.query(User).filter(User.email == email).first()
-    user.email_verified = True
-    db.commit()
-    db.close()
-
-    # Login to get tokens
-    response = test_auth_client.post(
-        "/api/auth/login",
-        json={"email": email, "password": password},
-    )
-    return response.json()
+from tests.conftest import register_and_verify_user
 
 
 @patch("app.routers.auth.EmailService.send_verification_email")

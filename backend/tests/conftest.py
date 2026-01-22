@@ -1,5 +1,7 @@
 """Shared test fixtures for authentication tests."""
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -18,6 +20,29 @@ from app.models.user import User
 from app.models.user_mfa import UserMfa
 from app.models.user_recovery_code import UserRecoveryCode
 from app.rate_limiter import limiter
+
+
+def register_and_verify_user(
+    test_client: TestClient, db_session_maker, email: str, password: str
+) -> dict:
+    """Helper to register and verify a user, then login to get tokens."""
+    with patch("app.routers.auth.EmailService.send_verification_email"):
+        test_client.post(
+            "/api/auth/register",
+            json={"email": email, "password": password},
+        )
+
+    db = db_session_maker()
+    user = db.query(User).filter(User.email == email).first()
+    user.email_verified = True
+    db.commit()
+    db.close()
+
+    response = test_client.post(
+        "/api/auth/login",
+        json={"email": email, "password": password},
+    )
+    return response.json()
 
 
 @pytest.fixture

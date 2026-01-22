@@ -15,6 +15,7 @@ from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
 from app.models.session import Session as UserSession
 from app.models.user import User
+from app.models.user_mfa import UserMfa
 from app.rate_limiter import limiter
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -30,7 +31,6 @@ from app.schemas.auth import (
     UserRegister,
     VerifyEmailRequest,
 )
-from app.models.user_mfa import UserMfa
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 
