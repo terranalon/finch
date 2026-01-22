@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import get_db
 from app.main import app
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
 from app.models.session import Session
 from app.models.user import User
@@ -34,11 +35,12 @@ def auth_client():
     Session.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
     EmailVerificationToken.__table__.create(engine, checkfirst=True)
+    PasswordResetToken.__table__.create(engine, checkfirst=True)
 
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     def override_get_db():
-        db = TestingSessionLocal()
+        db = testing_session_local()
         try:
             yield db
         finally:
@@ -47,6 +49,6 @@ def auth_client():
     app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as test_client:
-        yield test_client, TestingSessionLocal
+        yield test_client, testing_session_local
 
     app.dependency_overrides.clear()

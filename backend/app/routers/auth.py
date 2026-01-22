@@ -11,13 +11,17 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
 from app.models.session import Session as UserSession
 from app.models.user import User
 from app.rate_limiter import limiter
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
     MessageResponse,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenRefresh,
     TokenResponse,
     UserInfo,
@@ -34,9 +38,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-def _find_valid_session(
-    db: Session, user_id: str, refresh_token: str
-) -> UserSession | None:
+def _find_valid_session(db: Session, user_id: str, refresh_token: str) -> UserSession | None:
     """Find a valid (non-revoked, non-expired) session matching the refresh token."""
     sessions = (
         db.query(UserSession)
@@ -53,15 +55,15 @@ def _find_valid_session(
     return None
 
 
-def _create_verification_token(db: Session, user_id: str) -> str:
-    """Create a new email verification token for a user."""
+def _create_token(db: Session, user_id: str, model_class: type, expires_hours: int) -> str:
+    """Create a new token for a user (verification or password reset)."""
     token = secrets.token_urlsafe(32)
-    verification = EmailVerificationToken(
+    token_record = model_class(
         user_id=user_id,
         token_hash=AuthService.hash_token(token),
-        expires_at=datetime.now(UTC) + timedelta(hours=24),
+        expires_at=datetime.now(UTC) + timedelta(hours=expires_hours),
     )
-    db.add(verification)
+    db.add(token_record)
     return token
 
 
@@ -96,8 +98,8 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     )
     db.add(default_portfolio)
 
-    # Generate verification token
-    token = _create_verification_token(db, user.id)
+    # Generate verification token (24 hours)
+    token = _create_token(db, user.id, EmailVerificationToken, expires_hours=24)
     db.commit()
 
     # Send verification email
@@ -271,7 +273,7 @@ def resend_verification(
     if user and not user.email_verified:
         # Invalidate existing tokens and create new one
         db.query(EmailVerificationToken).filter(EmailVerificationToken.user_id == user.id).delete()
-        token = _create_verification_token(db, user.id)
+        token = _create_token(db, user.id, EmailVerificationToken, expires_hours=24)
         db.commit()
 
         EmailService.send_verification_email(user.email, token)
@@ -279,6 +281,104 @@ def resend_verification(
 
     # Always return success (don't reveal if email exists)
     return {"message": "If that email exists and is unverified, we sent a new verification link."}
+
+
+def _invalidate_user_sessions(db: Session, user_id: str) -> None:
+    """Revoke all active sessions for a user."""
+    db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.is_revoked == False,  # noqa: E712
+    ).update({UserSession.is_revoked: True})
+
+
+@router.put("/change-password", response_model=MessageResponse)
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Change password while logged in."""
+    # Verify current password
+    if not AuthService.verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    # Update password
+    current_user.password_hash = AuthService.hash_password(data.new_password)
+
+    # Invalidate all other sessions (keep current one active)
+    # Note: We can't easily identify the current session from the access token,
+    # so we invalidate all sessions - user will need to re-login
+    _invalidate_user_sessions(db, current_user.id)
+
+    db.commit()
+
+    # Send notification email
+    EmailService.send_password_changed_notification(current_user.email)
+
+    logger.info(f"Password changed for user: {current_user.email}")
+    return {"message": "Password changed successfully. Please log in again."}
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("3/hour")
+def forgot_password(
+    request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)
+) -> dict:
+    """Request password reset email."""
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if user and user.email_verified:
+        # Invalidate existing reset tokens
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
+
+        # Create new reset token (1 hour)
+        token = _create_token(db, user.id, PasswordResetToken, expires_hours=1)
+        db.commit()
+
+        EmailService.send_password_reset_email(user.email, token)
+        logger.info(f"Password reset email sent to: {user.email}")
+
+    # Always return success (don't reveal if email exists)
+    return {"message": "If that email exists, we sent a password reset link."}
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
+    """Reset password with token from email."""
+    token_hash = AuthService.hash_token(data.token)
+    reset_token = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > datetime.now(UTC),
+        )
+        .first()
+    )
+
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    # Update password
+    reset_token.user.password_hash = AuthService.hash_password(data.new_password)
+    reset_token.used_at = datetime.now(UTC)
+
+    # Invalidate all sessions
+    _invalidate_user_sessions(db, reset_token.user_id)
+
+    db.commit()
+
+    # Send notification email
+    EmailService.send_password_changed_notification(reset_token.user.email)
+
+    logger.info(f"Password reset for user: {reset_token.user.email}")
+    return {"message": "Password reset successfully. You can now log in with your new password."}
 
 
 @router.get("/me", response_model=UserInfo)

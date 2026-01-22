@@ -5,6 +5,21 @@ import re
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
+def _validate_password_strength(v: str) -> str:
+    """Shared password validation logic."""
+    errors = []
+    if not re.search(r"[a-z]", v):
+        errors.append("lowercase letter")
+    if not re.search(r"[A-Z]", v):
+        errors.append("uppercase letter")
+    if not re.search(r"\d", v):
+        errors.append("number")
+
+    if errors:
+        raise ValueError(f"Password must contain at least one: {', '.join(errors)}")
+    return v
+
+
 class UserRegister(BaseModel):
     """Schema for user registration."""
 
@@ -14,18 +29,7 @@ class UserRegister(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
-        """Validate password has sufficient complexity."""
-        errors = []
-        if not re.search(r"[a-z]", v):
-            errors.append("lowercase letter")
-        if not re.search(r"[A-Z]", v):
-            errors.append("uppercase letter")
-        if not re.search(r"\d", v):
-            errors.append("number")
-
-        if errors:
-            raise ValueError(f"Password must contain at least one: {', '.join(errors)}")
-        return v
+        return _validate_password_strength(v)
 
 
 class UserLogin(BaseModel):
@@ -84,3 +88,33 @@ class ResendVerificationRequest(BaseModel):
     """Schema for resending verification email."""
 
     email: EmailStr
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema for changing password while logged in."""
+
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=100)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema for requesting password reset."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Schema for resetting password with token."""
+
+    token: str
+    new_password: str = Field(min_length=8, max_length=100)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
