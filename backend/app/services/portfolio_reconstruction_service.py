@@ -216,9 +216,13 @@ class PortfolioReconstructionService:
 
             elif txn.type == "Withdrawal":
                 # Withdrawals subtract from holdings (prefer quantity for crypto precision)
+                # Also subtract the fee if present (for crypto withdrawals, fee is in crypto units)
                 withdrawal_qty = _resolve_quantity(txn)
                 if withdrawal_qty is not None:
                     h["quantity"] -= abs(withdrawal_qty)
+                    # Also subtract fee if present (crypto withdrawal fees)
+                    if txn.fees and txn.fees > 0:
+                        h["quantity"] -= txn.fees
                     # TODO: For crypto withdrawals, reduce cost_basis proportionally
 
             elif txn.type == "Trade Settlement":

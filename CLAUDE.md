@@ -1,7 +1,5 @@
 # Portfolio Tracker Coding Standards
 
-* Always launch Opus subagents.
-
 ## Type Hints (Python 3.11+)
 Use built-in generics (`list`, `dict`, `set`, `tuple`) instead of `typing.List`, `typing.Dict`, etc. Python 3.9+ supports this natively, making typing imports unnecessary and code cleaner.
 

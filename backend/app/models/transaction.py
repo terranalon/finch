@@ -31,7 +31,7 @@ class Transaction(Base):
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(20, 8))  # None for dividends
     price_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))  # None for dividends
     amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2))  # For cash dividends
-    fees: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=Decimal("0"))
+    fees: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal("0"))
     currency_rate_to_usd_at_date: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

@@ -68,6 +68,7 @@ class CashActivityResponse(BaseModel):
     type: str  # "Deposit", "Withdrawal", "Fee", "Transfer"
     symbol: str | None = None  # For context (e.g., which asset the fee relates to)
     amount: Decimal
+    fees: Decimal | None = None  # Fee amount (e.g., crypto withdrawal fee)
     currency: str
     account_name: str
     notes: str | None = None

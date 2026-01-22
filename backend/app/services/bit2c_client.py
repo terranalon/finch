@@ -363,14 +363,14 @@ class Bit2CClient:
         return []
 
     def _parse_funds_record(
-        self, record: dict
+        self, record: dict, fee_quantity: Decimal = Decimal("0")
     ) -> tuple[ParsedTransaction | None, ParsedCashTransaction | None]:
         """Parse a funds history record into appropriate transaction type.
 
         FundsHistory action types:
         - 2: Deposit (ILS or crypto)
         - 3: Withdrawal (ILS or crypto)
-        - 4: FeeWithdrawal (withdrawal fee, usually crypto)
+        - 4: FeeWithdrawal (withdrawal fee, usually crypto) - handled separately, combined with withdrawal
         - 23: RefundWithdrawal (refunded withdrawal)
         - 24: RefundFeeWithdrawal (refunded withdrawal fee)
         - 26: DepositFee
@@ -380,6 +380,7 @@ class Bit2CClient:
 
         Args:
             record: Raw funds history record from API
+            fee_quantity: Fee amount to include with withdrawals (from matched fee record)
 
         Returns:
             Tuple of (ParsedTransaction for crypto, ParsedCashTransaction for ILS)
@@ -404,12 +405,11 @@ class Bit2CClient:
         symbol = "ILS" if is_ils else first_coin
 
         # Map action to transaction type
+        # Note: action=4 (Withdrawal Fee) is handled separately and combined with withdrawals
         if action == 2:
             transaction_type = "Deposit"
         elif action == 3:
             transaction_type = "Withdrawal"
-        elif action == 4:
-            transaction_type = "Withdrawal Fee"
         elif action == 23:
             transaction_type = "Refund Withdrawal"
         elif action == 24:
@@ -446,46 +446,34 @@ class Bit2CClient:
             # Crypto deposit - positive quantity, fetch historical price for cost basis
             quantity = abs(first_amount)
             price = self._get_deposit_price(symbol, entry_date)
+            # Calculate fiat value if we have a price
+            fiat_amount = quantity * price if price else None
             crypto_txn = ParsedTransaction(
                 trade_date=entry_date,
                 symbol=symbol,
                 transaction_type="Deposit",
                 quantity=quantity,
                 price_per_unit=price,  # Historical price for cost basis
-                amount=quantity,  # Required for reconstruction service
+                amount=fiat_amount,  # Fiat value of deposit (for UI display)
                 fees=Decimal("0"),
-                currency="USD",
+                currency="USD" if price else symbol,
                 notes=f"Bit2C crypto deposit - {reference}",
                 raw_data=record,
             )
         elif transaction_type == "Withdrawal":
-            # Crypto withdrawal - negative quantity (amount is already negative in API)
+            # Crypto withdrawal - quantity is the net amount withdrawn (negative for outflow)
+            # fee_quantity is the additional fee deducted from account (stored separately)
             quantity = first_amount if first_amount < 0 else -abs(first_amount)
             crypto_txn = ParsedTransaction(
                 trade_date=entry_date,
                 symbol=symbol,
                 transaction_type="Withdrawal",
-                quantity=quantity,
+                quantity=quantity,  # Net withdrawal amount (not including fee)
                 price_per_unit=None,
-                amount=quantity,  # Required for reconstruction service
-                fees=Decimal("0"),
-                currency="USD",
-                notes=f"Bit2C crypto withdrawal - {reference}",
-                raw_data=record,
-            )
-        elif transaction_type == "Withdrawal Fee":
-            # Withdrawal fee - negative quantity
-            quantity = first_amount if first_amount < 0 else -abs(first_amount)
-            crypto_txn = ParsedTransaction(
-                trade_date=entry_date,
-                symbol=symbol,
-                transaction_type="Withdrawal Fee",
-                quantity=quantity,
-                price_per_unit=None,
-                amount=quantity,
-                fees=Decimal("0"),
-                currency="USD",
-                notes=f"Bit2C withdrawal fee - {reference}",
+                amount=None,  # No fiat value for crypto withdrawals
+                fees=fee_quantity,  # Fee in crypto units (note: may lose precision due to Numeric(15,2))
+                currency=symbol,  # Currency is the crypto itself
+                notes=f"Bit2C crypto withdrawal - {reference}" + (f" (fee: {fee_quantity} {symbol})" if fee_quantity else ""),
                 raw_data=record,
             )
         elif transaction_type in ("Refund Withdrawal", "Refund Fee"):
@@ -497,9 +485,9 @@ class Bit2CClient:
                 transaction_type=transaction_type,
                 quantity=quantity,
                 price_per_unit=None,
-                amount=quantity,
+                amount=None,  # No fiat value for refunds
                 fees=Decimal("0"),
-                currency="USD",
+                currency=symbol,  # Currency is the crypto itself
                 notes=f"Bit2C {transaction_type.lower()} - {reference}",
                 raw_data=record,
             )
@@ -512,9 +500,9 @@ class Bit2CClient:
                 transaction_type="Custody Fee",
                 quantity=quantity,
                 price_per_unit=None,
-                amount=quantity,
+                amount=None,  # No fiat value for custody fees
                 fees=Decimal("0"),
-                currency="USD",
+                currency=symbol,  # Currency is the crypto itself
                 notes=f"Bit2C custody fee - {reference}",
                 raw_data=record,
             )
@@ -590,8 +578,38 @@ class Bit2CClient:
             crypto_count = 0
             cash_count = 0
 
+            # First pass: collect all records and build fee lookup by reference number
+            withdrawal_fees: dict[str, dict] = {}  # reference_num -> fee record
+            other_records: list[dict] = []
+
             for record in funds_history:
-                crypto_txn, cash_txn = self._parse_funds_record(record)
+                action = record.get("action")
+                reference = record.get("reference", "")
+
+                if action == 4:  # Withdrawal Fee
+                    # Extract reference number from "FEE-BTC:162705" format
+                    if ":" in reference:
+                        ref_num = reference.split(":")[-1]
+                        withdrawal_fees[ref_num] = record
+                else:
+                    other_records.append(record)
+
+            # Second pass: process records, combining withdrawals with their fees
+            for record in other_records:
+                action = record.get("action")
+                reference = record.get("reference", "")
+
+                # For withdrawals, look up associated fee
+                fee_quantity = Decimal("0")
+                if action == 3:  # Withdrawal
+                    # Extract reference number from "RX162705" format
+                    ref_num = reference.replace("RX", "") if reference.startswith("RX") else reference
+                    if ref_num in withdrawal_fees:
+                        fee_record = withdrawal_fees[ref_num]
+                        fee_quantity = abs(self._parse_decimal(fee_record.get("firstAmount", 0)))
+                        logger.debug(f"Matched withdrawal {reference} with fee {fee_quantity}")
+
+                crypto_txn, cash_txn = self._parse_funds_record(record, fee_quantity)
                 if crypto_txn:
                     transactions.append(crypto_txn)
                     all_dates.append(crypto_txn.trade_date)

@@ -19,6 +19,7 @@ from app.schemas.transaction_views import (
     TradeResponse,
 )
 from app.services.currency_conversion_helper import CurrencyConversionHelper
+from app.services.price_fetcher import PriceFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,11 @@ async def list_trades(
         fees = txn.fees or Decimal("0")
         total = (qty * price) + fees
 
-        # Get native currency
+        # Get native currency - check for broker-specific overrides
+        # Bit2C transactions are always in ILS, regardless of asset's default currency
         native_currency = asset.currency or "USD"
+        if txn.notes and "Bit2C" in txn.notes:
+            native_currency = "ILS"
 
         # Convert to display currency if requested
         if display_currency and display_currency != native_currency:
@@ -127,13 +131,14 @@ async def list_dividends(
     """
     Get list of dividend and income transactions for user's accounts.
 
-    Includes: Dividend, Tax, Interest (excludes Dividend Cash which is the cash-side duplicate).
+    Includes: Dividend, Tax (excludes Dividend Cash which is the cash-side duplicate).
+    Interest is shown in Cash Activity instead.
     """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return []
 
-    dividend_types = ["Dividend", "Tax", "Interest"]
+    dividend_types = ["Dividend", "Tax"]
 
     query = (
         db.query(Transaction, Holding, Asset, Account)
@@ -295,7 +300,7 @@ async def list_cash_activity(
     if not allowed_account_ids:
         return []
 
-    cash_types = ["Deposit", "Withdrawal", "Fee", "Transfer"]
+    cash_types = ["Deposit", "Withdrawal", "Fee", "Transfer", "Custody Fee", "Interest"]
 
     query = (
         db.query(Transaction, Holding, Asset, Account)
@@ -315,15 +320,34 @@ async def list_cash_activity(
 
     cash_activity = []
     for txn, holding, asset, account in results:
-        # For crypto deposits/withdrawals, calculate USD value from quantity × price
-        # This is critical for TWR calculation to correctly exclude external cash flows
-        if asset.asset_class == "Crypto" and txn.type in ("Deposit", "Withdrawal"):
+        # For crypto transactions, calculate fiat value from quantity × price
+        crypto_types = ("Deposit", "Withdrawal", "Custody Fee")
+        fees = None
+        if asset.asset_class == "Crypto" and txn.type in crypto_types:
             quantity = txn.quantity or Decimal("0")
-            price = txn.price_per_unit or Decimal("0")
-            amount = quantity * price  # USD value of the crypto
-            native_currency = "USD"
+            price = txn.price_per_unit
+
+            # If no price stored, look up historical price
+            if price is None or price == 0:
+                price = PriceFetcher.get_price_for_date(db, asset.id, txn.date)
+
+            if price is not None and price != 0:
+                # Calculate fiat value (price is in USD)
+                amount = abs(quantity) * price
+                if quantity < 0:
+                    amount = -amount  # Preserve sign for withdrawals
+                # Convert fee to fiat as well
+                if txn.fees and txn.fees > 0:
+                    fees = txn.fees * price
+                native_currency = "USD"
+            else:
+                # Still no price - show raw crypto quantity
+                amount = quantity
+                fees = txn.fees if txn.fees and txn.fees > 0 else None
+                native_currency = asset.symbol
         else:
             amount = txn.amount or Decimal("0")
+            fees = txn.fees if txn.fees and txn.fees > 0 else None
             native_currency = asset.currency or asset.symbol
 
         needs_conversion = display_currency and display_currency != native_currency
@@ -333,6 +357,11 @@ async def list_cash_activity(
             amount = CurrencyConversionHelper.convert_value(
                 db, amount, native_currency, display_currency, txn.date
             )
+            # Convert fee as well
+            if fees is not None:
+                fees = CurrencyConversionHelper.convert_value(
+                    db, fees, native_currency, display_currency, txn.date
+                )
 
         cash_activity.append(
             CashActivityResponse(
@@ -341,6 +370,7 @@ async def list_cash_activity(
                 type=txn.type,
                 symbol=asset.symbol if asset.asset_class != "Cash" else None,
                 amount=amount,
+                fees=fees,
                 currency=output_currency,
                 account_name=account.name,
                 notes=txn.notes,

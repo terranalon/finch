@@ -111,10 +111,10 @@ function MinusCircleIcon({ className }) {
   );
 }
 
-function ArrowsRightLeftIcon({ className }) {
+function ReceiptPercentIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9 14.25 6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0c1.1.128 1.907 1.077 1.907 2.185ZM9.75 9h.008v.008H9.75V9Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 4.5h.008v.008h-.008V13.5Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
     </svg>
   );
 }
@@ -123,6 +123,14 @@ function BanknotesIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+    </svg>
+  );
+}
+
+function ArrowsRightLeftIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
     </svg>
   );
 }
@@ -190,7 +198,7 @@ const formatShortDate = (dateStr) => {
  * Trade Card - Buy/Sell transactions
  * Green for Buy (acquiring assets), Red for Sell (disposing assets)
  */
-function TradeCard({ tx, currency, onClick }) {
+function TradeCard({ tx, onClick }) {
   const isBuy = tx.side === 'BUY';
 
   return (
@@ -228,11 +236,11 @@ function TradeCard({ tx, currency, onClick }) {
           </div>
           {/* Quantity × price display */}
           <p className="text-sm text-[var(--text-secondary)] mt-1 font-mono tabular-nums">
-            {tx.quantity} × {formatCurrency(tx.price, currency)}
+            {tx.quantity} × {formatCurrency(tx.price, tx.currency)}
           </p>
           {tx.fee > 0 && (
             <p className="text-xs text-[var(--text-tertiary)] mt-1">
-              Fee: {formatCurrency(tx.fee, currency)}
+              Fee: {formatCurrency(tx.fee, tx.currency)}
             </p>
           )}
           <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{tx.account_name}</p>
@@ -247,7 +255,7 @@ function TradeCard({ tx, currency, onClick }) {
             ? 'text-emerald-600 dark:text-emerald-400'
             : 'text-red-600 dark:text-red-400'
         )}>
-          {isBuy ? '-' : '+'}{formatCurrency(Math.abs(tx.total), currency)}
+          {isBuy ? '-' : '+'}{formatCurrency(Math.abs(tx.total), tx.currency)}
         </p>
       </div>
     </div>
@@ -348,6 +356,44 @@ function ForexCard({ tx, onClick }) {
  */
 function CashCard({ tx, currency, onClick }) {
   const isDeposit = tx.activity_type === 'DEPOSIT';
+  const isFee = tx.activity_type === 'FEE';
+  const isInterest = tx.activity_type === 'INTEREST';
+
+  // Get style configuration based on transaction type
+  const getStyleConfig = () => {
+    if (isDeposit) {
+      return {
+        bgColor: 'bg-blue-50 dark:bg-blue-950/40',
+        textColor: 'text-blue-600 dark:text-blue-400',
+        icon: <PlusCircleIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />,
+        sign: '+',
+      };
+    } else if (isInterest) {
+      return {
+        bgColor: 'bg-green-50 dark:bg-green-950/40',
+        textColor: 'text-green-600 dark:text-green-400',
+        icon: <BanknotesIcon className="w-4 h-4 text-green-600 dark:text-green-400" />,
+        sign: '+',
+      };
+    } else if (isFee) {
+      return {
+        bgColor: 'bg-red-50 dark:bg-red-950/40',
+        textColor: 'text-red-600 dark:text-red-400',
+        icon: <ReceiptPercentIcon className="w-4 h-4 text-red-600 dark:text-red-400" />,
+        sign: '-',
+      };
+    } else {
+      return {
+        bgColor: 'bg-amber-50 dark:bg-amber-950/40',
+        textColor: 'text-amber-600 dark:text-amber-400',
+        icon: <MinusCircleIcon className="w-4 h-4 text-amber-600 dark:text-amber-400" />,
+        sign: '-',
+      };
+    }
+  };
+
+  const style = getStyleConfig();
+  const displayType = tx.cash_type || tx.activity_type;
 
   return (
     <div
@@ -356,29 +402,15 @@ function CashCard({ tx, currency, onClick }) {
     >
       <div className="flex items-start gap-3">
         {/* Icon */}
-        <div className={cn(
-          'p-2 rounded-lg',
-          isDeposit
-            ? 'bg-blue-50 dark:bg-blue-950/40'
-            : 'bg-amber-50 dark:bg-amber-950/40'
-        )}>
-          {isDeposit ? (
-            <PlusCircleIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          ) : (
-            <MinusCircleIcon className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          )}
+        <div className={cn('p-2 rounded-lg', style.bgColor)}>
+          {style.icon}
         </div>
 
         {/* Details */}
         <div>
           <div className="flex items-center gap-2">
-            <span className={cn(
-              'text-xs font-semibold px-2 py-0.5 rounded',
-              isDeposit
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
-            )}>
-              {tx.activity_type}
+            <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bgColor, style.textColor)}>
+              {displayType}
             </span>
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
@@ -388,13 +420,8 @@ function CashCard({ tx, currency, onClick }) {
 
       {/* Amount */}
       <div className="text-right">
-        <p className={cn(
-          'font-mono tabular-nums font-semibold',
-          isDeposit
-            ? 'text-blue-600 dark:text-blue-400'
-            : 'text-amber-600 dark:text-amber-400'
-        )}>
-          {isDeposit ? '+' : '-'}{formatCurrency(Math.abs(tx.amount), currency)}
+        <p className={cn('font-mono tabular-nums font-semibold', style.textColor)}>
+          {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
         </p>
       </div>
     </div>
@@ -407,7 +434,7 @@ function CashCard({ tx, currency, onClick }) {
 function TransactionCard({ tx, currency, onClick }) {
   switch (tx.type) {
     case 'trade':
-      return <TradeCard tx={tx} currency={currency} onClick={onClick} />;
+      return <TradeCard tx={tx} onClick={onClick} />;
     case 'dividend':
       return <DividendCard tx={tx} currency={currency} onClick={onClick} />;
     case 'forex':
@@ -461,7 +488,7 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
               'text-2xl font-semibold font-mono tabular-nums',
               isBuy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
             )}>
-              {isBuy ? '-' : '+'}{formatCurrency(Math.abs(total), currency)}
+              {isBuy ? '-' : '+'}{formatCurrency(Math.abs(total), tx.currency)}
             </span>
           </div>
         </div>
@@ -470,10 +497,10 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         <div className="space-y-4">
           <DetailRow label="Transaction Type" value={isBuy ? 'Buy' : 'Sell'} />
           <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
-          <DetailRow label="Price per Share" value={formatCurrency(tx.price, currency)} />
-          <DetailRow label="Subtotal" value={formatCurrency(subtotal, currency)} />
+          <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
+          <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
           {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, currency)} />
+            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
           )}
           <div className="h-px bg-[var(--border-primary)] my-2" />
           <DetailRow label="Date" value={formatShortDate(tx.date)} />
@@ -580,24 +607,55 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
 
   const renderCashDetails = () => {
     const isDeposit = tx.activity_type === 'DEPOSIT';
+    const isFee = tx.activity_type === 'FEE';
+    const isInterest = tx.activity_type === 'INTEREST';
+    const displayType = tx.cash_type || (isDeposit ? 'Deposit' : 'Withdrawal');
+
+    // Determine colors and icons based on transaction type
+    const getStyleConfig = () => {
+      if (isDeposit) {
+        return {
+          bgColor: 'bg-blue-50 dark:bg-blue-950/40',
+          textColor: 'text-blue-600 dark:text-blue-400',
+          icon: <PlusCircleIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />,
+          sign: '+',
+        };
+      } else if (isInterest) {
+        return {
+          bgColor: 'bg-green-50 dark:bg-green-950/40',
+          textColor: 'text-green-600 dark:text-green-400',
+          icon: <BanknotesIcon className="w-6 h-6 text-green-600 dark:text-green-400" />,
+          sign: '+',
+        };
+      } else if (isFee) {
+        return {
+          bgColor: 'bg-red-50 dark:bg-red-950/40',
+          textColor: 'text-red-600 dark:text-red-400',
+          icon: <ReceiptPercentIcon className="w-6 h-6 text-red-600 dark:text-red-400" />,
+          sign: '-',
+        };
+      } else {
+        return {
+          bgColor: 'bg-amber-50 dark:bg-amber-950/40',
+          textColor: 'text-amber-600 dark:text-amber-400',
+          icon: <MinusCircleIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />,
+          sign: '-',
+        };
+      }
+    };
+
+    const style = getStyleConfig();
 
     return (
       <>
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <div className={cn(
-            'p-3 rounded-xl',
-            isDeposit ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-amber-50 dark:bg-amber-950/40'
-          )}>
-            {isDeposit ? (
-              <PlusCircleIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            ) : (
-              <MinusCircleIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-            )}
+          <div className={cn('p-3 rounded-xl', style.bgColor)}>
+            {style.icon}
           </div>
           <div>
             <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-              {isDeposit ? 'Deposit' : 'Withdrawal'}
+              {displayType}
             </h2>
             <p className="text-sm text-[var(--text-secondary)]">{tx.description}</p>
           </div>
@@ -607,19 +665,18 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
             <span className="text-sm text-[var(--text-secondary)]">Amount</span>
-            <span className={cn(
-              'text-2xl font-semibold font-mono tabular-nums',
-              isDeposit ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'
-            )}>
-              {isDeposit ? '+' : '-'}{formatCurrency(Math.abs(tx.amount), currency)}
+            <span className={cn('text-2xl font-semibold font-mono tabular-nums', style.textColor)}>
+              {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
             </span>
           </div>
         </div>
 
         {/* Details Grid */}
         <div className="space-y-4">
-          <DetailRow label="Type" value={isDeposit ? 'Deposit' : 'Withdrawal'} />
-          <DetailRow label="Method" value={tx.description} />
+          <DetailRow label="Type" value={displayType} />
+          {tx.fee > 0 && (
+            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, currency)} />
+          )}
           {tx.reference && (
             <DetailRow label="Reference" value={tx.reference} />
           )}
@@ -953,13 +1010,25 @@ function transformForex(fx) {
  * Transform API cash response to unified format
  */
 function transformCash(cash) {
-  const isDeposit = cash.type === 'Deposit';
+  // Map transaction type to activity type for display
+  const activityTypeMap = {
+    'Deposit': 'DEPOSIT',
+    'Withdrawal': 'WITHDRAWAL',
+    'Fee': 'FEE',
+    'Transfer': 'TRANSFER',
+    'Custody Fee': 'FEE',
+    'Interest': 'INTEREST',
+  };
+  const activityType = activityTypeMap[cash.type] || cash.type.toUpperCase();
+
   return {
     id: `cash-${cash.id}`,
     type: 'cash',
     date: cash.date,
-    activity_type: isDeposit ? 'DEPOSIT' : 'WITHDRAWAL',
+    activity_type: activityType,
+    cash_type: cash.type,  // Keep original type for display
     amount: parseFloat(cash.amount),
+    fee: parseFloat(cash.fees || 0),
     currency: cash.currency || 'USD',
     description: cash.type + (cash.notes ? ` - ${cash.notes}` : ''),
     account_name: cash.account_name,
