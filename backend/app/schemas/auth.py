@@ -61,16 +61,6 @@ class TokenRefresh(BaseModel):
     refresh_token: str
 
 
-class UserResponse(BaseModel):
-    """Schema for user response."""
-
-    id: str
-    email: str
-    is_active: bool
-
-    model_config = {"from_attributes": True}
-
-
 class MessageResponse(BaseModel):
     """Schema for simple message response."""
 

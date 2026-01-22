@@ -34,6 +34,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
+def _find_valid_session(
+    db: Session, user_id: str, refresh_token: str
+) -> UserSession | None:
+    """Find a valid (non-revoked, non-expired) session matching the refresh token."""
+    sessions = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == user_id,
+            UserSession.is_revoked == False,  # noqa: E712
+            UserSession.expires_at > datetime.now(UTC),
+        )
+        .all()
+    )
+    for session in sessions:
+        if AuthService.verify_token_hash(refresh_token, session.refresh_token_hash):
+            return session
+    return None
+
+
+def _create_verification_token(db: Session, user_id: str) -> str:
+    """Create a new email verification token for a user."""
+    token = secrets.token_urlsafe(32)
+    verification = EmailVerificationToken(
+        user_id=user_id,
+        token_hash=AuthService.hash_token(token),
+        expires_at=datetime.now(UTC) + timedelta(hours=24),
+    )
+    db.add(verification)
+    return token
+
+
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def register(request: Request, data: UserRegister, db: Session = Depends(get_db)) -> dict:
@@ -66,13 +97,7 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     db.add(default_portfolio)
 
     # Generate verification token
-    token = secrets.token_urlsafe(32)
-    verification = EmailVerificationToken(
-        user_id=user.id,
-        token_hash=AuthService.hash_token(token),
-        expires_at=datetime.now(UTC) + timedelta(hours=24),
-    )
-    db.add(verification)
+    token = _create_verification_token(db, user.id)
     db.commit()
 
     # Send verification email
@@ -159,22 +184,7 @@ def refresh_tokens(data: TokenRefresh, db: Session = Depends(get_db)) -> dict:
         )
 
     # Verify refresh token exists in sessions (not revoked)
-    sessions = (
-        db.query(UserSession)
-        .filter(
-            UserSession.user_id == user_id,
-            UserSession.is_revoked == False,  # noqa: E712
-            UserSession.expires_at > datetime.now(UTC),
-        )
-        .all()
-    )
-
-    valid_session = None
-    for session in sessions:
-        if AuthService.verify_token_hash(data.refresh_token, session.refresh_token_hash):
-            valid_session = session
-            break
-
+    valid_session = _find_valid_session(db, user_id, data.refresh_token)
     if not valid_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -211,22 +221,10 @@ def logout(data: TokenRefresh, db: Session = Depends(get_db)) -> dict:
     payload = AuthService.decode_access_token(data.refresh_token)
     if payload and payload.get("type") == "refresh":
         user_id = payload["sub"]
-        # Revoke all sessions for this user (or just the matching one)
-        sessions = (
-            db.query(UserSession)
-            .filter(
-                UserSession.user_id == user_id,
-                UserSession.is_revoked == False,  # noqa: E712
-            )
-            .all()
-        )
-
-        for session in sessions:
-            if AuthService.verify_token_hash(data.refresh_token, session.refresh_token_hash):
-                session.is_revoked = True
-                break
-
-        db.commit()
+        session = _find_valid_session(db, user_id, data.refresh_token)
+        if session:
+            session.is_revoked = True
+            db.commit()
 
     return {"message": "Successfully logged out"}
 
@@ -271,17 +269,9 @@ def resend_verification(
     user = db.query(User).filter(User.email == data.email).first()
 
     if user and not user.email_verified:
-        # Invalidate existing tokens
+        # Invalidate existing tokens and create new one
         db.query(EmailVerificationToken).filter(EmailVerificationToken.user_id == user.id).delete()
-
-        # Create new token
-        token = secrets.token_urlsafe(32)
-        verification = EmailVerificationToken(
-            user_id=user.id,
-            token_hash=AuthService.hash_token(token),
-            expires_at=datetime.now(UTC) + timedelta(hours=24),
-        )
-        db.add(verification)
+        token = _create_verification_token(db, user.id)
         db.commit()
 
         EmailService.send_verification_email(user.email, token)
