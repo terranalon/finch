@@ -30,6 +30,7 @@ from app.schemas.mfa import (
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.services.mfa_service import MfaService
+from app.services.security_audit_service import SecurityAuditService, SecurityEventType
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,11 @@ def confirm_totp(
     # Generate recovery codes
     recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
 
+    # Log MFA enabled
+    SecurityAuditService.log_event(
+        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id,
+        details={"method": "totp"}
+    )
     db.commit()
     logger.info(f"TOTP MFA enabled for user: {current_user.email}")
 
@@ -145,6 +151,11 @@ def setup_email_otp(
     # Generate recovery codes
     recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
 
+    # Log MFA enabled
+    SecurityAuditService.log_event(
+        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id,
+        details={"method": "email"}
+    )
     db.commit()
     logger.info(f"Email OTP MFA enabled for user: {current_user.email}")
 
@@ -184,6 +195,10 @@ def disable_mfa(
     db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == current_user.id).delete()
     db.query(EmailOtpCode).filter(EmailOtpCode.user_id == current_user.id).delete()
 
+    # Log MFA disabled
+    SecurityAuditService.log_event(
+        db, SecurityEventType.MFA_DISABLED, user_id=current_user.id
+    )
     db.commit()
 
     # Send notification
@@ -332,6 +347,11 @@ def verify_mfa(
         verified = _verify_recovery_code(db, user.id, data.code)
 
     if not verified:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.MFA_FAILED, user_id=user.id,
+            details={"method": data.method}
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid MFA code",
@@ -351,6 +371,13 @@ def verify_mfa(
         expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     db.add(session)
+
+    # Log successful MFA verification
+    event_type = SecurityEventType.RECOVERY_CODE_USED if data.method == "recovery" else SecurityEventType.MFA_VERIFIED
+    SecurityAuditService.log_event(
+        db, event_type, user_id=user.id,
+        details={"method": data.method}
+    )
     db.commit()
 
     logger.info(f"MFA verified for user: {user.email} using {data.method}")

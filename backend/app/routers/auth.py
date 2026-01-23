@@ -33,6 +33,7 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
+from app.services.security_audit_service import SecurityAuditService, SecurityEventType
 
 logger = logging.getLogger(__name__)
 
@@ -110,27 +111,94 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     return {"message": "Registration successful. Please check your email to verify your account."}
 
 
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+
+
+def _check_account_lockout(user: User, db: Session, ip_address: str | None, user_agent: str | None):
+    """Check if account is locked and raise exception if so."""
+    if user.locked_until:
+        # Handle both timezone-aware and naive datetimes (SQLite stores naive)
+        locked_until = user.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=UTC)
+        if locked_until > datetime.now(UTC):
+            SecurityAuditService.log_event(
+                db, SecurityEventType.LOGIN_BLOCKED_LOCKOUT, user_id=user.id,
+                ip_address=ip_address, user_agent=user_agent,
+                details={"locked_until": user.locked_until.isoformat()}
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Account temporarily locked due to too many failed login attempts",
+            )
+
+
+def _record_failed_login(user: User, db: Session, ip_address: str | None, user_agent: str | None, reason: str):
+    """Record a failed login attempt and lock account if threshold reached."""
+    user.failed_login_attempts += 1
+
+    if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
+        user.locked_until = datetime.now(UTC) + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+        SecurityAuditService.log_event(
+            db, SecurityEventType.LOGIN_FAILED, user_id=user.id, ip_address=ip_address,
+            user_agent=user_agent, details={"reason": reason, "account_locked": True}
+        )
+    else:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.LOGIN_FAILED, user_id=user.id, ip_address=ip_address,
+            user_agent=user_agent, details={"reason": reason, "attempts": user.failed_login_attempts}
+        )
+    db.commit()
+
+
+def _clear_failed_attempts(user: User):
+    """Clear failed login attempts on successful login."""
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
+
 @router.post("/login")
 @limiter.limit("5/minute")
 def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> dict:
     """Login and get access/refresh tokens."""
+    ip_address, user_agent = SecurityAuditService.get_request_info(request)
+
     # Find user
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not user.password_hash:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.LOGIN_FAILED, ip_address=ip_address,
+            user_agent=user_agent, details={"email": data.email, "reason": "user_not_found"}
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    # Check if account is locked
+    _check_account_lockout(user, db, ip_address, user_agent)
 
     # Verify password
     if not AuthService.verify_password(data.password, user.password_hash):
+        _record_failed_login(user, db, ip_address, user_agent, "invalid_password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
+    # Password correct - clear any failed login attempts
+    _clear_failed_attempts(user)
+
     # Check if user is active
     if not user.is_active:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.LOGIN_BLOCKED_DISABLED, user_id=user.id,
+            ip_address=ip_address, user_agent=user_agent
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
@@ -138,6 +206,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
 
     # Check if email is verified
     if not user.email_verified:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.LOGIN_BLOCKED_UNVERIFIED, user_id=user.id,
+            ip_address=ip_address, user_agent=user_agent
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="email_not_verified",
@@ -171,6 +244,12 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
         expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
     )
     db.add(session)
+
+    # Log successful login
+    SecurityAuditService.log_event(
+        db, SecurityEventType.LOGIN_SUCCESS, user_id=user.id,
+        ip_address=ip_address, user_agent=user_agent
+    )
     db.commit()
 
     logger.info(f"User logged in: {user.email}")
@@ -271,6 +350,11 @@ def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)) -> dic
     # Mark token as used and verify user
     verification.used_at = datetime.now(UTC)
     verification.user.email_verified = True
+
+    # Log email verification
+    SecurityAuditService.log_event(
+        db, SecurityEventType.EMAIL_VERIFIED, user_id=verification.user_id
+    )
     db.commit()
 
     # Send welcome email
@@ -311,11 +395,14 @@ def _invalidate_user_sessions(db: Session, user_id: str) -> None:
 
 @router.put("/change-password", response_model=MessageResponse)
 def change_password(
+    request: Request,
     data: ChangePasswordRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Change password while logged in."""
+    ip_address, user_agent = SecurityAuditService.get_request_info(request)
+
     # Verify current password
     if not AuthService.verify_password(data.current_password, current_user.password_hash):
         raise HTTPException(
@@ -331,6 +418,11 @@ def change_password(
     # so we invalidate all sessions - user will need to re-login
     _invalidate_user_sessions(db, current_user.id)
 
+    # Log password change
+    SecurityAuditService.log_event(
+        db, SecurityEventType.PASSWORD_CHANGED, user_id=current_user.id,
+        ip_address=ip_address, user_agent=user_agent
+    )
     db.commit()
 
     # Send notification email
@@ -346,6 +438,7 @@ def forgot_password(
     request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)
 ) -> dict:
     """Request password reset email."""
+    ip_address, user_agent = SecurityAuditService.get_request_info(request)
     user = db.query(User).filter(User.email == data.email).first()
 
     if user and user.email_verified:
@@ -354,6 +447,12 @@ def forgot_password(
 
         # Create new reset token (1 hour)
         token = _create_token(db, user.id, PasswordResetToken, expires_hours=1)
+
+        # Log password reset request
+        SecurityAuditService.log_event(
+            db, SecurityEventType.PASSWORD_RESET_REQUESTED, user_id=user.id,
+            ip_address=ip_address, user_agent=user_agent
+        )
         db.commit()
 
         EmailService.send_password_reset_email(user.email, token)
@@ -364,8 +463,11 @@ def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
+def reset_password(
+    request: Request, data: ResetPasswordRequest, db: Session = Depends(get_db)
+) -> dict:
     """Reset password with token from email."""
+    ip_address, user_agent = SecurityAuditService.get_request_info(request)
     token_hash = AuthService.hash_token(data.token)
     reset_token = (
         db.query(PasswordResetToken)
@@ -390,6 +492,11 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)) ->
     # Invalidate all sessions
     _invalidate_user_sessions(db, reset_token.user_id)
 
+    # Log password reset completion
+    SecurityAuditService.log_event(
+        db, SecurityEventType.PASSWORD_RESET_COMPLETED, user_id=reset_token.user_id,
+        ip_address=ip_address, user_agent=user_agent
+    )
     db.commit()
 
     # Send notification email

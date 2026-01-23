@@ -15,6 +15,7 @@ from app.models.email_verification_token import EmailVerificationToken
 from app.models.mfa_temp_session import MfaTempSession
 from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.session import Session
 from app.models.user import User
 from app.models.user_mfa import UserMfa
@@ -69,6 +70,7 @@ def auth_client():
     EmailOtpCode.__table__.create(engine, checkfirst=True)
     UserRecoveryCode.__table__.create(engine, checkfirst=True)
     MfaTempSession.__table__.create(engine, checkfirst=True)
+    SecurityAuditLog.__table__.create(engine, checkfirst=True)
 
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

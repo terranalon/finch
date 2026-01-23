@@ -1,9 +1,8 @@
-"""Email service using SendGrid."""
+"""Email service using Resend."""
 
 import logging
 
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+import resend
 
 from app.config import settings
 
@@ -11,29 +10,28 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Service for sending transactional emails via SendGrid."""
+    """Service for sending transactional emails via Resend."""
 
     @staticmethod
     def _send_email(to_email: str, subject: str, html_content: str) -> bool:
-        """Send email via SendGrid. Returns True if successful."""
-        if not settings.sendgrid_api_key:
-            logger.warning("SendGrid API key not configured, skipping email send")
+        """Send email via Resend. Returns True if successful."""
+        if not settings.resend_api_key:
+            logger.warning("Resend API key not configured, skipping email send")
             return False
 
-        message = Mail(
-            from_email=(settings.email_from_address, settings.email_from_name),
-            to_emails=to_email,
-            subject=subject,
-            html_content=html_content,
-        )
+        resend.api_key = settings.resend_api_key
 
         try:
-            sg = SendGridAPIClient(settings.sendgrid_api_key)
-            response = sg.send(message)
-            logger.info(f"Email sent to {to_email}, status: {response.status_code}")
-            return response.status_code in (200, 201, 202)
+            response = resend.Emails.send({
+                "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content,
+            })
+            logger.info("Email sent to %s, id: %s", to_email, response.get("id"))
+            return True
         except Exception:
-            logger.exception(f"Failed to send email to {to_email}")
+            logger.exception("Failed to send email to %s", to_email)
             return False
 
     @classmethod

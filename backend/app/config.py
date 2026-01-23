@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
 
-    # Email (SendGrid)
-    sendgrid_api_key: str = ""
+    # Email (Resend)
+    resend_api_key: str = ""
     email_from_address: str = "noreply@finch.app"
     email_from_name: str = "Finch Portfolio"
     frontend_url: str = "http://localhost:5173"

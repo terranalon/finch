@@ -27,6 +27,14 @@ def upgrade() -> None:
         "users",
         sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
     )
+    op.add_column(
+        "users",
+        sa.Column("failed_login_attempts", sa.Integer(), nullable=False, server_default="0"),
+    )
+    op.add_column(
+        "users",
+        sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True),
+    )
 
     # Email verification tokens
     op.create_table(
@@ -126,13 +134,40 @@ def upgrade() -> None:
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
     )
 
+    # Security audit logs
+    op.create_table(
+        "security_audit_logs",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "user_id",
+            sa.String(36),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        sa.Column("event_type", sa.String(50), nullable=False, index=True),
+        sa.Column("ip_address", sa.String(45), nullable=True),
+        sa.Column("user_agent", sa.String(500), nullable=True),
+        sa.Column("details", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+            index=True,
+        ),
+    )
+
 
 def downgrade() -> None:
+    op.drop_table("security_audit_logs")
     op.drop_table("mfa_temp_sessions")
     op.drop_table("user_recovery_codes")
     op.drop_table("email_otp_codes")
     op.drop_table("user_mfa")
     op.drop_table("password_reset_tokens")
     op.drop_table("email_verification_tokens")
+    op.drop_column("users", "locked_until")
+    op.drop_column("users", "failed_login_attempts")
     op.drop_column("users", "is_admin")
     op.drop_column("users", "email_verified")

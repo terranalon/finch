@@ -12,6 +12,8 @@ import { cn } from '../lib';
 import { api } from '../lib/api';
 import { useTheme, useCurrency, usePortfolio, useAuth } from '../contexts';
 import { PageContainer } from '../components/layout';
+import { ChangePassword } from '../components/ChangePassword';
+import { TotpSetup, EmailOtpSetup, DisableMfa, RegenerateRecoveryCodes } from '../components/MfaSetup';
 
 // ============================================
 // MOCK DATA - Replace with real API data later
@@ -594,6 +596,135 @@ function PortfolioManagement() {
 }
 
 // ============================================
+// SECURITY SECTION
+// ============================================
+
+function SecuritySection() {
+  const [modal, setModal] = useState(null); // null, 'password', 'totp', 'email', 'disable', 'regenerate'
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+
+  // In a real app, you'd fetch MFA status from the API
+  // For now, we track it locally after setup
+
+  const closeModal = () => setModal(null);
+
+  const handleMfaComplete = () => {
+    setMfaEnabled(true);
+    closeModal();
+  };
+
+  const handleMfaDisabled = () => {
+    setMfaEnabled(false);
+    closeModal();
+  };
+
+  return (
+    <SettingsSection
+      icon={ShieldCheckIcon}
+      title="Security"
+      description="Password and authentication settings"
+    >
+      <div className="space-y-4">
+        {/* Password */}
+        <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-tertiary)]">
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">Password</p>
+            <p className="text-xs text-[var(--text-secondary)]">Change your account password</p>
+          </div>
+          <button
+            onClick={() => setModal('password')}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+          >
+            Change Password
+          </button>
+        </div>
+
+        {/* Two-Factor Authentication */}
+        <div className="p-4 rounded-lg bg-[var(--bg-tertiary)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Two-factor authentication</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {mfaEnabled
+                  ? 'Your account is protected with 2FA'
+                  : 'Add an extra layer of security to your account'}
+              </p>
+            </div>
+            {mfaEnabled ? (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-positive/10 text-positive">
+                Enabled
+              </span>
+            ) : (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-[var(--text-tertiary)]/10 text-[var(--text-tertiary)]">
+                Not enabled
+              </span>
+            )}
+          </div>
+
+          {!mfaEnabled ? (
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setModal('totp')}
+                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
+              >
+                Set up Authenticator App
+              </button>
+              <button
+                onClick={() => setModal('email')}
+                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+              >
+                Use Email OTP
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setModal('regenerate')}
+                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+              >
+                Regenerate Recovery Codes
+              </button>
+              <button
+                onClick={() => setModal('disable')}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-negative hover:bg-negative/10 transition-colors cursor-pointer"
+              >
+                Disable
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {modal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={closeModal} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-[var(--bg-primary)] rounded-xl shadow-xl max-w-md w-full p-6">
+              {modal === 'password' && (
+                <ChangePassword onComplete={closeModal} onCancel={closeModal} />
+              )}
+              {modal === 'totp' && (
+                <TotpSetup onComplete={handleMfaComplete} onCancel={closeModal} />
+              )}
+              {modal === 'email' && (
+                <EmailOtpSetup onComplete={handleMfaComplete} onCancel={closeModal} />
+              )}
+              {modal === 'disable' && (
+                <DisableMfa onComplete={handleMfaDisabled} onCancel={closeModal} />
+              )}
+              {modal === 'regenerate' && (
+                <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </SettingsSection>
+  );
+}
+
+// ============================================
 // MAIN COMPONENT
 // ============================================
 
@@ -615,18 +746,8 @@ export default function Settings() {
     marketNews: false,
   });
 
-  const [security, setSecurity] = useState({
-    twoFactor: false,
-  });
-
   const handleSaveProfile = () => {
-    // Mock: would call API to save
-    console.log('Saving profile:', profile);
-  };
-
-  const handleChangePassword = () => {
-    // Mock: would open password change modal or redirect
-    console.log('Change password clicked');
+    // TODO: Implement API call to save profile
   };
 
   return (
@@ -690,35 +811,7 @@ export default function Settings() {
         <PortfolioManagement />
 
         {/* Security Section */}
-        <SettingsSection
-          icon={ShieldCheckIcon}
-          title="Security"
-          description="Password and authentication settings"
-        >
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-tertiary)]">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">Password</p>
-                <p className="text-xs text-[var(--text-secondary)]">Last changed 3 months ago</p>
-              </div>
-              <button
-                onClick={handleChangePassword}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
-              >
-                Change Password
-              </button>
-            </div>
-
-            <Toggle
-              checked={security.twoFactor}
-              onChange={(checked) => setSecurity({ ...security, twoFactor: checked })}
-              label="Two-factor authentication"
-            />
-            <p className="text-xs text-[var(--text-tertiary)] -mt-2 ml-0">
-              Add an extra layer of security to your account
-            </p>
-          </div>
-        </SettingsSection>
+        <SecuritySection />
 
         {/* Appearance Section */}
         <SettingsSection
@@ -766,8 +859,8 @@ export default function Settings() {
                 onChange={async (checked) => {
                   try {
                     await updatePreferences({ show_combined_view: checked });
-                  } catch (err) {
-                    console.error('Failed to update preference:', err);
+                  } catch {
+                    // Preference update failed silently - UI will remain in sync
                   }
                 }}
                 label="Show 'All Portfolios' option"
