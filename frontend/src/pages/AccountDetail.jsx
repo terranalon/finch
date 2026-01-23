@@ -5,13 +5,13 @@
  * performance, import history, and settings.
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { cn, formatCurrency, api } from '../lib';
-import { useCurrency } from '../contexts';
+import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
 import { PageContainer } from '../components/layout';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
+import { TransactionCard } from '../components/transactions';
 
 /**
  * Calculate Time-Weighted Return using Modified Dietz method
@@ -83,58 +83,6 @@ function calculateTWR(snapshots, cashFlows) {
 }
 
 // ============================================
-// TRANSFORM FUNCTIONS
-// ============================================
-
-function transformTrade(trade) {
-  return {
-    id: `trade-${trade.id}`,
-    type: 'trade',
-    date: trade.date,
-    symbol: trade.symbol,
-    side: trade.action === 'Buy' ? 'BUY' : 'SELL',
-    quantity: parseFloat(trade.quantity),
-    price: parseFloat(trade.price_per_unit),
-    total: parseFloat(trade.total),
-    currency: trade.currency || 'USD', // Native currency
-  };
-}
-
-function transformDividend(div) {
-  return {
-    id: `div-${div.id}`,
-    type: 'dividend',
-    date: div.date,
-    symbol: div.symbol,
-    amount: parseFloat(div.amount),
-    currency: div.currency || 'USD', // Native currency
-  };
-}
-
-function transformForex(fx) {
-  return {
-    id: `fx-${fx.id}`,
-    type: 'forex',
-    date: fx.date,
-    from_currency: fx.from_currency,
-    to_currency: fx.to_currency,
-    from_amount: parseFloat(fx.from_amount),
-    to_amount: parseFloat(fx.to_amount),
-  };
-}
-
-function transformCash(cash) {
-  return {
-    id: `cash-${cash.id}`,
-    type: 'cash',
-    date: cash.date,
-    activity_type: cash.type.toUpperCase(),
-    amount: parseFloat(cash.amount),
-    currency: cash.currency || 'USD', // Native currency
-  };
-}
-
-// ============================================
 // ICONS
 // ============================================
 
@@ -142,22 +90,6 @@ function ArrowLeftIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-    </svg>
-  );
-}
-
-function ArrowUpIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-    </svg>
-  );
-}
-
-function ArrowDownIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
     </svg>
   );
 }
@@ -250,30 +182,6 @@ function ChevronDoubleRightIcon({ className }) {
   );
 }
 
-function BanknotesIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
-    </svg>
-  );
-}
-
-function ArrowsRightLeftIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-    </svg>
-  );
-}
-
-function PlusCircleIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -285,16 +193,6 @@ const formatDateShort = (dateStr) => {
 // Scroll to top of page (used for pagination)
 const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-const formatDateTime = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 };
 
 const getStatusInfo = (lastSync) => {
@@ -460,152 +358,10 @@ function HoldingsTable({ holdings }) {
 }
 
 // ============================================
-// RECENT TRANSACTIONS
-// ============================================
-
-function TransactionItem({ tx }) {
-  const txCurrency = tx.currency || 'USD'; // Use native currency from transaction
-
-  const getIcon = () => {
-    switch (tx.type) {
-      case 'trade':
-        return tx.side === 'BUY'
-          ? <ArrowDownIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          : <ArrowUpIcon className="w-4 h-4 text-red-600 dark:text-red-400" />;
-      case 'dividend':
-        return <BanknotesIcon className="w-4 h-4 text-teal-600 dark:text-teal-400" />;
-      case 'forex':
-        return <ArrowsRightLeftIcon className="w-4 h-4 text-violet-600 dark:text-violet-400" />;
-      case 'cash':
-        return tx.activity_type === 'DEPOSIT'
-          ? <PlusCircleIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          : <PlusCircleIcon className="w-4 h-4 text-amber-600 dark:text-amber-400" />;
-      default:
-        return null;
-    }
-  };
-
-  const getIconBg = () => {
-    switch (tx.type) {
-      case 'trade':
-        return tx.side === 'BUY' ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-red-50 dark:bg-red-950/40';
-      case 'dividend':
-        return 'bg-teal-50 dark:bg-teal-950/40';
-      case 'forex':
-        return 'bg-violet-50 dark:bg-violet-950/40';
-      case 'cash':
-        return tx.activity_type === 'DEPOSIT' ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-amber-50 dark:bg-amber-950/40';
-      default:
-        return 'bg-gray-50 dark:bg-gray-950/40';
-    }
-  };
-
-  const getDescription = () => {
-    switch (tx.type) {
-      case 'trade':
-        // Capitalize first letter only (Buy/Sell instead of BUY/SELL)
-        const action = tx.side.charAt(0) + tx.side.slice(1).toLowerCase();
-        return `${action} ${tx.quantity} ${tx.symbol}`;
-      case 'dividend':
-        return `${tx.symbol} dividend`;
-      case 'forex':
-        return `${tx.from_currency} → ${tx.to_currency}`;
-      case 'cash':
-        // Capitalize first letter only (Deposit/Withdrawal instead of DEPOSIT/WITHDRAWAL)
-        return tx.activity_type.charAt(0) + tx.activity_type.slice(1).toLowerCase();
-      default:
-        return 'Transaction';
-    }
-  };
-
-  const getAmount = () => {
-    switch (tx.type) {
-      case 'trade':
-        // Use Math.abs to avoid double signs (formatCurrency may add "-" for negatives)
-        return tx.side === 'BUY' ? `-${formatCurrency(Math.abs(tx.total), txCurrency)}` : `+${formatCurrency(Math.abs(tx.total), txCurrency)}`;
-      case 'dividend':
-        return `+${formatCurrency(Math.abs(tx.amount), txCurrency)}`;
-      case 'forex':
-        return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
-      case 'cash':
-        return tx.activity_type === 'DEPOSIT' ? `+${formatCurrency(Math.abs(tx.amount), txCurrency)}` : `-${formatCurrency(Math.abs(tx.amount), txCurrency)}`;
-      default:
-        return '';
-    }
-  };
-
-  const getAmountColor = () => {
-    switch (tx.type) {
-      case 'trade':
-        return tx.side === 'BUY' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
-      case 'dividend':
-        return 'text-teal-600 dark:text-teal-400';
-      case 'forex':
-        return 'text-violet-600 dark:text-violet-400';
-      case 'cash':
-        return tx.activity_type === 'DEPOSIT' ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400';
-      default:
-        return 'text-[var(--text-primary)]';
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-between py-3">
-      <div className="flex items-center gap-3">
-        <div className={cn('p-2 rounded-lg', getIconBg())}>
-          {getIcon()}
-        </div>
-        <div>
-          <p className="text-sm font-medium text-[var(--text-primary)]">{getDescription()}</p>
-          <p className="text-xs text-[var(--text-tertiary)]">{formatDateShort(tx.date)}</p>
-        </div>
-      </div>
-      <p className={cn('font-mono tabular-nums font-semibold', getAmountColor())}>
-        {getAmount()}
-      </p>
-    </div>
-  );
-}
-
-// ============================================
 // IMPORT HISTORY
 // ============================================
 
-function ImportHistoryItem({ item }) {
-  return (
-    <div className="flex items-start justify-between py-3">
-      <div className="flex items-start gap-3">
-        <div className={cn(
-          'p-2 rounded-lg',
-          item.status === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-amber-50 dark:bg-amber-950/40'
-        )}>
-          {item.status === 'success' ? (
-            <CheckCircleIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          ) : (
-            <ExclamationCircleIcon className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          )}
-        </div>
-        <div>
-          <p className="text-sm font-medium text-[var(--text-primary)]">
-            {item.type === 'api_sync' ? 'API Sync' : 'File Upload'}
-          </p>
-          <p className="text-xs text-[var(--text-tertiary)]">{item.source}</p>
-          {item.notes && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{item.notes}</p>
-          )}
-        </div>
-      </div>
-      <div className="text-right">
-        <p className="text-sm font-medium text-[var(--text-primary)]">
-          +{item.transactions_added} transactions
-        </p>
-        <p className="text-xs text-[var(--text-tertiary)]">{formatDateTime(item.date)}</p>
-      </div>
-    </div>
-  );
-}
-
-// Import source item from coverage API (different format from legacy ImportHistoryItem)
+// Import source item from coverage API
 function ImportSourceItem({ source }) {
   const isSuccess = source.status === 'completed';
   const filename = source.source_identifier || 'Unknown file';
@@ -1439,7 +1195,6 @@ function LoadingSkeleton() {
 export default function AccountDetail() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currency } = useCurrency();
   const [activeTab, setActiveTab] = useState('overview');
   const apiCredentialsRef = useRef(null);
   const [shouldScrollToCredentials, setShouldScrollToCredentials] = useState(false);
@@ -2315,7 +2070,7 @@ export default function AccountDetail() {
               ) : (
                 <div className="divide-y divide-[var(--border-primary)]">
                   {transactions.slice(0, 5).map((tx) => (
-                    <TransactionItem key={tx.id} tx={tx} />
+                    <TransactionCard key={tx.id} tx={tx} variant="compact" currency={account?.currency} />
                   ))}
                 </div>
               )}
@@ -2484,7 +2239,7 @@ export default function AccountDetail() {
                   {transactions
                     .slice((txCurrentPage - 1) * txPageSize, txCurrentPage * txPageSize)
                     .map((tx) => (
-                      <TransactionItem key={tx.id} tx={tx} />
+                      <TransactionCard key={tx.id} tx={tx} variant="compact" currency={account?.currency} />
                     ))}
                 </div>
 
