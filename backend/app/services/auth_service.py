@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """Service for authentication operations."""
 
+    # Pre-computed bcrypt hash for timing-consistent password verification
+    # Used when user doesn't exist to prevent email enumeration via timing attacks
+    _DUMMY_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYA9dWQ6E3Ky"
+
+    @staticmethod
+    def get_dummy_hash() -> str:
+        """Get a dummy password hash for timing-consistent verification."""
+        return AuthService._DUMMY_HASH
+
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt."""

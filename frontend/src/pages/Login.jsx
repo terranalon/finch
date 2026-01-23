@@ -26,9 +26,27 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+
+      // Check if MFA is required
+      if (result.mfa_required) {
+        navigate('/mfa-verify', {
+          state: {
+            tempToken: result.temp_token,
+            methods: result.methods,
+            email,
+          },
+        });
+        return;
+      }
+
       navigate('/');
     } catch (err) {
+      // Handle email not verified
+      if (err.code === 'email_not_verified') {
+        navigate('/verification-pending', { state: { email: err.email || email } });
+        return;
+      }
       setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -40,7 +58,11 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login('demo@finch.com', 'Demo1234');
+      const result = await login('demo@finch.com', 'Demo1234');
+      if (result.mfa_required) {
+        setError('Demo account has MFA enabled. Please use regular login.');
+        return;
+      }
       navigate('/');
     } catch (err) {
       setError('Demo login failed. Make sure the demo user is seeded.');
@@ -101,9 +123,17 @@ export default function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[var(--text-primary)]">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-[var(--text-primary)]">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-accent hover:text-accent-hover"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 name="password"

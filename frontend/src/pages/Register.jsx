@@ -6,18 +6,17 @@
 
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth, useTheme } from '../contexts';
+import { useTheme } from '../contexts';
 import { FinchIcon, ThemeToggle } from '../components/ui';
+import { register } from '../lib/api';
 
 export default function Register() {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { register } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -38,8 +37,9 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await register(email, password, name);
-      navigate('/');
+      await register(email, password);
+      // Redirect to verification pending page with email
+      navigate('/verification-pending', { state: { email } });
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -81,22 +81,6 @@ export default function Register() {
           )}
 
           <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-[var(--text-primary)]">
-                Name (optional)
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="Your name"
-              />
-            </div>
-
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-[var(--text-primary)]">
                 Email address

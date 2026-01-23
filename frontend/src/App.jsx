@@ -15,6 +15,11 @@ import Assets from './pages/Assets'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerificationPending from './pages/VerificationPending'
+import VerifyEmail from './pages/VerifyEmail'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import MfaVerify from './pages/MfaVerify'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +74,21 @@ function App() {
                 } />
                 <Route path="/register" element={
                   <PublicRoute><Register /></PublicRoute>
+                } />
+                <Route path="/verification-pending" element={
+                  <PublicRoute><VerificationPending /></PublicRoute>
+                } />
+                <Route path="/verify-email" element={
+                  <VerifyEmail />
+                } />
+                <Route path="/forgot-password" element={
+                  <PublicRoute><ForgotPassword /></PublicRoute>
+                } />
+                <Route path="/reset-password" element={
+                  <ResetPassword />
+                } />
+                <Route path="/mfa-verify" element={
+                  <MfaVerify />
                 } />
 
                 {/* Protected routes */}

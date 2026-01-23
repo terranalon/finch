@@ -56,12 +56,14 @@ async def health_check():
 # Import and include routers
 from app.routers import (
     accounts,
+    admin,
     assets,
     auth,
     broker_data,
     brokers,
     dashboard,
     holdings,
+    mfa,
     portfolios,
     positions,
     prices,
@@ -71,6 +73,8 @@ from app.routers import (
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(mfa.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(accounts.router)
 app.include_router(assets.router)
 app.include_router(broker_data.router)
