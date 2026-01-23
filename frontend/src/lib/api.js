@@ -213,4 +213,253 @@ export async function logout() {
   clearTokens();
 }
 
+/**
+ * Verify email with token from verification link
+ *
+ * @param {string} token - Verification token from email
+ */
+export async function verifyEmail(token) {
+  const response = await fetch(`${API_BASE}/auth/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Email verification failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * Resend verification email
+ *
+ * @param {string} email - User's email address
+ */
+export async function resendVerification(email) {
+  const response = await fetch(`${API_BASE}/auth/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to resend verification email');
+  }
+
+  return response.json();
+}
+
+/**
+ * Reset password with token from reset link
+ *
+ * @param {string} token - Reset token from email
+ * @param {string} newPassword - New password
+ */
+export async function resetPassword(token, newPassword) {
+  const response = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Password reset failed');
+  }
+
+  return response.json();
+}
+
+/**
+ * Change password for authenticated user
+ *
+ * @param {string} currentPassword - User's current password
+ * @param {string} newPassword - New password
+ */
+export async function changePassword(currentPassword, newPassword) {
+  const response = await api('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to change password');
+  }
+
+  return response.json();
+}
+
+/**
+ * Request password reset email
+ *
+ * @param {string} email - User's email address
+ */
+export async function forgotPassword(email) {
+  const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to send reset email');
+  }
+
+  return response.json();
+}
+
+/**
+ * Verify MFA code during login
+ *
+ * @param {string} tempToken - Temporary token from login response
+ * @param {string} code - MFA code
+ * @param {string} method - MFA method (totp, email, recovery)
+ */
+export async function verifyMfa(tempToken, code, method) {
+  const response = await fetch(`${API_BASE}/auth/mfa/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ temp_token: tempToken, code, method }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'MFA verification failed');
+  }
+
+  const data = await response.json();
+  setToken(data.access_token);
+  setRefreshToken(data.refresh_token);
+  return data;
+}
+
+/**
+ * Send MFA email code during login
+ *
+ * @param {string} tempToken - Temporary token from login response
+ */
+export async function sendMfaEmailCode(tempToken) {
+  const response = await fetch(`${API_BASE}/auth/mfa/send-email-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ temp_token: tempToken }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to send email code');
+  }
+
+  return response.json();
+}
+
+/**
+ * Start TOTP setup for authenticated user
+ *
+ * @returns {Promise<{secret: string, qr_code_base64: string}>}
+ */
+export async function setupTotp() {
+  const response = await api('/auth/mfa/totp/setup', {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to start TOTP setup');
+  }
+
+  return response.json();
+}
+
+/**
+ * Confirm TOTP setup with verification code
+ *
+ * @param {string} secret - TOTP secret from setup
+ * @param {string} code - 6-digit code from authenticator app
+ * @returns {Promise<{recovery_codes: string[]}>}
+ */
+export async function confirmTotp(secret, code) {
+  const response = await api('/auth/mfa/totp/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ secret, code }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to confirm TOTP');
+  }
+
+  return response.json();
+}
+
+/**
+ * Enable email OTP for authenticated user
+ *
+ * @returns {Promise<{recovery_codes: string[]}>}
+ */
+export async function setupEmailOtp() {
+  const response = await api('/auth/mfa/email/setup', {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to enable email OTP');
+  }
+
+  return response.json();
+}
+
+/**
+ * Disable MFA for authenticated user
+ *
+ * @param {string|null} mfaCode - TOTP code (if using authenticator)
+ * @param {string|null} recoveryCode - Recovery code (if using recovery)
+ */
+export async function disableMfa(mfaCode, recoveryCode) {
+  const response = await api('/auth/mfa/disable', {
+    method: 'POST',
+    body: JSON.stringify({
+      mfa_code: mfaCode,
+      recovery_code: recoveryCode,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to disable MFA');
+  }
+
+  return response.json();
+}
+
+/**
+ * Regenerate recovery codes for authenticated user
+ *
+ * @param {string} code - TOTP code for verification
+ * @returns {Promise<{recovery_codes: string[]}>}
+ */
+export async function regenerateRecoveryCodes(code) {
+  const response = await api('/auth/mfa/recovery-codes/regenerate', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to regenerate recovery codes');
+  }
+
+  return response.json();
+}
+
 export default api;
