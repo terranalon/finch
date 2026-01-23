@@ -424,6 +424,7 @@ export async function setupEmailOtp() {
  *
  * @param {string|null} mfaCode - TOTP code (if using authenticator)
  * @param {string|null} recoveryCode - Recovery code (if using recovery)
+ * @returns {Promise<{message: string}>}
  */
 export async function disableMfa(mfaCode, recoveryCode) {
   const response = await api('/auth/mfa', {
