@@ -38,4 +38,5 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "Review pull request #${{ github.event.pull_request.number }} in this repository. Analyze the code changes and provide constructive feedback on code quality, potential bugs, and suggestions for improvement."
           settings: "{}"
+          show_full_output: true
 
