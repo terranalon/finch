@@ -180,3 +180,27 @@ class TestAccountLockout:
         user = db.query(User).filter(User.email == "test@example.com").first()
         assert user.failed_login_attempts == 2
         db.close()
+
+
+class TestTimingAttackPrevention:
+    """Tests for timing attack prevention on login."""
+
+    @patch("app.routers.auth.AuthService.verify_password")
+    @patch("app.routers.auth.AuthService.get_dummy_hash")
+    def test_nonexistent_user_performs_dummy_verification(
+        self, mock_get_dummy, mock_verify, auth_client
+    ):
+        """Non-existent user login should perform dummy verification for timing consistency."""
+        test_client, _ = auth_client
+        mock_get_dummy.return_value = "dummy_hash"
+        mock_verify.return_value = False
+
+        response = test_client.post(
+            "/api/auth/login",
+            json={"email": "nonexistent@example.com", "password": "AnyPassword123"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid email or password"
+        mock_get_dummy.assert_called_once()
+        mock_verify.assert_called_once_with("AnyPassword123", "dummy_hash")
