@@ -17,6 +17,7 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 
 | Command | Purpose |
 |---------|---------|
+| `/serve` | Start the development server |
 | `/plan` | Create implementation plan |
 | `/tdd` | Test-driven development |
 | `/code-review` | Review code quality |
