@@ -36,19 +36,5 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            Review this pull request and provide feedback on:
-            1. Code quality and best practices
-            2. Potential bugs or issues
-            3. Suggestions for improvement
-
-            Use `gh pr view ${{ github.event.pull_request.number }}` and `gh pr diff ${{ github.event.pull_request.number }}` to analyze the changes.
-          allowed_tools: |
-            Bash(gh pr view:*)
-            Bash(gh pr diff:*)
-            Bash(git diff:*)
-            Bash(git log:*)
-            Read
-            Glob
-            Grep
+          prompt: "Review pull request #${{ github.event.pull_request.number }} in this repository. Analyze the code changes and provide constructive feedback on code quality, potential bugs, and suggestions for improvement."
 
