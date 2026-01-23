@@ -368,7 +368,7 @@ export async function sendMfaEmailCode(tempToken) {
  * @returns {Promise<{secret: string, qr_code_base64: string}>}
  */
 export async function setupTotp() {
-  const response = await api('/auth/mfa/totp/setup', {
+  const response = await api('/auth/mfa/setup/totp', {
     method: 'POST',
   });
 
@@ -388,7 +388,7 @@ export async function setupTotp() {
  * @returns {Promise<{recovery_codes: string[]}>}
  */
 export async function confirmTotp(secret, code) {
-  const response = await api('/auth/mfa/totp/confirm', {
+  const response = await api('/auth/mfa/confirm/totp', {
     method: 'POST',
     body: JSON.stringify({ secret, code }),
   });
@@ -407,7 +407,7 @@ export async function confirmTotp(secret, code) {
  * @returns {Promise<{recovery_codes: string[]}>}
  */
 export async function setupEmailOtp() {
-  const response = await api('/auth/mfa/email/setup', {
+  const response = await api('/auth/mfa/setup/email', {
     method: 'POST',
   });
 
@@ -426,8 +426,8 @@ export async function setupEmailOtp() {
  * @param {string|null} recoveryCode - Recovery code (if using recovery)
  */
 export async function disableMfa(mfaCode, recoveryCode) {
-  const response = await api('/auth/mfa/disable', {
-    method: 'POST',
+  const response = await api('/auth/mfa', {
+    method: 'DELETE',
     body: JSON.stringify({
       mfa_code: mfaCode,
       recovery_code: recoveryCode,
@@ -449,7 +449,7 @@ export async function disableMfa(mfaCode, recoveryCode) {
  * @returns {Promise<{recovery_codes: string[]}>}
  */
 export async function regenerateRecoveryCodes(code) {
-  const response = await api('/auth/mfa/recovery-codes/regenerate', {
+  const response = await api('/auth/mfa/recovery-codes', {
     method: 'POST',
     body: JSON.stringify({ code }),
   });
