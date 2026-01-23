@@ -337,6 +337,24 @@ async def upload_broker_file(
                 "total_records": parsed_data.total_records,
                 "errors": import_stats.get("errors", []),
             }
+        elif broker_type in ("kraken", "bit2c", "binance"):
+            # For crypto brokers, use the CryptoImportService
+            from app.services.crypto_import_service import CryptoImportService
+
+            parsed_data = parser.parse(content)
+            import_service = CryptoImportService(db)
+            import_stats = import_service.import_data(
+                account_id, parsed_data, broker_type.capitalize()
+            )
+
+            source.import_stats = {
+                "transactions": import_stats.get("transactions", {}),
+                "cash_transactions": import_stats.get("cash_transactions", {}),
+                "dividends": import_stats.get("dividends", {}),
+                "holdings_reconstruction": import_stats.get("holdings_reconstruction", {}),
+                "total_records": parsed_data.total_records,
+                "errors": import_stats.get("errors", []),
+            }
         else:
             # For other broker types, use the generic parser (future)
             parsed_data = parser.parse(content)
