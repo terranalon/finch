@@ -263,6 +263,9 @@ function renderDetailedForexContent(tx, style) {
       </div>
       <p className="text-xs text-[var(--text-tertiary)] mt-1">
         Rate: {formatRate(tx.exchange_rate)}
+        {tx.fee > 0 && (
+          <span> · Fee: {getCurrencySymbol(tx.from_currency)}{tx.fee}</span>
+        )}
       </p>
     </>
   );
