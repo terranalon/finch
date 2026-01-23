@@ -39,13 +39,14 @@ class TestAccountLockout:
         # Reset rate limiter so we can test lockout specifically
         limiter.reset()
 
-        # 6th attempt should be blocked with 429 due to account lockout
+        # 6th attempt should be blocked due to account lockout
+        # Returns 401 (same as invalid credentials) to prevent email enumeration
         response = test_client.post(
             "/api/auth/login",
             json={"email": "test@example.com", "password": "WrongPassword"},
         )
-        assert response.status_code == 429
-        assert "locked" in response.json()["detail"].lower()
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid email or password"
 
     @patch("app.routers.auth.EmailService.send_verification_email")
     def test_correct_password_blocked_when_locked(self, mock_send, auth_client):
@@ -72,12 +73,16 @@ class TestAccountLockout:
                 json={"email": "test@example.com", "password": "WrongPassword"},
             )
 
+        # Reset rate limiter so we can test lockout specifically
+        limiter.reset()
+
         # Try with correct password - should still be blocked
+        # Returns 401 (same as invalid credentials) to prevent email enumeration
         response = test_client.post(
             "/api/auth/login",
             json={"email": "test@example.com", "password": "Password123"},
         )
-        assert response.status_code == 429
+        assert response.status_code == 401
 
     @patch("app.routers.auth.EmailService.send_verification_email")
     def test_successful_login_clears_failed_attempts(self, mock_send, auth_client):

@@ -116,7 +116,10 @@ LOCKOUT_DURATION_MINUTES = 15
 
 
 def _check_account_lockout(user: User, db: Session, ip_address: str | None, user_agent: str | None):
-    """Check if account is locked and raise exception if so."""
+    """Check if account is locked and raise exception if so.
+
+    Returns same error as invalid credentials to prevent email enumeration.
+    """
     if user.locked_until:
         # Handle both timezone-aware and naive datetimes (SQLite stores naive)
         locked_until = user.locked_until
@@ -129,9 +132,10 @@ def _check_account_lockout(user: User, db: Session, ip_address: str | None, user
                 details={"locked_until": user.locked_until.isoformat()}
             )
             db.commit()
+            # Return same error as invalid credentials to prevent email enumeration
             raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Account temporarily locked due to too many failed login attempts",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
             )
 
 
@@ -168,6 +172,8 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
     # Find user
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not user.password_hash:
+        # Perform dummy password verification to prevent timing-based email enumeration
+        AuthService.verify_password(data.password, AuthService.get_dummy_hash())
         SecurityAuditService.log_event(
             db, SecurityEventType.LOGIN_FAILED, ip_address=ip_address,
             user_agent=user_agent, details={"email": data.email, "reason": "user_not_found"}
