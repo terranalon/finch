@@ -138,28 +138,29 @@ class KrakenParser(BaseBrokerParser):
                 if refid not in trades_by_refid:
                     trades_by_refid[refid] = []
                 trades_by_refid[refid].append(row)
-            elif txn_type == "deposit":
-                cash_txn = self._parse_deposit(row)
-                if cash_txn:
-                    cash_transactions.append(cash_txn)
-            elif txn_type == "withdrawal":
-                cash_txn = self._parse_withdrawal(row)
-                if cash_txn:
-                    cash_transactions.append(cash_txn)
-            elif txn_type == "staking":
-                dividend = self._parse_staking_reward(row)
-                if dividend:
-                    dividends.append(dividend)
-            elif txn_type in ("transfer", "adjustment"):
-                # Handle transfers/adjustments as cash transactions
-                cash_txn = self._parse_transfer(row)
-                if cash_txn:
-                    cash_transactions.append(cash_txn)
+            elif txn_type in (
+                "deposit",
+                "withdrawal",
+                "staking",
+                "transfer",
+                "adjustment",
+                "earn",
+            ):
+                parsed = self._parse_non_trade_entry(row, txn_type)
+                if parsed:
+                    category, data = parsed
+                    if category == "cash":
+                        cash_transactions.append(data)
+                    elif category == "dividend":
+                        dividends.append(data)
+                    else:  # crypto_deposit, crypto_withdrawal, transfer
+                        transactions.append(data)
 
-        # Process grouped trades
+        # Process grouped trades (returns both crypto txns and trade settlements)
         for refid, trade_rows in trades_by_refid.items():
-            parsed_trades = self._parse_trade_group(trade_rows)
+            parsed_trades, trade_settlements = self._parse_trade_group(trade_rows)
             transactions.extend(parsed_trades)
+            cash_transactions.extend(trade_settlements)
 
         # Extract date range
         start_date, end_date = self.extract_date_range(file_content)
@@ -178,155 +179,313 @@ class KrakenParser(BaseBrokerParser):
             dividends=dividends,
         )
 
-    def _parse_deposit(self, row: dict) -> ParsedCashTransaction | None:
-        """Parse a deposit transaction."""
+    def _parse_non_trade_entry(
+        self, row: dict, entry_type: str
+    ) -> tuple[str, ParsedTransaction | ParsedCashTransaction] | None:
+        """Parse a single non-trade ledger entry.
+
+        Trade entries are handled by _parse_trade_group() which groups
+        crypto+fiat sides together.
+
+        Returns:
+            Tuple of (category, parsed_data) where category is one of:
+            - "cash": Fiat deposit/withdrawal -> ParsedCashTransaction
+            - "crypto_deposit": Crypto deposit -> ParsedTransaction
+            - "crypto_withdrawal": Crypto withdrawal -> ParsedTransaction
+            - "dividend": Staking reward -> ParsedTransaction
+            - "transfer": Internal transfer -> ParsedTransaction
+        """
         dt = self._parse_datetime(row.get("time", ""))
         if not dt:
             return None
 
-        amount = row.get("amount", "")
-        if not amount:
+        amount_str = row.get("amount", "")
+        if not amount_str:
             return None
 
+        entry_date = dt.date()
         asset = self._normalize_asset(row.get("asset", ""))
-
-        return ParsedCashTransaction(
-            date=dt.date(),
-            transaction_type="Deposit",
-            amount=Decimal(amount),
-            currency=asset,
-            notes=f"Kraken deposit - {row.get('txid', '')}",
-            raw_data=dict(row),
-        )
-
-    def _parse_withdrawal(self, row: dict) -> ParsedCashTransaction | None:
-        """Parse a withdrawal transaction."""
-        dt = self._parse_datetime(row.get("time", ""))
-        if not dt:
-            return None
-
-        amount = row.get("amount", "")
-        if not amount:
-            return None
-
-        asset = self._normalize_asset(row.get("asset", ""))
+        amount = Decimal(amount_str)
         fee = Decimal(row.get("fee", "0") or "0")
+        refid = row.get("refid", "")
 
-        return ParsedCashTransaction(
-            date=dt.date(),
-            transaction_type="Withdrawal",
-            amount=Decimal(amount),  # Already negative in Kraken data
-            currency=asset,
-            notes=f"Kraken withdrawal - fee: {fee}",
-            raw_data=dict(row),
-        )
+        if entry_type == "deposit":
+            if asset in FIAT_CURRENCIES:
+                net_amount = amount - fee
+                return (
+                    "cash",
+                    ParsedCashTransaction(
+                        date=entry_date,
+                        transaction_type="Deposit",
+                        amount=net_amount,
+                        currency=asset,
+                        fees=fee,
+                        notes=f"Kraken deposit - {refid}",
+                        raw_data=dict(row),
+                    ),
+                )
+            # Crypto deposit - creates holding quantity
+            # Note: Price lookup for cost basis is not available in CSV parser
+            # (API client uses CoinGecko for this)
+            return (
+                "crypto_deposit",
+                ParsedTransaction(
+                    trade_date=entry_date,
+                    symbol=asset,
+                    transaction_type="Deposit",
+                    quantity=amount,
+                    price_per_unit=None,
+                    amount=amount,
+                    currency="USD",
+                    notes=f"Kraken crypto deposit - {refid}",
+                    raw_data=dict(row),
+                ),
+            )
 
-    def _parse_staking_reward(self, row: dict) -> ParsedTransaction | None:
-        """Parse a staking reward as dividend-like income."""
-        dt = self._parse_datetime(row.get("time", ""))
-        if not dt:
-            return None
+        if entry_type == "withdrawal":
+            # Net amount = withdrawal amount - fee (both are negative impact)
+            net_amount = amount - fee
+            if asset in FIAT_CURRENCIES:
+                return (
+                    "cash",
+                    ParsedCashTransaction(
+                        date=entry_date,
+                        transaction_type="Withdrawal",
+                        amount=net_amount,
+                        currency=asset,
+                        fees=fee,
+                        notes=f"Kraken withdrawal - {refid}",
+                        raw_data=dict(row),
+                    ),
+                )
+            # Crypto withdrawal - reduces holding quantity
+            return (
+                "crypto_withdrawal",
+                ParsedTransaction(
+                    trade_date=entry_date,
+                    symbol=asset,
+                    transaction_type="Withdrawal",
+                    quantity=net_amount,
+                    price_per_unit=None,
+                    amount=net_amount,
+                    currency="USD",
+                    notes=f"Kraken crypto withdrawal - {refid}",
+                    raw_data=dict(row),
+                ),
+            )
 
-        amount = row.get("amount", "")
-        if not amount:
-            return None
+        if entry_type == "staking":
+            net_quantity = amount - fee
+            return (
+                "dividend",
+                ParsedTransaction(
+                    trade_date=entry_date,
+                    symbol=asset,
+                    transaction_type="Staking",
+                    quantity=net_quantity,
+                    amount=net_quantity,
+                    fees=fee,
+                    currency="USD",
+                    notes=f"Kraken staking reward - {refid}",
+                    raw_data=dict(row),
+                ),
+            )
 
-        asset = self._normalize_asset(row.get("asset", ""))
+        if entry_type in ("transfer", "adjustment"):
+            subtype = row.get("subtype", "")
+            return (
+                "transfer",
+                ParsedTransaction(
+                    trade_date=entry_date,
+                    symbol=asset,
+                    transaction_type="Transfer",
+                    quantity=amount,
+                    price_per_unit=None,
+                    amount=amount,
+                    currency="USD",
+                    notes=f"Kraken transfer ({subtype}) - {refid}",
+                    raw_data=dict(row),
+                ),
+            )
 
-        return ParsedTransaction(
-            trade_date=dt.date(),
-            symbol=asset,
-            transaction_type="Staking",
-            amount=Decimal(amount),
-            currency=asset,
-            notes=f"Kraken staking reward - {row.get('txid', '')}",
-            raw_data=dict(row),
-        )
+        if entry_type == "earn":
+            subtype = row.get("subtype", "")
 
-    def _parse_transfer(self, row: dict) -> ParsedCashTransaction | None:
-        """Parse a transfer or adjustment transaction."""
-        dt = self._parse_datetime(row.get("time", ""))
-        if not dt:
-            return None
+            # Earn rewards are staking dividends
+            if subtype == "reward":
+                net_quantity = amount - fee
+                return (
+                    "dividend",
+                    ParsedTransaction(
+                        trade_date=entry_date,
+                        symbol=asset,
+                        transaction_type="Staking",
+                        quantity=net_quantity,
+                        amount=net_quantity,
+                        fees=fee,
+                        currency="USD",
+                        notes=f"Kraken earn reward - {refid}",
+                        raw_data=dict(row),
+                    ),
+                )
 
-        amount = row.get("amount", "")
-        if not amount:
-            return None
+            # Allocation/autoallocation - internal transfers to/from earn wallet
+            return (
+                "transfer",
+                ParsedTransaction(
+                    trade_date=entry_date,
+                    symbol=asset,
+                    transaction_type="Transfer",
+                    quantity=amount,
+                    price_per_unit=None,
+                    amount=amount,
+                    currency="USD",
+                    notes=f"Kraken earn ({subtype}) - {refid}",
+                    raw_data=dict(row),
+                ),
+            )
 
-        asset = self._normalize_asset(row.get("asset", ""))
-        txn_type = row.get("type", "transfer").capitalize()
+        return None
 
-        return ParsedCashTransaction(
-            date=dt.date(),
-            transaction_type=txn_type,
-            amount=Decimal(amount),
-            currency=asset,
-            notes=f"Kraken {txn_type.lower()} - {row.get('txid', '')}",
-            raw_data=dict(row),
-        )
-
-    def _parse_trade_group(self, rows: list[dict]) -> list[ParsedTransaction]:
+    def _parse_trade_group(
+        self, rows: list[dict]
+    ) -> tuple[list[ParsedTransaction], list[ParsedCashTransaction]]:
         """Parse a group of trade rows with same refid.
 
         Kraken trades come in pairs: one negative (sold) and one positive (bought).
         Example: Buy BTC with USD creates:
         - ZUSD: -500.25 (sold USD)
         - XXBT: +0.01 (bought BTC)
+
+        For fiat-to-crypto trades, this creates:
+        1. A crypto transaction with quantity adjusted for fees
+        2. A Trade Settlement cash transaction for dual-entry accounting
+
+        Fee handling:
+        - Buy: quantity = crypto_received - crypto_fee (fee reduces what you get)
+        - Sell: quantity = crypto_sold + crypto_fee (fee adds to what you give up)
+
+        Returns:
+            Tuple of (crypto transactions, trade settlement cash transactions)
         """
         if not rows:
-            return []
+            return [], []
 
         dt = self._parse_datetime(rows[0].get("time", ""))
         if not dt:
-            return []
+            return [], []
 
-        # Separate into outgoing (negative) and incoming (positive) entries
-        outgoing = [r for r in rows if Decimal(r.get("amount", "0")) < 0]
-        incoming = [r for r in rows if Decimal(r.get("amount", "0")) > 0]
+        trade_date = dt.date()
 
-        transactions = []
-        for in_row in incoming:
-            in_asset = self._normalize_asset(in_row.get("asset", ""))
-            in_amount = Decimal(in_row.get("amount", "0"))
+        # Separate crypto and fiat entries
+        crypto_entry = None
+        fiat_entry = None
+        crypto_entries = []
 
-            out_row = outgoing[0] if outgoing else None
-            out_asset = self._normalize_asset(out_row.get("asset", "")) if out_row else ""
-            out_amount = abs(Decimal(out_row.get("amount", "0"))) if out_row else Decimal("0")
-            fee = Decimal(out_row.get("fee", "0") or "0") if out_row else Decimal("0")
-
-            raw_data = {"buy": dict(in_row), "sell": dict(out_row) if out_row else {}}
-            refid = in_row.get("refid", "")
-
-            # If we received fiat, we sold crypto; otherwise we bought crypto
-            if in_asset in FIAT_CURRENCIES:
-                transactions.append(
-                    ParsedTransaction(
-                        trade_date=dt.date(),
-                        symbol=out_asset,
-                        transaction_type="Sell",
-                        quantity=out_amount,
-                        price_per_unit=in_amount / out_amount if out_amount > 0 else None,
-                        amount=in_amount,
-                        fees=fee,
-                        currency=in_asset,
-                        notes=f"Kraken trade - {refid}",
-                        raw_data=raw_data,
-                    )
-                )
+        for row in rows:
+            asset = self._normalize_asset(row.get("asset", ""))
+            if asset in FIAT_CURRENCIES:
+                fiat_entry = row
             else:
-                transactions.append(
-                    ParsedTransaction(
-                        trade_date=dt.date(),
-                        symbol=in_asset,
-                        transaction_type="Buy",
-                        quantity=in_amount,
-                        price_per_unit=out_amount / in_amount if in_amount > 0 else None,
-                        amount=out_amount,
-                        fees=fee,
-                        currency=out_asset if out_asset else in_asset,
-                        notes=f"Kraken trade - {refid}",
-                        raw_data=raw_data,
-                    )
+                crypto_entry = row
+                crypto_entries.append(row)
+
+        # Crypto-to-crypto trade: both sides are crypto (no fiat involved)
+        if fiat_entry is None:
+            if len(crypto_entries) == 2:
+                return self._parse_crypto_to_crypto_trade(crypto_entries, trade_date), []
+            logger.warning(f"Trade has unexpected structure: {len(rows)} entries, skipping")
+            return [], []
+
+        if crypto_entry is None:
+            logger.warning(f"Trade missing crypto entry: {len(rows)} entries, skipping")
+            return [], []
+
+        # Extract data from both entries
+        refid = crypto_entry.get("refid", "")
+        crypto_asset = self._normalize_asset(crypto_entry.get("asset", ""))
+        crypto_amount = Decimal(crypto_entry.get("amount", "0"))
+        crypto_fee = Decimal(crypto_entry.get("fee", "0") or "0")
+        fiat_amount = Decimal(fiat_entry.get("amount", "0"))
+        fiat_fee = Decimal(fiat_entry.get("fee", "0") or "0")
+        fiat_currency = self._normalize_asset(fiat_entry.get("asset", ""))
+
+        # Determine transaction type based on crypto amount sign
+        # Positive crypto = Buy, Negative crypto = Sell
+        if crypto_amount > 0:
+            transaction_type = "Buy"
+            quantity = crypto_amount - crypto_fee  # Net crypto received after fee
+            cost = abs(fiat_amount)  # fiat_amount is negative (spent)
+        else:
+            transaction_type = "Sell"
+            quantity = abs(crypto_amount) + crypto_fee  # Total crypto leaving account
+            cost = fiat_amount  # fiat_amount is positive (received)
+
+        price_per_unit = cost / quantity if quantity != 0 else None
+        total_fees = fiat_fee + crypto_fee
+
+        transaction = ParsedTransaction(
+            trade_date=trade_date,
+            symbol=crypto_asset,
+            transaction_type=transaction_type,
+            quantity=quantity,
+            price_per_unit=price_per_unit,
+            amount=cost,
+            fees=total_fees,
+            currency="USD",
+            notes=f"Kraken trade - {refid}",
+            raw_data={"crypto": dict(crypto_entry), "fiat": dict(fiat_entry)},
+        )
+
+        # Trade Settlement for cash impact (dual-entry accounting)
+        # Total cash impact = fiat_amount - fiat_fee (fee reduces cash further)
+        settlement = ParsedCashTransaction(
+            date=trade_date,
+            transaction_type="Trade Settlement",
+            amount=fiat_amount - fiat_fee,
+            currency=fiat_currency,
+            notes=f"Settlement for {crypto_asset} {transaction_type} - {refid}",
+            raw_data=dict(fiat_entry),
+        )
+
+        return [transaction], [settlement]
+
+    def _parse_crypto_to_crypto_trade(
+        self, entries: list[dict], trade_date: date
+    ) -> list[ParsedTransaction]:
+        """Parse a crypto-to-crypto trade (no fiat involved).
+
+        For buys: net quantity = amount - fee (fee reduces what you receive)
+        For sells: quantity = abs(amount) + fee (fee adds to what you give up)
+        """
+        refid = entries[0].get("refid", "")
+        transactions = []
+
+        for entry in entries:
+            asset = self._normalize_asset(entry.get("asset", ""))
+            amount = Decimal(entry.get("amount", "0"))
+            fee = Decimal(entry.get("fee", "0") or "0")
+
+            if amount > 0:
+                transaction_type = "Buy"
+                quantity = amount - fee
+            else:
+                transaction_type = "Sell"
+                quantity = abs(amount) + fee
+
+            transactions.append(
+                ParsedTransaction(
+                    trade_date=trade_date,
+                    symbol=asset,
+                    transaction_type=transaction_type,
+                    quantity=quantity,
+                    price_per_unit=None,
+                    amount=None,
+                    fees=fee,
+                    currency="USD",
+                    notes=f"Kraken crypto-to-crypto trade ({transaction_type.lower()}) - {refid}",
+                    raw_data=dict(entry),
                 )
+            )
 
         return transactions
