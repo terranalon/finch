@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Asset, BrokerDataSource, Holding, Transaction
+from app.models import Asset, BrokerDataSource, Holding
 from app.services.base_broker_parser import (
     BrokerImportData,
     ParsedCashTransaction,
@@ -17,8 +17,7 @@ from app.services.base_broker_parser import (
 from app.services.coingecko_client import CoinGeckoClient
 from app.services.transaction_hash_service import (
     DedupResult,
-    check_and_transfer_ownership,
-    compute_transaction_hash,
+    create_or_transfer_transaction,
 )
 
 logger = logging.getLogger(__name__)
@@ -201,44 +200,28 @@ class CryptoImportService:
                 if asset_created:
                     stats["assets_created"] += 1
 
-                # Compute content hash for deduplication
-                content_hash = compute_transaction_hash(
-                    external_txn_id=txn.external_transaction_id,
+                # Create or transfer transaction with automatic deduplication
+                result, _ = create_or_transfer_transaction(
+                    db=self.db,
+                    holding_id=holding.id,
+                    source_id=source_id,
                     txn_date=txn.trade_date,
-                    symbol=txn.symbol,
                     txn_type=txn.transaction_type,
-                    quantity=txn.quantity or Decimal("0"),
+                    symbol=txn.symbol,
+                    quantity=txn.quantity,
                     price=txn.price_per_unit,
-                    fees=txn.fees or Decimal("0"),
+                    fees=txn.fees,
+                    amount=txn.amount,
+                    external_txn_id=txn.external_transaction_id,
+                    notes=txn.notes,
                 )
 
-                # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
+                if result == DedupResult.NEW:
+                    stats["imported"] += 1
+                elif result == DedupResult.TRANSFERRED:
                     stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
+                else:
                     stats["skipped"] += 1
-                    continue
-
-                # Create new transaction
-                self.db.add(
-                    Transaction(
-                        holding_id=holding.id,
-                        broker_source_id=source_id,
-                        date=txn.trade_date,
-                        type=txn.transaction_type,
-                        quantity=txn.quantity,
-                        price_per_unit=txn.price_per_unit,
-                        amount=txn.amount,
-                        fees=txn.fees or Decimal("0"),
-                        notes=txn.notes,
-                        external_transaction_id=txn.external_transaction_id,
-                        content_hash=content_hash,
-                    )
-                )
-                self.db.flush()
-                stats["imported"] += 1
 
             except Exception as e:
                 logger.error(f"Error importing transaction for {txn.symbol}: {e}")
@@ -269,40 +252,25 @@ class CryptoImportService:
                     account_id, currency, asset_class, currency
                 )
 
-                # Compute content hash for deduplication
-                content_hash = compute_transaction_hash(
-                    external_txn_id=None,  # Cash transactions don't have external IDs
+                # Create or transfer transaction with automatic deduplication
+                result, _ = create_or_transfer_transaction(
+                    db=self.db,
+                    holding_id=holding.id,
+                    source_id=source_id,
                     txn_date=cash_txn.date,
-                    symbol=currency,
                     txn_type=cash_txn.transaction_type,
-                    quantity=cash_txn.amount or Decimal("0"),
-                    price=None,
-                    fees=cash_txn.fees or Decimal("0"),
+                    symbol=currency,
+                    amount=cash_txn.amount,
+                    fees=cash_txn.fees,
+                    notes=cash_txn.notes,
                 )
 
-                # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
+                if result == DedupResult.NEW:
+                    stats["imported"] += 1
+                elif result == DedupResult.TRANSFERRED:
                     stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
+                else:
                     stats["skipped"] += 1
-                    continue
-
-                self.db.add(
-                    Transaction(
-                        holding_id=holding.id,
-                        broker_source_id=source_id,
-                        date=cash_txn.date,
-                        type=cash_txn.transaction_type,
-                        amount=cash_txn.amount,
-                        fees=cash_txn.fees,
-                        notes=cash_txn.notes,
-                        content_hash=content_hash,
-                    )
-                )
-                self.db.flush()
-                stats["imported"] += 1
 
             except Exception as e:
                 logger.error(f"Error importing cash transaction: {e}")
@@ -328,44 +296,27 @@ class CryptoImportService:
                     account_id, div.symbol, "Crypto", div.currency
                 )
 
-                # For dividends, use amount as the quantity for hashing (consistent with IBKR/Meitav)
-                dividend_quantity = div.amount or div.quantity or Decimal("0")
-
-                # Compute content hash for deduplication
-                content_hash = compute_transaction_hash(
-                    external_txn_id=div.external_transaction_id,
+                # Create or transfer transaction with automatic deduplication
+                result, _ = create_or_transfer_transaction(
+                    db=self.db,
+                    holding_id=holding.id,
+                    source_id=source_id,
                     txn_date=div.trade_date,
-                    symbol=div.symbol,
                     txn_type=div.transaction_type,
-                    quantity=dividend_quantity,
-                    price=None,
-                    fees=div.fees or Decimal("0"),
+                    symbol=div.symbol,
+                    quantity=div.quantity,
+                    amount=div.amount,
+                    fees=div.fees,
+                    external_txn_id=div.external_transaction_id,
+                    notes=div.notes,
                 )
 
-                # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
+                if result == DedupResult.NEW:
+                    stats["imported"] += 1
+                elif result == DedupResult.TRANSFERRED:
                     stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
+                else:
                     stats["skipped"] += 1
-                    continue
-
-                self.db.add(
-                    Transaction(
-                        holding_id=holding.id,
-                        broker_source_id=source_id,
-                        date=div.trade_date,
-                        type=div.transaction_type,
-                        quantity=div.quantity,
-                        amount=div.amount,
-                        notes=div.notes,
-                        external_transaction_id=div.external_transaction_id,
-                        content_hash=content_hash,
-                    )
-                )
-                self.db.flush()
-                stats["imported"] += 1
 
             except Exception as e:
                 logger.error(f"Error importing dividend for {div.symbol}: {e}")
