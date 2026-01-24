@@ -23,6 +23,7 @@ class ParsedTransaction:
     fees: Decimal = field(default_factory=lambda: Decimal("0"))
     currency: str = "USD"
     notes: str | None = None
+    external_transaction_id: str | None = None  # Broker's unique transaction ID
     raw_data: dict | None = None  # Original broker data for debugging
 
 
