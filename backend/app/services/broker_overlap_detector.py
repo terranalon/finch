@@ -39,6 +39,18 @@ class CoverageSummary:
     gaps: list[CoverageGap]
 
 
+@dataclass
+class OverlapAnalysis:
+    """Analysis of overlap between new file and existing sources."""
+
+    overlapping_sources: list  # List of BrokerDataSource
+    overlap_type: str  # 'none', 'partial', 'full_contains', 'subset'
+    affected_transaction_count: int
+    sources_to_delete: list  # Sources fully contained (can be auto-deleted)
+    requires_confirmation: bool
+    message: str
+
+
 class BrokerOverlapDetector:
     """Detects overlaps and gaps in broker data coverage.
 
@@ -245,6 +257,120 @@ class BrokerOverlapDetector:
             query = query.filter(BrokerDataSource.broker_type == broker_type)
 
         return query.order_by(BrokerDataSource.start_date.desc()).all()
+
+    def analyze_overlap(
+        self,
+        db: Session,
+        account_id: int,
+        broker_type: str,
+        new_start: date,
+        new_end: date,
+    ) -> OverlapAnalysis:
+        """Analyze overlaps and return detailed impact report.
+
+        Determines the type of overlap and what actions are needed:
+        - none: No overlap, can import freely
+        - partial: Some dates overlap, needs user confirmation
+        - full_contains: New file fully contains old sources (can auto-delete)
+        - subset: New file is already covered by existing imports
+
+        Args:
+            db: Database session
+            account_id: Account to check
+            broker_type: Broker type to check
+            new_start: Start date of new import
+            new_end: End date of new import
+
+        Returns:
+            OverlapAnalysis with detailed information about the overlap
+        """
+        from sqlalchemy import func
+
+        from app.models.transaction import Transaction
+
+        overlapping = self._get_overlapping_sources(db, account_id, broker_type, new_start, new_end)
+
+        if not overlapping:
+            return OverlapAnalysis(
+                overlapping_sources=[],
+                overlap_type="none",
+                affected_transaction_count=0,
+                sources_to_delete=[],
+                requires_confirmation=False,
+                message="No overlap detected",
+            )
+
+        # Count affected transactions
+        source_ids = [s.id for s in overlapping]
+        txn_count = (
+            db.query(func.count(Transaction.id))
+            .filter(Transaction.broker_source_id.in_(source_ids))
+            .scalar()
+            or 0
+        )
+
+        # Determine overlap type
+        sources_to_delete = []
+        is_subset = False
+
+        for source in overlapping:
+            # New file fully contains old source
+            if new_start <= source.start_date and new_end >= source.end_date:
+                sources_to_delete.append(source)
+            # New file is subset of old source
+            elif source.start_date <= new_start and source.end_date >= new_end:
+                is_subset = True
+
+        if is_subset:
+            overlap_type = "subset"
+            message = "This file's date range is already covered by existing imports."
+        elif len(sources_to_delete) == len(overlapping):
+            overlap_type = "full_contains"
+            message = f"This will replace {len(sources_to_delete)} existing import(s)."
+        else:
+            overlap_type = "partial"
+            message = f"Partial overlap with {len(overlapping)} existing import(s)."
+
+        return OverlapAnalysis(
+            overlapping_sources=overlapping,
+            overlap_type=overlap_type,
+            affected_transaction_count=txn_count,
+            sources_to_delete=sources_to_delete,
+            requires_confirmation=True,
+            message=message,
+        )
+
+    def _get_overlapping_sources(
+        self,
+        db: Session,
+        account_id: int,
+        broker_type: str,
+        new_start: date,
+        new_end: date,
+    ) -> list[BrokerDataSource]:
+        """Get all sources that overlap with the given date range.
+
+        Args:
+            db: Database session
+            account_id: Account to check
+            broker_type: Broker type to check
+            new_start: Start date of new range
+            new_end: End date of new range
+
+        Returns:
+            List of overlapping BrokerDataSource records
+        """
+        return (
+            db.query(BrokerDataSource)
+            .filter(
+                BrokerDataSource.account_id == account_id,
+                BrokerDataSource.broker_type == broker_type,
+                BrokerDataSource.status == "completed",
+                BrokerDataSource.start_date <= new_end,
+                BrokerDataSource.end_date >= new_start,
+            )
+            .all()
+        )
 
 
 # Singleton instance for convenience
