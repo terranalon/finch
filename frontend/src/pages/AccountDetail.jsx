@@ -316,7 +316,7 @@ function StatCard({ label, value, subValue, trend, trendDirection }) {
 // ALERT DIALOG COMPONENT
 // ============================================
 
-function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLabel = 'Delete', variant = 'danger', isLoading = false }) {
+function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLabel = 'Delete', loadingLabel, variant = 'danger', isLoading = false }) {
   if (!isOpen) return null;
 
   return (
@@ -361,7 +361,7 @@ function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLa
                   : 'bg-amber-600 hover:bg-amber-700'
               )}
             >
-              {isLoading ? 'Deleting...' : confirmLabel}
+              {isLoading ? (loadingLabel || 'Processing...') : confirmLabel}
             </button>
           </div>
         </div>
@@ -1333,6 +1333,10 @@ export default function AccountDetail() {
   const [deleteDialogSource, setDeleteDialogSource] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Overlap warning state
+  const [overlapWarning, setOverlapWarning] = useState(null);
+  const [pendingUploadFile, setPendingUploadFile] = useState(null);
+
   // Handle tab query parameter and scrolling to API credentials
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -1389,15 +1393,43 @@ export default function AccountDetail() {
     checkCredentials();
   }, [account?.id, account?.broker_type, brokerConfig?.has_api]);
 
-  // Handle file upload from modal
-  const handleFileUpload = async (file) => {
+  // Handle file upload from modal - first analyze, then upload with optional overlap confirmation
+  const handleFileUpload = async (file, confirmOverlap = false) => {
     if (!file) return;
 
     setIsUploading(true);
     try {
+      // If not confirming overlap, first analyze the file
+      if (!confirmOverlap) {
+        const analyzeFormData = new FormData();
+        analyzeFormData.append('file', file);
+        analyzeFormData.append('broker_type', account.broker_type);
+
+        const analyzeRes = await api(`/broker-data/upload/${id}/analyze`, {
+          method: 'POST',
+          body: analyzeFormData,
+        });
+
+        if (analyzeRes.ok) {
+          const analysis = await analyzeRes.json();
+
+          // If there's an overlap warning and it requires confirmation
+          if (analysis.overlap_warning && analysis.requires_confirmation) {
+            setOverlapWarning(analysis.overlap_warning);
+            setPendingUploadFile(file);
+            setIsUploading(false);
+            return; // Wait for user to confirm
+          }
+        }
+      }
+
+      // Proceed with upload (with or without overlap confirmation)
       const formData = new FormData();
       formData.append('file', file);
       formData.append('broker_type', account.broker_type);
+      if (confirmOverlap) {
+        formData.append('confirm_overlap', 'true');
+      }
 
       const res = await api(`/broker-data/upload/${id}`, {
         method: 'POST',
@@ -1410,6 +1442,8 @@ export default function AccountDetail() {
           `Successfully imported ${result.stats?.total_records || 0} records from ${file.name}`
         );
         setIsUploadModalOpen(false);
+        setOverlapWarning(null);
+        setPendingUploadFile(null);
         window.location.reload();
       } else {
         const errorData = await res.json();
@@ -1426,6 +1460,18 @@ export default function AccountDetail() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Handle overlap confirmation
+  const handleOverlapConfirm = async () => {
+    if (!pendingUploadFile) return;
+    await handleFileUpload(pendingUploadFile, true);
+  };
+
+  // Handle overlap cancellation
+  const handleOverlapCancel = () => {
+    setOverlapWarning(null);
+    setPendingUploadFile(null);
   };
 
   // Handle delete data source
@@ -2537,6 +2583,19 @@ export default function AccountDetail() {
         }}
       />
 
+      {/* Overlap Warning Dialog */}
+      <AlertDialog
+        isOpen={!!overlapWarning}
+        onClose={handleOverlapCancel}
+        onConfirm={handleOverlapConfirm}
+        title="Overlapping Date Range Detected"
+        description={overlapWarning ? `${overlapWarning.message}\n\nAffected sources:\n${overlapWarning.affected_sources?.map(s => `- ${s.identifier} (${s.start_date} to ${s.end_date})`).join('\n') || 'None'}\n\nTransactions affected: ${overlapWarning.affected_transaction_count || 0}\n\nContinuing will transfer ownership of duplicate transactions to this new import.` : ''}
+        confirmLabel="Continue Import"
+        loadingLabel="Importing..."
+        variant="warning"
+        isLoading={isUploading}
+      />
+
       {/* Delete Import Confirmation Dialog */}
       <AlertDialog
         isOpen={!!deleteDialogSource}
@@ -2545,6 +2604,7 @@ export default function AccountDetail() {
         title="Delete Import Source"
         description={deleteDialogSource ? `Are you sure you want to delete this import?\n\n${deleteDialogSource.source_identifier || 'Unknown file'}\n\nThis will permanently delete ${(deleteDialogSource.transaction_count || 0).toLocaleString()} transaction${deleteDialogSource.transaction_count !== 1 ? 's' : ''} and all related data imported from this file. This action cannot be undone.` : ''}
         confirmLabel="Delete Import"
+        loadingLabel="Deleting..."
         variant="danger"
         isLoading={isDeleting}
       />
