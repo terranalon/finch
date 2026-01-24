@@ -3,6 +3,53 @@
 import hashlib
 from datetime import date
 from decimal import Decimal
+from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from app.models import Transaction
+
+
+class DedupResult(Enum):
+    """Result of transaction deduplication check."""
+
+    NEW = "new"  # No existing transaction, create new
+    TRANSFERRED = "transferred"  # Ownership transferred to new source
+    SKIPPED = "skipped"  # Already owned by this source
+
+
+def check_and_transfer_ownership(
+    db: "Session",
+    content_hash: str,
+    source_id: int | None,
+) -> tuple[DedupResult, "Transaction | None"]:
+    """Check for existing transaction by hash and handle ownership transfer.
+
+    Implements the latest-wins policy: if a transaction exists under a different
+    source, ownership is transferred to the new source.
+
+    Args:
+        db: Database session
+        content_hash: SHA256 hash of transaction content
+        source_id: New broker source ID
+
+    Returns:
+        Tuple of (DedupResult, existing_transaction or None)
+    """
+    from app.models import Transaction
+
+    existing = db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
+
+    if not existing:
+        return DedupResult.NEW, None
+
+    if existing.broker_source_id != source_id:
+        existing.broker_source_id = source_id
+        return DedupResult.TRANSFERRED, existing
+
+    return DedupResult.SKIPPED, existing
 
 
 def compute_transaction_hash(

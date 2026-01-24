@@ -18,7 +18,11 @@ from app.services.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.tase_api_service import TASEApiService
-from app.services.transaction_hash_service import compute_transaction_hash
+from app.services.transaction_hash_service import (
+    DedupResult,
+    check_and_transfer_ownership,
+    compute_transaction_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,19 +259,13 @@ class MeitavImportService:
                     fees=txn.fees or Decimal("0"),
                 )
 
-                # Check for existing transaction by hash
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(Transaction.content_hash == content_hash)
-                    .first()
-                )
-
-                if existing:
-                    if existing.broker_source_id != source_id:
-                        existing.broker_source_id = source_id
-                        stats["transferred"] += 1
-                    else:
-                        stats["skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result == DedupResult.TRANSFERRED:
+                    stats["transferred"] += 1
+                    continue
+                if dedup_result == DedupResult.SKIPPED:
+                    stats["skipped"] += 1
                     continue
 
                 # Create transaction
@@ -414,19 +412,13 @@ class MeitavImportService:
                     fees=cash_txn.fees or Decimal("0"),
                 )
 
-                # Check for existing transaction by hash
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(Transaction.content_hash == content_hash)
-                    .first()
-                )
-
-                if existing:
-                    if existing.broker_source_id != source_id:
-                        existing.broker_source_id = source_id
-                        stats["transferred"] += 1
-                    else:
-                        stats["skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result == DedupResult.TRANSFERRED:
+                    stats["transferred"] += 1
+                    continue
+                if dedup_result == DedupResult.SKIPPED:
+                    stats["skipped"] += 1
                     continue
 
                 # Create transaction
@@ -522,19 +514,13 @@ class MeitavImportService:
                     fees=div.fees or Decimal("0"),
                 )
 
-                # Check for existing transaction by hash
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(Transaction.content_hash == content_hash)
-                    .first()
-                )
-
-                if existing:
-                    if existing.broker_source_id != source_id:
-                        existing.broker_source_id = source_id
-                        stats["transferred"] += 1
-                    else:
-                        stats["skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result == DedupResult.TRANSFERRED:
+                    stats["transferred"] += 1
+                    continue
+                if dedup_result == DedupResult.SKIPPED:
+                    stats["skipped"] += 1
                     continue
 
                 # Create dividend transaction

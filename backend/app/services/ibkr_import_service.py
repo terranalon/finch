@@ -13,7 +13,11 @@ from sqlalchemy.orm import Session
 from app.models import Asset, Holding, Transaction
 from app.services.asset_metadata_service import AssetMetadataService
 from app.services.price_fetcher import PriceFetcher
-from app.services.transaction_hash_service import compute_transaction_hash
+from app.services.transaction_hash_service import (
+    DedupResult,
+    check_and_transfer_ownership,
+    compute_transaction_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -650,17 +654,13 @@ class IBKRImportService:
                     fees=txn["commission"],
                 )
 
-                # Check for existing transaction by hash
-                existing = (
-                    db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
-                )
-
-                if existing:
-                    if existing.broker_source_id != source_id:
-                        existing.broker_source_id = source_id
-                        stats["transferred"] += 1
-                    else:
-                        stats["skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(db, content_hash, source_id)
+                if dedup_result == DedupResult.TRANSFERRED:
+                    stats["transferred"] += 1
+                    continue
+                if dedup_result == DedupResult.SKIPPED:
+                    stats["skipped"] += 1
                     continue
 
                 # Create transaction - add to batch list
@@ -827,17 +827,13 @@ class IBKRImportService:
                     fees=Decimal("0"),
                 )
 
-                # Check for existing transaction by hash
-                existing = (
-                    db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
-                )
-
-                if existing:
-                    if existing.broker_source_id != source_id:
-                        existing.broker_source_id = source_id
-                        stats["transferred"] += 1
-                    else:
-                        stats["skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(db, content_hash, source_id)
+                if dedup_result == DedupResult.TRANSFERRED:
+                    stats["transferred"] += 1
+                    continue
+                if dedup_result == DedupResult.SKIPPED:
+                    stats["skipped"] += 1
                     continue
 
                 # Check for DRIP (Dividend Reinvestment Plan)
