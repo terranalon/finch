@@ -52,3 +52,27 @@ Astronomer Runtime isolates tasks from Airflow's metadata database by setting `A
 - App uses `postgres:5432` (Docker network)
 - Airflow DAGs use `host.docker.internal:5432` (cross-network access)
 - Shared DB module at `airflow/dags/shared_db.py` handles this translation
+
+## Service Account Authentication
+
+DAGs authenticate with the backend API using a service account. Credentials are in `backend/.env`:
+- `AIRFLOW_SERVICE_EMAIL=airflow-service@system.internal`
+- `AIRFLOW_SERVICE_PASSWORD=<generated-password>`
+
+Service accounts (users with `is_service_account = TRUE`) bypass the email verification check automatically.
+
+## Troubleshooting
+
+### DAG fails with 403 "email_not_verified"
+
+**Symptom:** `import_broker_data` or similar tasks fail with HTTP 403 and `{"detail":"email_not_verified"}`.
+
+**Cause:** The user exists but is not marked as a service account (`is_service_account = FALSE`).
+
+**Fix:**
+```sql
+UPDATE users SET is_service_account = TRUE
+WHERE email = 'airflow-service@system.internal';
+```
+
+**Note:** The `scripts/create_service_account.py` script sets this flag automatically.

@@ -218,6 +218,36 @@ class TestVerifyEmail:
         assert response.status_code == 400
 
 
+class TestServiceAccountLogin:
+    """Tests for service account login bypassing email verification."""
+
+    def test_service_account_can_login_without_email_verification(self, auth_client):
+        """Service accounts should be able to login even if email_verified=False."""
+        test_auth_client, db_session_maker = auth_client
+        from app.services.auth_service import AuthService
+
+        # Create a service account with email_verified=False
+        db = db_session_maker()
+        service_user = User(
+            email="test-service@system.internal",
+            password_hash=AuthService.hash_password("ServicePass123"),
+            is_service_account=True,
+            email_verified=False,  # Explicitly unverified
+            is_active=True,
+        )
+        db.add(service_user)
+        db.commit()
+        db.close()
+
+        # Login should succeed despite email_verified=False
+        response = test_auth_client.post(
+            "/api/auth/login",
+            json={"email": "test-service@system.internal", "password": "ServicePass123"},
+        )
+        assert response.status_code == 200
+        assert "access_token" in response.json()
+
+
 class TestResendVerification:
     """Tests for resend-verification endpoint."""
 

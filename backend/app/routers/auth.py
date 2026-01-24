@@ -210,8 +210,8 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
             detail="Account is disabled",
         )
 
-    # Check if email is verified
-    if not user.email_verified:
+    # Check if email is verified (service accounts bypass this check)
+    if not user.email_verified and not user.is_service_account:
         SecurityAuditService.log_event(
             db, SecurityEventType.LOGIN_BLOCKED_UNVERIFIED, user_id=user.id,
             ip_address=ip_address, user_agent=user_agent
