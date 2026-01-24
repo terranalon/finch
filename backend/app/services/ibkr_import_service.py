@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models import Asset, Holding, Transaction
 from app.services.asset_metadata_service import AssetMetadataService
 from app.services.price_fetcher import PriceFetcher
+from app.services.transaction_hash_service import compute_transaction_hash
 
 logger = logging.getLogger(__name__)
 
@@ -558,7 +559,8 @@ class IBKRImportService:
         stats = {
             "total": len(transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
             "forex_pairs_skipped": 0,
@@ -637,28 +639,29 @@ class IBKRImportService:
                     db.add(holding)
                     db.flush()  # Need ID for transaction FK
 
-                # Check for duplicate transaction
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=txn.get("external_transaction_id"),
+                    txn_date=txn["trade_date"],
+                    symbol=txn["symbol"],
+                    txn_type=txn["transaction_type"],
+                    quantity=txn["quantity"],
+                    price=txn["price"],
+                    fees=txn["commission"],
+                )
+
+                # Check for existing transaction by hash
                 existing = (
-                    db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == txn["trade_date"],
-                        Transaction.type == txn["transaction_type"],
-                        Transaction.quantity == txn["quantity"],
-                    )
-                    .first()
+                    db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
                 )
 
                 if existing:
-                    # Check price match (within tolerance)
-                    if existing.price_per_unit and abs(
-                        existing.price_per_unit - txn["price"]
-                    ) < Decimal("0.01"):
-                        stats["duplicates_skipped"] += 1
-                        logger.debug(
-                            f"Skipping duplicate transaction for {txn['symbol']} on {txn['trade_date']}"
-                        )
-                        continue
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
+                    continue
 
                 # Create transaction - add to batch list
                 transaction = Transaction(
@@ -670,6 +673,8 @@ class IBKRImportService:
                     price_per_unit=txn["price"],
                     fees=txn["commission"],
                     notes=f"IBKR Import - {txn['description']}",
+                    external_transaction_id=txn.get("external_transaction_id"),
+                    content_hash=content_hash,
                 )
                 new_transactions.append(transaction)
                 stats["imported"] += 1
@@ -753,7 +758,7 @@ class IBKRImportService:
         db: Session, account_id: int, dividends: list[dict], source_id: int | None = None
     ) -> dict:
         """
-        Import dividends as transactions.
+        Import dividends as transactions with hash-based deduplication.
 
         Uses batch operations to minimize database lock time.
 
@@ -769,7 +774,8 @@ class IBKRImportService:
         stats = {
             "total": len(dividends),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -810,22 +816,28 @@ class IBKRImportService:
                     db.add(holding)
                     db.flush()  # Need ID for transaction FK
 
-                # Check for duplicate
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=None,  # Dividends don't have external IDs in IBKR
+                    txn_date=div["date"],
+                    symbol=div["symbol"],
+                    txn_type="Dividend",
+                    quantity=div["amount"],  # Use amount as quantity for dividends
+                    price=None,
+                    fees=Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
                 existing = (
-                    db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == div["date"],
-                        Transaction.type == "Dividend",
-                    )
-                    .first()
+                    db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
                 )
 
                 if existing:
-                    stats["duplicates_skipped"] += 1
-                    logger.debug(
-                        f"Skipping duplicate dividend for {div['symbol']} on {div['date']}"
-                    )
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 # Check for DRIP (Dividend Reinvestment Plan)
@@ -859,6 +871,7 @@ class IBKRImportService:
                     amount=div["amount"],  # Store in amount field
                     fees=Decimal("0"),
                     notes=dividend_notes,
+                    content_hash=content_hash,
                 )
                 new_transactions.append(transaction)
                 stats["imported"] += 1
