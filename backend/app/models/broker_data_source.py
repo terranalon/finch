@@ -73,6 +73,9 @@ class BrokerDataSource(Base):
     # Error tracking
     errors: Mapped[list | None] = mapped_column(JSONB)  # List of error messages if failed
 
+    # Discontinuous date ranges after ownership transfer
+    date_ranges: Mapped[list | None] = mapped_column(JSONB)  # [{start_date, end_date}, ...]
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
