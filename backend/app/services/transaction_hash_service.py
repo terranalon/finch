@@ -48,6 +48,19 @@ class DedupResult(Enum):
     TRANSFERRED = "transferred"  # Ownership transferred to new source
     SKIPPED = "skipped"  # Already owned by this source
 
+    def update_stats(self, stats: dict) -> None:
+        """Update import statistics based on this result.
+
+        Args:
+            stats: Dictionary with 'imported', 'transferred', 'skipped' keys
+        """
+        if self == DedupResult.NEW:
+            stats["imported"] += 1
+        elif self == DedupResult.TRANSFERRED:
+            stats["transferred"] += 1
+        else:
+            stats["skipped"] += 1
+
 
 def check_and_transfer_ownership(
     db: "Session",

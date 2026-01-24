@@ -34,6 +34,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/broker-data", tags=["broker-data"])
 
 
+def _validate_account_access(account_id: int, current_user: User, db: Session) -> None:
+    """Verify account belongs to user, raise 404 if not."""
+    allowed_account_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+
+
+def _validate_broker_type(broker_type: str) -> None:
+    """Validate broker type is supported, raise 400 if not."""
+    if not BrokerParserRegistry.is_supported(broker_type):
+        supported = BrokerParserRegistry.get_supported_broker_types()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported broker type '{broker_type}'. Supported: {supported}",
+        )
+
+
+def _get_parser_for_file(broker_type: str, filename: str):
+    """Get parser for file, raise 400 on error."""
+    try:
+        return BrokerParserRegistry.get_parser_for_file(broker_type, filename)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 # Response Models
 
 
@@ -160,27 +188,9 @@ async def analyze_upload(
     Returns:
         Analysis including date range, overlap warnings, and confirmation requirements
     """
-    # Verify account belongs to user
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
-
-    # Validate broker type
-    if not BrokerParserRegistry.is_supported(broker_type):
-        supported = BrokerParserRegistry.get_supported_broker_types()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported broker type '{broker_type}'. Supported: {supported}",
-        )
-
-    # Get parser
-    try:
-        parser = BrokerParserRegistry.get_parser_for_file(broker_type, file.filename or "")
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    _validate_account_access(account_id, current_user, db)
+    _validate_broker_type(broker_type)
+    parser = _get_parser_for_file(broker_type, file.filename or "")
 
     # Read and validate file
     content = await file.read()
@@ -272,27 +282,9 @@ async def upload_broker_file(
         404: Account not found
         409: Date range overlaps with existing source (when confirm_overlap=False)
     """
-    # Verify account belongs to user
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
-
-    # Validate broker type
-    if not BrokerParserRegistry.is_supported(broker_type):
-        supported = BrokerParserRegistry.get_supported_broker_types()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported broker type '{broker_type}'. Supported: {supported}",
-        )
-
-    # Get parser and validate file
-    try:
-        parser = BrokerParserRegistry.get_parser_for_file(broker_type, file.filename or "")
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    _validate_account_access(account_id, current_user, db)
+    _validate_broker_type(broker_type)
+    parser = _get_parser_for_file(broker_type, file.filename or "")
 
     # Read file content
     content = await file.read()
@@ -578,13 +570,7 @@ async def get_data_coverage(
     Returns:
         Coverage information per broker
     """
-    # Verify account belongs to user
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
+    _validate_account_access(account_id, current_user, db)
 
     overlap_detector = get_overlap_detector()
     result: dict[str, BrokerCoverageResponse] = {}

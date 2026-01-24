@@ -261,11 +261,8 @@ class MeitavImportService:
 
                 # Check for existing transaction and handle ownership transfer
                 dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
-                    stats["skipped"] += 1
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create transaction
@@ -414,11 +411,8 @@ class MeitavImportService:
 
                 # Check for existing transaction and handle ownership transfer
                 dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
-                    stats["skipped"] += 1
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create transaction
@@ -516,11 +510,8 @@ class MeitavImportService:
 
                 # Check for existing transaction and handle ownership transfer
                 dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
-                    stats["skipped"] += 1
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create dividend transaction
@@ -733,76 +724,6 @@ class MeitavImportService:
         Returns:
             Statistics dictionary
         """
-        from datetime import date as date_type
+        from app.services.holdings_reconstruction import reconstruct_and_update_holdings
 
-        from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
-
-        stats = {
-            "holdings_updated": 0,
-            "holdings_activated": 0,
-            "holdings_deactivated": 0,
-        }
-
-        try:
-            # Reconstruct holdings as of today
-            today = date_type.today()
-            reconstructed = PortfolioReconstructionService.reconstruct_holdings(
-                self.db, account_id, today, apply_ticker_changes=False
-            )
-
-            logger.info(f"Reconstructed {len(reconstructed)} holdings for account {account_id}")
-
-            # Build map of reconstructed holdings by asset_id
-            reconstructed_map = {h["asset_id"]: h for h in reconstructed}
-
-            # Get all holdings for this account
-            holdings = self.db.query(Holding).filter(Holding.account_id == account_id).all()
-
-            # Update existing holdings
-            for holding in holdings:
-                recon = reconstructed_map.get(holding.asset_id)
-
-                if recon:
-                    # Update quantity and cost basis from reconstruction
-                    old_qty = holding.quantity
-                    holding.quantity = recon["quantity"]
-                    holding.cost_basis = recon["cost_basis"]
-                    holding.is_active = recon["quantity"] != 0
-
-                    if old_qty == 0 and holding.quantity != 0:
-                        stats["holdings_activated"] += 1
-                    elif old_qty != 0 and holding.quantity == 0:
-                        stats["holdings_deactivated"] += 1
-
-                    stats["holdings_updated"] += 1
-                    logger.debug(
-                        f"Updated holding {holding.asset_id}: qty={holding.quantity}, "
-                        f"cost_basis={holding.cost_basis}"
-                    )
-
-                    # Remove from map (processed)
-                    del reconstructed_map[holding.asset_id]
-                else:
-                    # No transactions for this holding - mark as inactive if zero
-                    if holding.quantity == 0:
-                        holding.is_active = False
-
-            # Any remaining in reconstructed_map are new holdings that need to be created
-            # (This shouldn't happen normally as transactions create holdings, but just in case)
-            for asset_id, recon in reconstructed_map.items():
-                if recon["quantity"] != 0:
-                    logger.warning(
-                        f"Found reconstructed holding without Holding record: "
-                        f"asset_id={asset_id}, qty={recon['quantity']}"
-                    )
-
-            logger.info(
-                f"Holdings reconstruction complete: {stats['holdings_updated']} updated, "
-                f"{stats['holdings_activated']} activated, {stats['holdings_deactivated']} deactivated"
-            )
-
-        except Exception as e:
-            logger.exception(f"Error reconstructing holdings: {e}")
-            stats["error"] = str(e)
-
-        return stats
+        return reconstruct_and_update_holdings(self.db, account_id)

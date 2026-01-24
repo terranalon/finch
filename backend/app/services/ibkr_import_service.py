@@ -656,11 +656,8 @@ class IBKRImportService:
 
                 # Check for existing transaction and handle ownership transfer
                 dedup_result, _ = check_and_transfer_ownership(db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
-                    stats["skipped"] += 1
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create transaction - add to batch list
@@ -829,11 +826,8 @@ class IBKRImportService:
 
                 # Check for existing transaction and handle ownership transfer
                 dedup_result, _ = check_and_transfer_ownership(db, content_hash, source_id)
-                if dedup_result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                    continue
-                if dedup_result == DedupResult.SKIPPED:
-                    stats["skipped"] += 1
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Check for DRIP (Dividend Reinvestment Plan)

@@ -15,10 +15,7 @@ from app.services.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.coingecko_client import CoinGeckoClient
-from app.services.transaction_hash_service import (
-    DedupResult,
-    create_or_transfer_transaction,
-)
+from app.services.transaction_hash_service import create_or_transfer_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -215,13 +212,7 @@ class CryptoImportService:
                     external_txn_id=txn.external_transaction_id,
                     notes=txn.notes,
                 )
-
-                if result == DedupResult.NEW:
-                    stats["imported"] += 1
-                elif result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                else:
-                    stats["skipped"] += 1
+                result.update_stats(stats)
 
             except Exception as e:
                 logger.error(f"Error importing transaction for {txn.symbol}: {e}")
@@ -264,13 +255,7 @@ class CryptoImportService:
                     fees=cash_txn.fees,
                     notes=cash_txn.notes,
                 )
-
-                if result == DedupResult.NEW:
-                    stats["imported"] += 1
-                elif result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                else:
-                    stats["skipped"] += 1
+                result.update_stats(stats)
 
             except Exception as e:
                 logger.error(f"Error importing cash transaction: {e}")
@@ -310,13 +295,7 @@ class CryptoImportService:
                     external_txn_id=div.external_transaction_id,
                     notes=div.notes,
                 )
-
-                if result == DedupResult.NEW:
-                    stats["imported"] += 1
-                elif result == DedupResult.TRANSFERRED:
-                    stats["transferred"] += 1
-                else:
-                    stats["skipped"] += 1
+                result.update_stats(stats)
 
             except Exception as e:
                 logger.error(f"Error importing dividend for {div.symbol}: {e}")
@@ -439,8 +418,7 @@ class CryptoImportService:
         """Reconstruct holdings from transactions and update the Holding table.
 
         This replays all transactions to calculate current quantities and cost basis,
-        then updates the Holding records accordingly. This is the same approach used
-        by Meitav and IBKR imports.
+        then updates the Holding records accordingly.
 
         Args:
             account_id: Account ID to reconstruct holdings for
@@ -448,95 +426,6 @@ class CryptoImportService:
         Returns:
             Statistics dictionary
         """
-        from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+        from app.services.holdings_reconstruction import reconstruct_and_update_holdings
 
-        stats = {
-            "holdings_updated": 0,
-            "holdings_activated": 0,
-            "holdings_deactivated": 0,
-        }
-
-        try:
-            # Reconstruct holdings as of today
-            today = date_type.today()
-            reconstructed = PortfolioReconstructionService.reconstruct_holdings(
-                self.db, account_id, today, apply_ticker_changes=False
-            )
-
-            logger.info(f"Reconstructed {len(reconstructed)} holdings for account {account_id}")
-
-            # Build map of reconstructed holdings by asset_id
-            reconstructed_map = {h["asset_id"]: h for h in reconstructed}
-
-            # Get all holdings for this account
-            holdings = self.db.query(Holding).filter(Holding.account_id == account_id).all()
-
-            # Update existing holdings
-            for holding in holdings:
-                recon = reconstructed_map.get(holding.asset_id)
-
-                if recon:
-                    # Update quantity and cost basis from reconstruction
-                    old_qty = holding.quantity
-                    holding.quantity = recon["quantity"]
-                    holding.cost_basis = recon["cost_basis"]
-                    holding.is_active = recon["quantity"] != 0
-
-                    if old_qty == 0 and holding.quantity != 0:
-                        stats["holdings_activated"] += 1
-                    elif old_qty != 0 and holding.quantity == 0:
-                        stats["holdings_deactivated"] += 1
-
-                    stats["holdings_updated"] += 1
-                    logger.debug(
-                        f"Updated holding {holding.asset_id}: qty={holding.quantity}, "
-                        f"cost_basis={holding.cost_basis}"
-                    )
-
-                    # Remove from map (processed)
-                    del reconstructed_map[holding.asset_id]
-                else:
-                    # Holding not in reconstruction results - check if it has transactions
-                    # If it does, the transactions sum to 0 (otherwise it would be in results)
-                    from app.models import Transaction
-
-                    has_transactions = (
-                        self.db.query(Transaction)
-                        .filter(Transaction.holding_id == holding.id)
-                        .first()
-                        is not None
-                    )
-
-                    if has_transactions:
-                        # Has transactions but they sum to 0 - update to 0
-                        if holding.quantity != 0:
-                            old_qty = holding.quantity
-                            holding.quantity = Decimal("0")
-                            holding.cost_basis = Decimal("0")
-                            holding.is_active = False
-                            stats["holdings_deactivated"] += 1
-                            stats["holdings_updated"] += 1
-                            logger.debug(f"Zeroed holding {holding.asset_id}: was {old_qty}, now 0")
-                    else:
-                        # No transactions - just mark inactive if already zero
-                        if holding.quantity == 0:
-                            holding.is_active = False
-
-            # Any remaining in reconstructed_map are new holdings that need to be created
-            for asset_id, recon in reconstructed_map.items():
-                if recon["quantity"] != 0:
-                    logger.warning(
-                        f"Found reconstructed holding without Holding record: "
-                        f"asset_id={asset_id}, qty={recon['quantity']}"
-                    )
-
-            logger.info(
-                f"Holdings reconstruction complete: {stats['holdings_updated']} updated, "
-                f"{stats['holdings_activated']} activated, {stats['holdings_deactivated']} deactivated"
-            )
-
-        except Exception as e:
-            logger.exception(f"Error reconstructing holdings: {e}")
-            stats["error"] = str(e)
-
-        return stats
+        return reconstruct_and_update_holdings(self.db, account_id)
