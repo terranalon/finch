@@ -18,6 +18,7 @@ from app.services.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.tase_api_service import TASEApiService
+from app.services.transaction_hash_service import compute_transaction_hash
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ class MeitavImportService:
     def _import_transactions(
         self, account_id: int, transactions: list[ParsedTransaction], source_id: int | None = None
     ) -> dict:
-        """Import buy/sell transactions.
+        """Import buy/sell transactions with hash-based deduplication.
 
         Args:
             account_id: Account ID
@@ -199,7 +200,8 @@ class MeitavImportService:
         stats = {
             "total": len(transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -242,20 +244,30 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=txn.external_transaction_id,
+                    txn_date=txn.trade_date,
+                    symbol=symbol,
+                    txn_type=txn.transaction_type,
+                    quantity=txn.quantity or Decimal("0"),
+                    price=txn.price_per_unit,
+                    fees=txn.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
                 existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == txn.trade_date,
-                        Transaction.type == txn.transaction_type,
-                        Transaction.quantity == txn.quantity,
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
 
                 if existing:
-                    stats["duplicates_skipped"] += 1
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 # Create transaction
@@ -269,6 +281,8 @@ class MeitavImportService:
                     amount=txn.amount,
                     fees=txn.fees,
                     notes=f"Meitav Import - {txn.notes or ''}",
+                    external_transaction_id=txn.external_transaction_id,
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
@@ -332,13 +346,17 @@ class MeitavImportService:
         return stats
 
     def _import_cash_transactions(
-        self, account_id: int, cash_transactions: list[ParsedCashTransaction]
+        self,
+        account_id: int,
+        cash_transactions: list[ParsedCashTransaction],
+        source_id: int | None = None,
     ) -> dict:
-        """Import cash transactions (deposits, withdrawals, interest).
+        """Import cash transactions (deposits, withdrawals, interest) with hash-based dedup.
 
         Args:
             account_id: Account ID
             cash_transactions: List of parsed cash transactions
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -346,7 +364,8 @@ class MeitavImportService:
         stats = {
             "total": len(cash_transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -384,30 +403,42 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=None,
+                    txn_date=cash_txn.date,
+                    symbol=currency,
+                    txn_type=cash_txn.transaction_type,
+                    quantity=cash_txn.amount or Decimal("0"),
+                    price=None,
+                    fees=cash_txn.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
                 existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == cash_txn.date,
-                        Transaction.type == cash_txn.transaction_type,
-                        Transaction.amount == cash_txn.amount,
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
 
                 if existing:
-                    stats["duplicates_skipped"] += 1
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 # Create transaction
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=cash_txn.date,
                     type=cash_txn.transaction_type,
                     amount=cash_txn.amount,
                     fees=Decimal("0"),
                     notes=f"Meitav Import - {cash_txn.notes or cash_txn.transaction_type}",
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
@@ -420,12 +451,15 @@ class MeitavImportService:
 
         return stats
 
-    def _import_dividends(self, account_id: int, dividends: list[ParsedTransaction]) -> dict:
-        """Import dividend transactions.
+    def _import_dividends(
+        self, account_id: int, dividends: list[ParsedTransaction], source_id: int | None = None
+    ) -> dict:
+        """Import dividend transactions with hash-based deduplication.
 
         Args:
             account_id: Account ID
             dividends: List of parsed dividend transactions
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -433,7 +467,8 @@ class MeitavImportService:
         stats = {
             "total": len(dividends),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -476,29 +511,43 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=div.external_transaction_id,
+                    txn_date=div.trade_date,
+                    symbol=symbol,
+                    txn_type="Dividend",
+                    quantity=div.amount or Decimal("0"),
+                    price=None,
+                    fees=div.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
                 existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == div.trade_date,
-                        Transaction.type == "Dividend",
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
 
                 if existing:
-                    stats["duplicates_skipped"] += 1
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 # Create dividend transaction
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=div.trade_date,
                     type="Dividend",
                     amount=div.amount,
                     fees=Decimal("0"),
                     notes=f"Meitav Import - Dividend {div.amount} {div.currency}",
+                    external_transaction_id=div.external_transaction_id,
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
