@@ -426,6 +426,103 @@ class TestMfaLoginFlow:
         assert response.status_code == 401
 
 
+class TestMfaStatus:
+    """Tests for GET /auth/mfa/status endpoint."""
+
+    def test_get_mfa_status_no_mfa_configured(self, auth_client):
+        """Returns all false when no MFA is configured."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "status_nomfa@example.com", "Password123"
+        )
+
+        response = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mfa_enabled"] is False
+        assert data["totp_enabled"] is False
+        assert data["email_otp_enabled"] is False
+        assert data["primary_method"] is None
+        assert data["has_recovery_codes"] is False
+
+    def test_get_mfa_status_email_only(self, auth_client):
+        """Returns correct status when only email OTP is enabled."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "status_email@example.com", "Password123"
+        )
+
+        # Setup: enable email OTP
+        test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        response = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mfa_enabled"] is True
+        assert data["totp_enabled"] is False
+        assert data["email_otp_enabled"] is True
+        assert data["primary_method"] == "email"
+        assert data["has_recovery_codes"] is True
+
+    @patch("app.services.mfa_service.MfaService.verify_totp")
+    def test_get_mfa_status_totp_only(self, mock_verify, auth_client):
+        """Returns correct status when only TOTP is enabled."""
+        test_client, db_session_maker = auth_client
+        mock_verify.return_value = True
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "status_totp@example.com", "Password123"
+        )
+
+        # Setup TOTP by directly creating MFA record (to avoid encryption key issue in tests)
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from app.models.user_recovery_code import UserRecoveryCode
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "status_totp@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        # Add a recovery code to simulate full setup
+        recovery = UserRecoveryCode(user_id=user.id, code_hash="test_hash")
+        db.add(recovery)
+        db.commit()
+        db.close()
+
+        response = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mfa_enabled"] is True
+        assert data["totp_enabled"] is True
+        assert data["email_otp_enabled"] is False
+        assert data["primary_method"] == "totp"
+        assert data["has_recovery_codes"] is True
+
+
 class TestEmailOtpSend:
     """Tests for sending Email OTP codes."""
 

@@ -64,3 +64,13 @@ class SendEmailOtpRequest(BaseModel):
     """Request to send email OTP code."""
 
     temp_token: str
+
+
+class MfaStatusResponse(BaseModel):
+    """Response for GET /auth/mfa/status."""
+
+    mfa_enabled: bool
+    totp_enabled: bool
+    email_otp_enabled: bool
+    primary_method: str | None
+    has_recovery_codes: bool

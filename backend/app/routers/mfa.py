@@ -20,6 +20,7 @@ from app.schemas.auth import MessageResponse, TokenResponse, UserInfo
 from app.schemas.mfa import (
     MfaDisableRequest,
     MfaEnabledResponse,
+    MfaStatusResponse,
     MfaVerifyRequest,
     RecoveryCodesRequest,
     RecoveryCodesResponse,
@@ -75,6 +76,38 @@ def _get_or_create_mfa(db: Session, user_id: str) -> UserMfa:
         mfa = UserMfa(user_id=user_id)
         db.add(mfa)
     return mfa
+
+
+@router.get("/status", response_model=MfaStatusResponse)
+def get_mfa_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Get current user's MFA configuration status."""
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
+    has_recovery_codes = (
+        db.query(UserRecoveryCode)
+        .filter(UserRecoveryCode.user_id == current_user.id)
+        .first()
+        is not None
+    )
+
+    if not mfa:
+        return {
+            "mfa_enabled": False,
+            "totp_enabled": False,
+            "email_otp_enabled": False,
+            "primary_method": None,
+            "has_recovery_codes": False,
+        }
+
+    return {
+        "mfa_enabled": mfa.totp_enabled or mfa.email_otp_enabled,
+        "totp_enabled": mfa.totp_enabled,
+        "email_otp_enabled": mfa.email_otp_enabled,
+        "primary_method": mfa.primary_method,
+        "has_recovery_codes": has_recovery_codes,
+    }
 
 
 @router.post("/setup/totp", response_model=TotpSetupResponse)
