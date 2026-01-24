@@ -34,6 +34,8 @@ class Transaction(Base):
     fees: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal("0"))
     currency_rate_to_usd_at_date: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     notes: Mapped[str | None] = mapped_column(Text)
+    external_transaction_id: Mapped[str | None] = mapped_column(String(100))
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     # Forex-specific fields (only populated for Forex Conversion transactions)

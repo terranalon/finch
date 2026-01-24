@@ -18,6 +18,11 @@ from app.services.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.tase_api_service import TASEApiService
+from app.services.transaction_hash_service import (
+    DedupResult,
+    check_and_transfer_ownership,
+    compute_transaction_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +191,7 @@ class MeitavImportService:
     def _import_transactions(
         self, account_id: int, transactions: list[ParsedTransaction], source_id: int | None = None
     ) -> dict:
-        """Import buy/sell transactions.
+        """Import buy/sell transactions with hash-based deduplication.
 
         Args:
             account_id: Account ID
@@ -199,7 +204,8 @@ class MeitavImportService:
         stats = {
             "total": len(transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -242,20 +248,21 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == txn.trade_date,
-                        Transaction.type == txn.transaction_type,
-                        Transaction.quantity == txn.quantity,
-                    )
-                    .first()
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=txn.external_transaction_id,
+                    txn_date=txn.trade_date,
+                    symbol=symbol,
+                    txn_type=txn.transaction_type,
+                    quantity=txn.quantity or Decimal("0"),
+                    price=txn.price_per_unit,
+                    fees=txn.fees or Decimal("0"),
                 )
 
-                if existing:
-                    stats["duplicates_skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create transaction
@@ -269,6 +276,8 @@ class MeitavImportService:
                     amount=txn.amount,
                     fees=txn.fees,
                     notes=f"Meitav Import - {txn.notes or ''}",
+                    external_transaction_id=txn.external_transaction_id,
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
@@ -332,13 +341,17 @@ class MeitavImportService:
         return stats
 
     def _import_cash_transactions(
-        self, account_id: int, cash_transactions: list[ParsedCashTransaction]
+        self,
+        account_id: int,
+        cash_transactions: list[ParsedCashTransaction],
+        source_id: int | None = None,
     ) -> dict:
-        """Import cash transactions (deposits, withdrawals, interest).
+        """Import cash transactions (deposits, withdrawals, interest) with hash-based dedup.
 
         Args:
             account_id: Account ID
             cash_transactions: List of parsed cash transactions
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -346,7 +359,8 @@ class MeitavImportService:
         stats = {
             "total": len(cash_transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -384,30 +398,33 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == cash_txn.date,
-                        Transaction.type == cash_txn.transaction_type,
-                        Transaction.amount == cash_txn.amount,
-                    )
-                    .first()
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=None,
+                    txn_date=cash_txn.date,
+                    symbol=currency,
+                    txn_type=cash_txn.transaction_type,
+                    quantity=cash_txn.amount or Decimal("0"),
+                    price=None,
+                    fees=cash_txn.fees or Decimal("0"),
                 )
 
-                if existing:
-                    stats["duplicates_skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create transaction
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=cash_txn.date,
                     type=cash_txn.transaction_type,
                     amount=cash_txn.amount,
                     fees=Decimal("0"),
                     notes=f"Meitav Import - {cash_txn.notes or cash_txn.transaction_type}",
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
@@ -420,12 +437,15 @@ class MeitavImportService:
 
         return stats
 
-    def _import_dividends(self, account_id: int, dividends: list[ParsedTransaction]) -> dict:
-        """Import dividend transactions.
+    def _import_dividends(
+        self, account_id: int, dividends: list[ParsedTransaction], source_id: int | None = None
+    ) -> dict:
+        """Import dividend transactions with hash-based deduplication.
 
         Args:
             account_id: Account ID
             dividends: List of parsed dividend transactions
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -433,7 +453,8 @@ class MeitavImportService:
         stats = {
             "total": len(dividends),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -476,29 +497,34 @@ class MeitavImportService:
                     self.db.add(holding)
                     self.db.flush()
 
-                # Check for duplicate
-                existing = (
-                    self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == div.trade_date,
-                        Transaction.type == "Dividend",
-                    )
-                    .first()
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=div.external_transaction_id,
+                    txn_date=div.trade_date,
+                    symbol=symbol,
+                    txn_type="Dividend",
+                    quantity=div.amount or Decimal("0"),
+                    price=None,
+                    fees=div.fees or Decimal("0"),
                 )
 
-                if existing:
-                    stats["duplicates_skipped"] += 1
+                # Check for existing transaction and handle ownership transfer
+                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                if dedup_result != DedupResult.NEW:
+                    dedup_result.update_stats(stats)
                     continue
 
                 # Create dividend transaction
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=div.trade_date,
                     type="Dividend",
                     amount=div.amount,
                     fees=Decimal("0"),
                     notes=f"Meitav Import - Dividend {div.amount} {div.currency}",
+                    external_transaction_id=div.external_transaction_id,
+                    content_hash=content_hash,
                 )
                 self.db.add(transaction)
                 stats["imported"] += 1
@@ -698,76 +724,6 @@ class MeitavImportService:
         Returns:
             Statistics dictionary
         """
-        from datetime import date as date_type
+        from app.services.holdings_reconstruction import reconstruct_and_update_holdings
 
-        from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
-
-        stats = {
-            "holdings_updated": 0,
-            "holdings_activated": 0,
-            "holdings_deactivated": 0,
-        }
-
-        try:
-            # Reconstruct holdings as of today
-            today = date_type.today()
-            reconstructed = PortfolioReconstructionService.reconstruct_holdings(
-                self.db, account_id, today, apply_ticker_changes=False
-            )
-
-            logger.info(f"Reconstructed {len(reconstructed)} holdings for account {account_id}")
-
-            # Build map of reconstructed holdings by asset_id
-            reconstructed_map = {h["asset_id"]: h for h in reconstructed}
-
-            # Get all holdings for this account
-            holdings = self.db.query(Holding).filter(Holding.account_id == account_id).all()
-
-            # Update existing holdings
-            for holding in holdings:
-                recon = reconstructed_map.get(holding.asset_id)
-
-                if recon:
-                    # Update quantity and cost basis from reconstruction
-                    old_qty = holding.quantity
-                    holding.quantity = recon["quantity"]
-                    holding.cost_basis = recon["cost_basis"]
-                    holding.is_active = recon["quantity"] != 0
-
-                    if old_qty == 0 and holding.quantity != 0:
-                        stats["holdings_activated"] += 1
-                    elif old_qty != 0 and holding.quantity == 0:
-                        stats["holdings_deactivated"] += 1
-
-                    stats["holdings_updated"] += 1
-                    logger.debug(
-                        f"Updated holding {holding.asset_id}: qty={holding.quantity}, "
-                        f"cost_basis={holding.cost_basis}"
-                    )
-
-                    # Remove from map (processed)
-                    del reconstructed_map[holding.asset_id]
-                else:
-                    # No transactions for this holding - mark as inactive if zero
-                    if holding.quantity == 0:
-                        holding.is_active = False
-
-            # Any remaining in reconstructed_map are new holdings that need to be created
-            # (This shouldn't happen normally as transactions create holdings, but just in case)
-            for asset_id, recon in reconstructed_map.items():
-                if recon["quantity"] != 0:
-                    logger.warning(
-                        f"Found reconstructed holding without Holding record: "
-                        f"asset_id={asset_id}, qty={recon['quantity']}"
-                    )
-
-            logger.info(
-                f"Holdings reconstruction complete: {stats['holdings_updated']} updated, "
-                f"{stats['holdings_activated']} activated, {stats['holdings_deactivated']} deactivated"
-            )
-
-        except Exception as e:
-            logger.exception(f"Error reconstructing holdings: {e}")
-            stats["error"] = str(e)
-
-        return stats
+        return reconstruct_and_update_holdings(self.db, account_id)

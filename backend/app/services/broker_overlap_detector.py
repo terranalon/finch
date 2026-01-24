@@ -8,9 +8,11 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import BrokerDataSource
+from app.models.transaction import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,18 @@ class CoverageSummary:
     total_days: int
     sources_count: int
     gaps: list[CoverageGap]
+
+
+@dataclass
+class OverlapAnalysis:
+    """Analysis of overlap between new file and existing sources."""
+
+    overlapping_sources: list  # List of BrokerDataSource
+    overlap_type: str  # 'none', 'partial', 'full_contains', 'subset'
+    affected_transaction_count: int
+    sources_to_delete: list  # Sources fully contained (can be auto-deleted)
+    requires_confirmation: bool
+    message: str
 
 
 class BrokerOverlapDetector:
@@ -72,32 +86,25 @@ class BrokerOverlapDetector:
         Returns:
             The conflicting BrokerDataSource if overlap found, None otherwise
         """
-        query = db.query(BrokerDataSource).filter(
-            BrokerDataSource.account_id == account_id,
-            BrokerDataSource.broker_type == broker_type,
-            BrokerDataSource.status == "completed",  # Only check completed sources
-            # Overlap condition: ranges overlap if start <= other_end AND end >= other_start
-            BrokerDataSource.start_date <= end_date,
-            BrokerDataSource.end_date >= start_date,
+        overlapping = self._get_overlapping_sources(
+            db, account_id, broker_type, start_date, end_date, exclude_source_id
         )
 
-        if exclude_source_id:
-            query = query.filter(BrokerDataSource.id != exclude_source_id)
+        if not overlapping:
+            return None
 
-        conflicting_source = query.first()
-
-        if conflicting_source:
-            logger.warning(
-                "Overlap detected for account %d, broker %s: "
-                "proposed %s to %s conflicts with source %d (%s to %s)",
-                account_id,
-                broker_type,
-                start_date,
-                end_date,
-                conflicting_source.id,
-                conflicting_source.start_date,
-                conflicting_source.end_date,
-            )
+        conflicting_source = overlapping[0]
+        logger.warning(
+            "Overlap detected for account %d, broker %s: "
+            "proposed %s to %s conflicts with source %d (%s to %s)",
+            account_id,
+            broker_type,
+            start_date,
+            end_date,
+            conflicting_source.id,
+            conflicting_source.start_date,
+            conflicting_source.end_date,
+        )
 
         return conflicting_source
 
@@ -246,14 +253,106 @@ class BrokerOverlapDetector:
 
         return query.order_by(BrokerDataSource.start_date.desc()).all()
 
+    def analyze_overlap(
+        self,
+        db: Session,
+        account_id: int,
+        broker_type: str,
+        new_start: date,
+        new_end: date,
+    ) -> OverlapAnalysis:
+        """Analyze overlaps and return detailed impact report.
 
-# Singleton instance for convenience
-_default_detector: BrokerOverlapDetector | None = None
+        Determines the type of overlap and what actions are needed:
+        - none: No overlap, can import freely
+        - partial: Some dates overlap, needs user confirmation
+        - full_contains: New file fully contains old sources (can auto-delete)
+        - subset: New file is already covered by existing imports
+
+        Args:
+            db: Database session
+            account_id: Account to check
+            broker_type: Broker type to check
+            new_start: Start date of new import
+            new_end: End date of new import
+
+        Returns:
+            OverlapAnalysis with detailed information about the overlap
+        """
+        overlapping = self._get_overlapping_sources(db, account_id, broker_type, new_start, new_end)
+
+        if not overlapping:
+            return OverlapAnalysis(
+                overlapping_sources=[],
+                overlap_type="none",
+                affected_transaction_count=0,
+                sources_to_delete=[],
+                requires_confirmation=False,
+                message="No overlap detected",
+            )
+
+        source_ids = [s.id for s in overlapping]
+        txn_count = (
+            db.query(func.count(Transaction.id))
+            .filter(Transaction.broker_source_id.in_(source_ids))
+            .scalar()
+            or 0
+        )
+
+        # Categorize sources by their relationship to the new file's date range
+        sources_to_delete = [
+            s for s in overlapping if new_start <= s.start_date and new_end >= s.end_date
+        ]
+        has_subset = any(s.start_date <= new_start and s.end_date >= new_end for s in overlapping)
+
+        # Determine overlap type
+        if has_subset:
+            overlap_type = "subset"
+            message = "This file's date range is already covered by existing imports."
+        elif len(sources_to_delete) == len(overlapping):
+            overlap_type = "full_contains"
+            message = f"This will replace {len(sources_to_delete)} existing import(s)."
+        else:
+            overlap_type = "partial"
+            message = f"Partial overlap with {len(overlapping)} existing import(s)."
+
+        return OverlapAnalysis(
+            overlapping_sources=overlapping,
+            overlap_type=overlap_type,
+            affected_transaction_count=txn_count,
+            sources_to_delete=sources_to_delete,
+            requires_confirmation=True,
+            message=message,
+        )
+
+    def _get_overlapping_sources(
+        self,
+        db: Session,
+        account_id: int,
+        broker_type: str,
+        new_start: date,
+        new_end: date,
+        exclude_source_id: int | None = None,
+    ) -> list[BrokerDataSource]:
+        """Get all sources that overlap with the given date range."""
+        query = db.query(BrokerDataSource).filter(
+            BrokerDataSource.account_id == account_id,
+            BrokerDataSource.broker_type == broker_type,
+            BrokerDataSource.status == "completed",
+            BrokerDataSource.start_date <= new_end,
+            BrokerDataSource.end_date >= new_start,
+        )
+
+        if exclude_source_id:
+            query = query.filter(BrokerDataSource.id != exclude_source_id)
+
+        return query.all()
 
 
 def get_overlap_detector() -> BrokerOverlapDetector:
-    """Get the default overlap detector instance."""
-    global _default_detector
-    if _default_detector is None:
-        _default_detector = BrokerOverlapDetector()
-    return _default_detector
+    """Get an overlap detector instance.
+
+    Note: BrokerOverlapDetector is stateless, so each call returns a new instance.
+    This factory function exists for consistency with other service patterns.
+    """
+    return BrokerOverlapDetector()

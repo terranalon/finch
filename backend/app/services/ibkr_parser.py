@@ -204,6 +204,7 @@ class IBKRParser:
                         isin = trade.get("isin", "")
                         conid = trade.get("conid", "")
                         figi = trade.get("figi", "")
+                        trade_id = trade.get("tradeID", "")
 
                         if not symbol or not trade_date_str:
                             logger.warning("Skipping trade without symbol or date")
@@ -244,6 +245,8 @@ class IBKRParser:
                                 "isin": isin or None,
                                 "conid": conid or None,
                                 "figi": figi or None,
+                                # External transaction ID for deduplication
+                                "external_transaction_id": trade_id or None,
                             }
                         )
 

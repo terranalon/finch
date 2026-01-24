@@ -238,6 +238,7 @@ class KrakenParser(BaseBrokerParser):
                     amount=amount,
                     currency="USD",
                     notes=f"Kraken crypto deposit - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(row),
                 ),
             )
@@ -270,6 +271,7 @@ class KrakenParser(BaseBrokerParser):
                     amount=net_amount,
                     currency="USD",
                     notes=f"Kraken crypto withdrawal - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(row),
                 ),
             )
@@ -287,6 +289,7 @@ class KrakenParser(BaseBrokerParser):
                     fees=fee,
                     currency="USD",
                     notes=f"Kraken staking reward - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(row),
                 ),
             )
@@ -304,6 +307,7 @@ class KrakenParser(BaseBrokerParser):
                     amount=amount,
                     currency="USD",
                     notes=f"Kraken transfer ({subtype}) - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(row),
                 ),
             )
@@ -325,6 +329,7 @@ class KrakenParser(BaseBrokerParser):
                         fees=fee,
                         currency="USD",
                         notes=f"Kraken earn reward - {refid}",
+                        external_transaction_id=refid,
                         raw_data=dict(row),
                     ),
                 )
@@ -341,6 +346,7 @@ class KrakenParser(BaseBrokerParser):
                     amount=amount,
                     currency="USD",
                     notes=f"Kraken earn ({subtype}) - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(row),
                 ),
             )
@@ -434,6 +440,7 @@ class KrakenParser(BaseBrokerParser):
             fees=total_fees,
             currency="USD",
             notes=f"Kraken trade - {refid}",
+            external_transaction_id=refid,
             raw_data={"crypto": dict(crypto_entry), "fiat": dict(fiat_entry)},
         )
 
@@ -484,6 +491,7 @@ class KrakenParser(BaseBrokerParser):
                     fees=fee,
                     currency="USD",
                     notes=f"Kraken crypto-to-crypto trade ({transaction_type.lower()}) - {refid}",
+                    external_transaction_id=refid,
                     raw_data=dict(entry),
                 )
             )
