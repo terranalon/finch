@@ -106,7 +106,138 @@ class ConflictResponse(BaseModel):
     conflicting_source: dict
 
 
+class OverlapWarning(BaseModel):
+    """Response model for overlap warning details."""
+
+    overlap_type: str  # 'none', 'partial', 'full_contains', 'subset'
+    affected_sources: list[dict]  # List of overlapping source info
+    affected_transaction_count: int
+    sources_to_delete: list[dict]  # Sources fully contained (can be auto-deleted)
+    message: str
+
+
+class PreImportAnalysis(BaseModel):
+    """Response model for pre-import file analysis."""
+
+    file_valid: bool
+    date_range: dict  # start_date, end_date
+    overlap_warning: OverlapWarning | None
+    requires_confirmation: bool
+
+
+class DetailedImportResult(BaseModel):
+    """Response model for import with ownership transfer details."""
+
+    status: str
+    message: str
+    source_id: int
+    date_range: dict
+    stats: dict
+    breakdown: dict  # new, transferred, skipped counts
+    old_sources_affected: list[int]  # Sources that had transactions transferred
+
+
 # Endpoints
+
+
+@router.post("/upload/{account_id}/analyze", response_model=PreImportAnalysis)
+async def analyze_upload(
+    account_id: int,
+    broker_type: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PreImportAnalysis:
+    """Analyze a broker file before import to detect overlaps.
+
+    Does NOT modify the database - only validates and analyzes.
+
+    Args:
+        account_id: Account to analyze for
+        broker_type: Broker type (e.g., 'ibkr', 'kraken')
+        file: Uploaded file to analyze
+
+    Returns:
+        Analysis including date range, overlap warnings, and confirmation requirements
+    """
+    # Verify account belongs to user
+    allowed_account_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+
+    # Validate broker type
+    if not BrokerParserRegistry.is_supported(broker_type):
+        supported = BrokerParserRegistry.get_supported_broker_types()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported broker type '{broker_type}'. Supported: {supported}",
+        )
+
+    # Get parser
+    try:
+        parser = BrokerParserRegistry.get_parser_for_file(broker_type, file.filename or "")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Read and validate file
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file uploaded",
+        )
+
+    is_valid, error = parser.validate_file(content, file.filename or "")
+    if not is_valid:
+        return PreImportAnalysis(
+            file_valid=False,
+            date_range={},
+            overlap_warning=None,
+            requires_confirmation=False,
+        )
+
+    # Extract date range
+    try:
+        start_date, end_date = parser.extract_date_range(content)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not determine date range: {e}",
+        )
+
+    # Analyze overlaps
+    overlap_detector = get_overlap_detector()
+    analysis = overlap_detector.analyze_overlap(db, account_id, broker_type, start_date, end_date)
+
+    overlap_warning = None
+    if analysis.overlapping_sources:
+        overlap_warning = OverlapWarning(
+            overlap_type=analysis.overlap_type,
+            affected_sources=[
+                {
+                    "id": s.id,
+                    "identifier": s.source_identifier,
+                    "start_date": str(s.start_date),
+                    "end_date": str(s.end_date),
+                }
+                for s in analysis.overlapping_sources
+            ],
+            affected_transaction_count=analysis.affected_transaction_count,
+            sources_to_delete=[
+                {"id": s.id, "identifier": s.source_identifier} for s in analysis.sources_to_delete
+            ],
+            message=analysis.message,
+        )
+
+    return PreImportAnalysis(
+        file_valid=True,
+        date_range={"start_date": str(start_date), "end_date": str(end_date)},
+        overlap_warning=overlap_warning,
+        requires_confirmation=analysis.requires_confirmation,
+    )
 
 
 @router.post("/upload/{account_id}", response_model=UploadResponse)
@@ -114,6 +245,7 @@ async def upload_broker_file(
     account_id: int,
     broker_type: str = Form(...),
     file: UploadFile = File(...),
+    confirm_overlap: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UploadResponse:
@@ -122,10 +254,15 @@ async def upload_broker_file(
     The file is validated, checked for duplicates and overlaps,
     then imported into the database.
 
+    With confirm_overlap=True, overlapping imports are allowed and transactions
+    from previous imports will have their ownership transferred to this new source
+    (latest-wins policy).
+
     Args:
         account_id: Account to import into
         broker_type: Broker type (e.g., 'ibkr', 'binance')
         file: Uploaded file
+        confirm_overlap: If True, allow overlapping imports with ownership transfer
 
     Returns:
         Import statistics and source ID
@@ -133,7 +270,7 @@ async def upload_broker_file(
     Raises:
         400: Invalid file or unsupported broker
         404: Account not found
-        409: Date range overlaps with existing source
+        409: Date range overlaps with existing source (when confirm_overlap=False)
     """
     # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
@@ -189,10 +326,15 @@ async def upload_broker_file(
             detail=f"Could not determine date range: {e}",
         )
 
-    # Check for overlaps (strict policy: reject if any overlap)
+    # Check for overlaps
     overlap_detector = get_overlap_detector()
-    conflicting = overlap_detector.check_overlap(db, account_id, broker_type, start_date, end_date)
-    if conflicting:
+    overlap_analysis = overlap_detector.analyze_overlap(
+        db, account_id, broker_type, start_date, end_date
+    )
+
+    # If there are overlaps and user hasn't confirmed, reject
+    if overlap_analysis.overlapping_sources and not confirm_overlap:
+        conflicting = overlap_analysis.overlapping_sources[0]
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -206,6 +348,7 @@ async def upload_broker_file(
                     "start_date": str(conflicting.start_date),
                     "end_date": str(conflicting.end_date),
                 },
+                "hint": "Use confirm_overlap=true to proceed with ownership transfer",
             },
         )
 
