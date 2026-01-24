@@ -15,6 +15,7 @@ from app.services.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.coingecko_client import CoinGeckoClient
+from app.services.transaction_hash_service import compute_transaction_hash
 
 logger = logging.getLogger(__name__)
 
@@ -174,11 +175,16 @@ class CryptoImportService:
     def _import_transactions(
         self, account_id: int, transactions: list[ParsedTransaction], source_id: int | None = None
     ) -> dict:
-        """Import buy/sell transactions."""
+        """Import buy/sell transactions with hash-based deduplication.
+
+        Uses content hash to detect duplicates. If a duplicate exists under a different
+        source, ownership is transferred to the new source (latest-wins policy).
+        """
         stats = {
             "total": len(transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "assets_created": 0,
             "errors": [],
         }
@@ -191,22 +197,34 @@ class CryptoImportService:
                 if asset_created:
                     stats["assets_created"] += 1
 
-                # Check for duplicate - include notes (contains refid) for uniqueness
-                exists = (
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=txn.external_transaction_id,
+                    txn_date=txn.trade_date,
+                    symbol=txn.symbol,
+                    txn_type=txn.transaction_type,
+                    quantity=txn.quantity or Decimal("0"),
+                    price=txn.price_per_unit,
+                    fees=txn.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
+                existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == txn.trade_date,
-                        Transaction.type == txn.transaction_type,
-                        Transaction.quantity == txn.quantity,
-                        Transaction.notes == txn.notes,
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
-                if exists:
-                    stats["duplicates_skipped"] += 1
+
+                if existing:
+                    if existing.broker_source_id != source_id:
+                        # Transfer ownership to new source
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
+                # Create new transaction with hash
                 self.db.add(
                     Transaction(
                         holding_id=holding.id,
@@ -218,6 +236,8 @@ class CryptoImportService:
                         amount=txn.amount,
                         fees=txn.fees or Decimal("0"),
                         notes=txn.notes,
+                        external_transaction_id=txn.external_transaction_id,
+                        content_hash=content_hash,
                     )
                 )
                 self.db.flush()
@@ -235,11 +255,12 @@ class CryptoImportService:
         cash_transactions: list[ParsedCashTransaction],
         source_id: int | None = None,
     ) -> dict:
-        """Import cash transactions (deposits, withdrawals)."""
+        """Import cash transactions (deposits, withdrawals) with hash-based deduplication."""
         stats = {
             "total": len(cash_transactions),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "errors": [],
         }
 
@@ -251,20 +272,30 @@ class CryptoImportService:
                     account_id, currency, asset_class, currency
                 )
 
-                # Check for duplicate - include notes (contains refid) for uniqueness
-                exists = (
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=None,  # Cash transactions don't have external IDs
+                    txn_date=cash_txn.date,
+                    symbol=currency,
+                    txn_type=cash_txn.transaction_type,
+                    quantity=cash_txn.amount or Decimal("0"),
+                    price=None,
+                    fees=cash_txn.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
+                existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == cash_txn.date,
-                        Transaction.type == cash_txn.transaction_type,
-                        Transaction.amount == cash_txn.amount,
-                        Transaction.notes == cash_txn.notes,
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
-                if exists:
-                    stats["duplicates_skipped"] += 1
+
+                if existing:
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 self.db.add(
@@ -276,6 +307,7 @@ class CryptoImportService:
                         amount=cash_txn.amount,
                         fees=cash_txn.fees,
                         notes=cash_txn.notes,
+                        content_hash=content_hash,
                     )
                 )
                 self.db.flush()
@@ -290,11 +322,12 @@ class CryptoImportService:
     def _import_dividends(
         self, account_id: int, dividends: list[ParsedTransaction], source_id: int | None = None
     ) -> dict:
-        """Import dividends/staking rewards."""
+        """Import dividends/staking rewards with hash-based deduplication."""
         stats = {
             "total": len(dividends),
             "imported": 0,
-            "duplicates_skipped": 0,
+            "transferred": 0,
+            "skipped": 0,
             "errors": [],
         }
 
@@ -304,19 +337,30 @@ class CryptoImportService:
                     account_id, div.symbol, "Crypto", div.currency
                 )
 
-                # Check for duplicate
-                exists = (
+                # Compute content hash for deduplication
+                content_hash = compute_transaction_hash(
+                    external_txn_id=div.external_transaction_id,
+                    txn_date=div.trade_date,
+                    symbol=div.symbol,
+                    txn_type=div.transaction_type,
+                    quantity=div.quantity or div.amount or Decimal("0"),
+                    price=None,
+                    fees=div.fees or Decimal("0"),
+                )
+
+                # Check for existing transaction by hash
+                existing = (
                     self.db.query(Transaction)
-                    .filter(
-                        Transaction.holding_id == holding.id,
-                        Transaction.date == div.trade_date,
-                        Transaction.type == div.transaction_type,
-                        Transaction.amount == div.amount,
-                    )
+                    .filter(Transaction.content_hash == content_hash)
                     .first()
                 )
-                if exists:
-                    stats["duplicates_skipped"] += 1
+
+                if existing:
+                    if existing.broker_source_id != source_id:
+                        existing.broker_source_id = source_id
+                        stats["transferred"] += 1
+                    else:
+                        stats["skipped"] += 1
                     continue
 
                 self.db.add(
@@ -328,6 +372,8 @@ class CryptoImportService:
                         quantity=div.quantity if div.quantity else div.amount,
                         amount=div.amount,
                         notes=div.notes,
+                        external_transaction_id=div.external_transaction_id,
+                        content_hash=content_hash,
                     )
                 )
                 self.db.flush()
