@@ -529,7 +529,9 @@ class IBKRImportService:
         return stats
 
     @staticmethod
-    def _import_transactions(db: Session, account_id: int, transactions: list[dict]) -> dict:
+    def _import_transactions(
+        db: Session, account_id: int, transactions: list[dict], source_id: int | None = None
+    ) -> dict:
         """
         Import trades as transactions.
 
@@ -548,6 +550,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             transactions: List of transaction dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -660,6 +663,7 @@ class IBKRImportService:
                 # Create transaction - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=txn["trade_date"],
                     type=txn["transaction_type"],
                     quantity=txn["quantity"],
@@ -721,6 +725,7 @@ class IBKRImportService:
                         # Create Trade Settlement transaction - add to batch list
                         cash_transaction = Transaction(
                             holding_id=cash_holding.id,
+                            broker_source_id=source_id,
                             date=txn["trade_date"],
                             type="Trade Settlement",
                             amount=net_cash,
@@ -744,7 +749,9 @@ class IBKRImportService:
         return stats
 
     @staticmethod
-    def _import_dividends(db: Session, account_id: int, dividends: list[dict]) -> dict:
+    def _import_dividends(
+        db: Session, account_id: int, dividends: list[dict], source_id: int | None = None
+    ) -> dict:
         """
         Import dividends as transactions.
 
@@ -754,6 +761,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             dividends: List of dividend dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -843,6 +851,7 @@ class IBKRImportService:
                 # Create dividend transaction with amount field - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=div["date"],
                     type="Dividend",
                     quantity=None,
@@ -868,7 +877,9 @@ class IBKRImportService:
         return stats
 
     @staticmethod
-    def _import_transfers(db: Session, account_id: int, transfers: list[dict]) -> dict:
+    def _import_transfers(
+        db: Session, account_id: int, transfers: list[dict], source_id: int | None = None
+    ) -> dict:
         """
         Import deposit/withdrawal transfers as transactions.
 
@@ -881,6 +892,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             transfers: List of transfer dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -953,6 +965,7 @@ class IBKRImportService:
                 # Create transfer transaction - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=transfer["date"],
                     type=transfer["type"],  # "Deposit" or "Withdrawal"
                     quantity=None,  # Transfers don't have quantity
@@ -978,7 +991,9 @@ class IBKRImportService:
         return stats
 
     @staticmethod
-    def _import_forex_transactions(db: Session, account_id: int, forex_txns: list[dict]) -> dict:
+    def _import_forex_transactions(
+        db: Session, account_id: int, forex_txns: list[dict], source_id: int | None = None
+    ) -> dict:
         """
         Import forex (currency conversion) transactions.
 
@@ -995,6 +1010,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             forex_txns: List of forex transaction dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -1104,6 +1120,7 @@ class IBKRImportService:
                 # Create single forex transaction with all conversion details - add to batch list
                 forex_txn = Transaction(
                     holding_id=from_holding.id,
+                    broker_source_id=source_id,
                     to_holding_id=to_holding.id,
                     date=forex["date"],
                     type="Forex Conversion",
@@ -1140,7 +1157,7 @@ class IBKRImportService:
 
     @staticmethod
     def _import_other_cash_transactions(
-        db: Session, account_id: int, cash_txns: list[dict]
+        db: Session, account_id: int, cash_txns: list[dict], source_id: int | None = None
     ) -> dict:
         """
         Import other cash transactions (interest, tax, fees).
@@ -1153,6 +1170,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             cash_txns: List of cash transaction dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -1227,6 +1245,7 @@ class IBKRImportService:
                 # Create transaction - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=txn_date,
                     type=txn_type,
                     quantity=None,
@@ -1252,7 +1271,9 @@ class IBKRImportService:
         return stats
 
     @staticmethod
-    def _import_dividend_cash(db: Session, account_id: int, dividends: list[dict]) -> dict:
+    def _import_dividend_cash(
+        db: Session, account_id: int, dividends: list[dict], source_id: int | None = None
+    ) -> dict:
         """
         Import dividend cash impact to the cash balance.
 
@@ -1265,6 +1286,7 @@ class IBKRImportService:
             db: Database session
             account_id: Our account ID
             dividends: List of dividend dicts from parser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -1338,6 +1360,7 @@ class IBKRImportService:
                 # Create cash dividend transaction - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=div_date,
                     type="Dividend Cash",
                     quantity=None,

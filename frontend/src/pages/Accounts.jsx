@@ -601,7 +601,13 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
         window.location.reload();
       } else {
         const error = await res.json();
-        alert(`Import failed: ${error.detail || 'Unknown error'}`);
+        // Handle both string and object error details
+        const detail = error.detail;
+        const errorMessage =
+          typeof detail === 'string'
+            ? detail
+            : detail?.message || detail?.error || JSON.stringify(detail);
+        alert(`Import failed: ${errorMessage}`);
       }
     } catch (err) {
       console.error('Upload error:', err);

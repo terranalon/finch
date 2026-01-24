@@ -42,12 +42,15 @@ class MeitavImportService:
         self.db = db
         self.tase_service = TASEApiService()
 
-    def import_data(self, account_id: int, data: BrokerImportData) -> dict:
+    def import_data(
+        self, account_id: int, data: BrokerImportData, source_id: int | None = None
+    ) -> dict:
         """Import complete Meitav broker data into database.
 
         Args:
             account_id: Account ID to import into
             data: Parsed broker data from MeitavParser
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary with import results
@@ -69,17 +72,19 @@ class MeitavImportService:
 
             # Import transactions
             if data.transactions:
-                stats["transactions"] = self._import_transactions(account_id, data.transactions)
+                stats["transactions"] = self._import_transactions(
+                    account_id, data.transactions, source_id
+                )
 
             # Import cash transactions
             if data.cash_transactions:
                 stats["cash_transactions"] = self._import_cash_transactions(
-                    account_id, data.cash_transactions
+                    account_id, data.cash_transactions, source_id
                 )
 
             # Import dividends
             if data.dividends:
-                stats["dividends"] = self._import_dividends(account_id, data.dividends)
+                stats["dividends"] = self._import_dividends(account_id, data.dividends, source_id)
 
             self.db.commit()
 
@@ -178,12 +183,15 @@ class MeitavImportService:
 
         return stats
 
-    def _import_transactions(self, account_id: int, transactions: list[ParsedTransaction]) -> dict:
+    def _import_transactions(
+        self, account_id: int, transactions: list[ParsedTransaction], source_id: int | None = None
+    ) -> dict:
         """Import buy/sell transactions.
 
         Args:
             account_id: Account ID
             transactions: List of parsed transactions
+            source_id: Optional broker source ID for tracking import lineage
 
         Returns:
             Statistics dictionary
@@ -253,6 +261,7 @@ class MeitavImportService:
                 # Create transaction
                 transaction = Transaction(
                     holding_id=holding.id,
+                    broker_source_id=source_id,
                     date=txn.trade_date,
                     type=txn.transaction_type,
                     quantity=txn.quantity,
@@ -306,6 +315,7 @@ class MeitavImportService:
                             if not existing_settlement:
                                 settlement = Transaction(
                                     holding_id=cash_holding.id,
+                                    broker_source_id=source_id,
                                     date=txn.trade_date,
                                     type="Trade Settlement",
                                     amount=settlement_amount,

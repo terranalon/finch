@@ -33,6 +33,7 @@ class CryptoImportService:
         data: BrokerImportData,
         broker_name: str,
         import_positions: bool = False,
+        source_id: int | None = None,
     ) -> dict:
         """Import complete crypto broker data into database.
 
@@ -42,6 +43,7 @@ class CryptoImportService:
             broker_name: Name of the broker for logging
             import_positions: If True, import positions from API (not recommended).
                               If False (default), calculate balances from transactions.
+            source_id: Optional broker source ID for tracking import lineage
         """
         stats = {
             "account_id": account_id,
@@ -62,13 +64,15 @@ class CryptoImportService:
                 stats["positions"] = self._import_positions(account_id, data.positions)
 
             if data.transactions:
-                stats["transactions"] = self._import_transactions(account_id, data.transactions)
+                stats["transactions"] = self._import_transactions(
+                    account_id, data.transactions, source_id
+                )
             if data.cash_transactions:
                 stats["cash_transactions"] = self._import_cash_transactions(
-                    account_id, data.cash_transactions
+                    account_id, data.cash_transactions, source_id
                 )
             if data.dividends:
-                stats["dividends"] = self._import_dividends(account_id, data.dividends)
+                stats["dividends"] = self._import_dividends(account_id, data.dividends, source_id)
 
             self.db.commit()
 
@@ -167,7 +171,9 @@ class CryptoImportService:
 
         return stats
 
-    def _import_transactions(self, account_id: int, transactions: list[ParsedTransaction]) -> dict:
+    def _import_transactions(
+        self, account_id: int, transactions: list[ParsedTransaction], source_id: int | None = None
+    ) -> dict:
         """Import buy/sell transactions."""
         stats = {
             "total": len(transactions),
@@ -204,6 +210,7 @@ class CryptoImportService:
                 self.db.add(
                     Transaction(
                         holding_id=holding.id,
+                        broker_source_id=source_id,
                         date=txn.trade_date,
                         type=txn.transaction_type,
                         quantity=txn.quantity,
@@ -223,7 +230,10 @@ class CryptoImportService:
         return stats
 
     def _import_cash_transactions(
-        self, account_id: int, cash_transactions: list[ParsedCashTransaction]
+        self,
+        account_id: int,
+        cash_transactions: list[ParsedCashTransaction],
+        source_id: int | None = None,
     ) -> dict:
         """Import cash transactions (deposits, withdrawals)."""
         stats = {
@@ -260,6 +270,7 @@ class CryptoImportService:
                 self.db.add(
                     Transaction(
                         holding_id=holding.id,
+                        broker_source_id=source_id,
                         date=cash_txn.date,
                         type=cash_txn.transaction_type,
                         amount=cash_txn.amount,
@@ -276,7 +287,9 @@ class CryptoImportService:
 
         return stats
 
-    def _import_dividends(self, account_id: int, dividends: list[ParsedTransaction]) -> dict:
+    def _import_dividends(
+        self, account_id: int, dividends: list[ParsedTransaction], source_id: int | None = None
+    ) -> dict:
         """Import dividends/staking rewards."""
         stats = {
             "total": len(dividends),
@@ -309,6 +322,7 @@ class CryptoImportService:
                 self.db.add(
                     Transaction(
                         holding_id=holding.id,
+                        broker_source_id=source_id,
                         date=div.trade_date,
                         type=div.transaction_type,
                         quantity=div.quantity if div.quantity else div.amount,
@@ -500,6 +514,7 @@ class CryptoImportService:
                     # Holding not in reconstruction results - check if it has transactions
                     # If it does, the transactions sum to 0 (otherwise it would be in results)
                     from app.models import Transaction
+
                     has_transactions = (
                         self.db.query(Transaction)
                         .filter(Transaction.holding_id == holding.id)
@@ -516,9 +531,7 @@ class CryptoImportService:
                             holding.is_active = False
                             stats["holdings_deactivated"] += 1
                             stats["holdings_updated"] += 1
-                            logger.debug(
-                                f"Zeroed holding {holding.asset_id}: was {old_qty}, now 0"
-                            )
+                            logger.debug(f"Zeroed holding {holding.asset_id}: was {old_qty}, now 0")
                     else:
                         # No transactions - just mark inactive if already zero
                         if holding.quantity == 0:

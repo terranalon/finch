@@ -18,6 +18,7 @@ export {
   setRefreshToken,
   getRefreshToken,
   clearTokens,
+  deleteDataSource,
 } from './api';
 export {
   transformTrade,

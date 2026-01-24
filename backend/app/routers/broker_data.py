@@ -9,19 +9,25 @@ Provides endpoints for:
 
 import logging
 from datetime import date
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import BrokerDataSource
+from app.models.daily_cash_balance import DailyCashBalance
+from app.models.holding import Holding
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.broker_file_storage import get_file_storage
 from app.services.broker_overlap_detector import get_overlap_detector
 from app.services.broker_parser_registry import BrokerParserRegistry
+from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,7 @@ class BrokerSourceResponse(BaseModel):
     end_date: date
     status: str
     stats: dict | None
+    transaction_count: int | None = None  # Count of linked transactions
 
     class Config:
         from_attributes = True
@@ -271,14 +278,24 @@ async def upload_broker_file(
             # Also import from CashReport if available (legacy support)
             cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
 
-            txn_stats = IBKRImportService._import_transactions(db, account_id, transactions_data)
-            div_stats = IBKRImportService._import_dividends(db, account_id, dividends_data)
-            transfer_stats = IBKRImportService._import_transfers(db, account_id, transfers_data)
-            forex_stats = IBKRImportService._import_forex_transactions(db, account_id, forex_data)
-            other_cash_stats = IBKRImportService._import_other_cash_transactions(
-                db, account_id, other_cash_data
+            txn_stats = IBKRImportService._import_transactions(
+                db, account_id, transactions_data, source.id
             )
-            div_cash_stats = IBKRImportService._import_dividend_cash(db, account_id, dividends_data)
+            div_stats = IBKRImportService._import_dividends(
+                db, account_id, dividends_data, source.id
+            )
+            transfer_stats = IBKRImportService._import_transfers(
+                db, account_id, transfers_data, source.id
+            )
+            forex_stats = IBKRImportService._import_forex_transactions(
+                db, account_id, forex_data, source.id
+            )
+            other_cash_stats = IBKRImportService._import_other_cash_transactions(
+                db, account_id, other_cash_data, source.id
+            )
+            div_cash_stats = IBKRImportService._import_dividend_cash(
+                db, account_id, dividends_data, source.id
+            )
 
             # Run validation against IBKR's authoritative cash positions
             from app.services.ibkr_validation_service import validate_ibkr_import
@@ -344,7 +361,7 @@ async def upload_broker_file(
             parsed_data = parser.parse(content)
             import_service = CryptoImportService(db)
             import_stats = import_service.import_data(
-                account_id, parsed_data, broker_type.capitalize()
+                account_id, parsed_data, broker_type.capitalize(), source_id=source.id
             )
 
             source.import_stats = {
@@ -446,6 +463,16 @@ async def get_data_coverage(
         sources = overlap_detector.get_all_sources(db, account_id, bt)
         summary = overlap_detector.get_coverage_summary(db, account_id, bt)
 
+        # Query actual transaction counts linked to each source
+        source_ids = [s.id for s in sources]
+        tx_counts_query = (
+            db.query(Transaction.broker_source_id, func.count(Transaction.id).label("count"))
+            .filter(Transaction.broker_source_id.in_(source_ids))
+            .group_by(Transaction.broker_source_id)
+            .all()
+        )
+        tx_counts_map = {row.broker_source_id: row.count for row in tx_counts_query}
+
         # Calculate totals - handle both old format (int) and new format (dict with stats)
         def get_transaction_count(stats: dict | None) -> int:
             if not stats:
@@ -471,6 +498,7 @@ async def get_data_coverage(
                     end_date=s.end_date,
                     status=s.status,
                     stats=s.import_stats,
+                    transaction_count=tx_counts_map.get(s.id, 0),
                 )
                 for s in sources
             ],
@@ -500,16 +528,19 @@ async def delete_data_source(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Delete a data source (must belong to user's account).
+    """Delete a data source and all associated data (must belong to user's account).
 
-    Note: This does NOT delete transactions linked to this source.
-    Transactions will have their broker_source_id set to NULL.
+    This performs a CASCADE DELETE:
+    - Deletes all transactions linked to this source
+    - Deletes all daily cash balances linked to this source
+    - Deletes the uploaded file from disk
+    - Deletes the source record
 
     Args:
         source_id: Source ID to delete
 
     Returns:
-        Deletion confirmation
+        Deletion confirmation with stats on what was deleted
     """
     source = db.query(BrokerDataSource).filter(BrokerDataSource.id == source_id).first()
     if not source:
@@ -526,21 +557,79 @@ async def delete_data_source(
             detail=f"Data source {source_id} not found",
         )
 
+    source_identifier = source.source_identifier
+    account_id = source.account_id
+
+    # CASCADE DELETE: Delete associated transactions first
+    transactions_deleted = (
+        db.query(Transaction)
+        .filter(Transaction.broker_source_id == source_id)
+        .delete(synchronize_session=False)
+    )
+
+    # CASCADE DELETE: Delete associated daily cash balances
+    cash_balances_deleted = (
+        db.query(DailyCashBalance)
+        .filter(DailyCashBalance.broker_source_id == source_id)
+        .delete(synchronize_session=False)
+    )
+
     # Delete file if it exists
     if source.file_path:
         file_storage = get_file_storage()
         file_storage.delete_file(source.file_path)
 
-    source_identifier = source.source_identifier
+    # Delete the source record
     db.delete(source)
     db.commit()
 
-    logger.info("Deleted data source %d (%s)", source_id, source_identifier)
+    # Recalculate holdings from remaining transactions
+    holdings_stats = {"updated": 0, "zeroed": 0}
+    if transactions_deleted > 0:
+        today = date.today()
+        reconstructed = PortfolioReconstructionService.reconstruct_holdings(
+            db, account_id, today, apply_ticker_changes=False
+        )
+        reconstructed_map = {h["asset_id"]: h for h in reconstructed}
+
+        # Update all holdings for this account
+        holdings = db.query(Holding).filter(Holding.account_id == account_id).all()
+        for holding in holdings:
+            recon = reconstructed_map.get(holding.asset_id)
+            if recon:
+                holding.quantity = recon["quantity"]
+                holding.cost_basis = recon["cost_basis"]
+                holding.is_active = recon["quantity"] != Decimal("0")
+                holdings_stats["updated"] += 1
+            else:
+                # No transactions left for this holding - zero it out
+                holding.quantity = Decimal("0")
+                holding.cost_basis = Decimal("0")
+                holding.is_active = False
+                holdings_stats["zeroed"] += 1
+
+        db.commit()
+
+    logger.info(
+        "Deleted data source %d (%s): %d transactions, %d cash balances, "
+        "%d holdings updated, %d holdings zeroed",
+        source_id,
+        source_identifier,
+        transactions_deleted,
+        cash_balances_deleted,
+        holdings_stats["updated"],
+        holdings_stats["zeroed"],
+    )
 
     return {
         "status": "deleted",
         "message": f"Deleted data source '{source_identifier}'",
         "source_id": source_id,
+        "deleted": {
+            "transactions": transactions_deleted,
+            "cash_balances": cash_balances_deleted,
+        },
+        "holdings": holdings_stats,
     }
 
 

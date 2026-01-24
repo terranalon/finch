@@ -463,4 +463,23 @@ export async function regenerateRecoveryCodes(code) {
   return response.json();
 }
 
+/**
+ * Delete a broker data source and all associated transactions
+ *
+ * @param {number} sourceId - The source ID to delete
+ * @returns {Promise<object>} Deletion confirmation with stats
+ */
+export async function deleteDataSource(sourceId) {
+  const response = await api(`/broker-data/source/${sourceId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete data source');
+  }
+
+  return response.json();
+}
+
 export default api;

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
+import { cn, formatCurrency, api, deleteDataSource, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
 import { PageContainer } from '../components/layout';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
 import { TransactionCard } from '../components/transactions';
@@ -182,6 +182,22 @@ function ChevronDoubleRightIcon({ className }) {
   );
 }
 
+function TrashIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+    </svg>
+  );
+}
+
+function ExclamationTriangleIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    </svg>
+  );
+}
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -297,6 +313,64 @@ function StatCard({ label, value, subValue, trend, trendDirection }) {
 }
 
 // ============================================
+// ALERT DIALOG COMPONENT
+// ============================================
+
+function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLabel = 'Delete', variant = 'danger', isLoading = false }) {
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+
+      {/* Dialog */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-[var(--bg-primary)] rounded-xl shadow-xl max-w-md w-full p-6">
+          <div className="flex items-start gap-4">
+            <div className={cn(
+              'p-2 rounded-full',
+              variant === 'danger' ? 'bg-red-100 dark:bg-red-950/40' : 'bg-amber-100 dark:bg-amber-950/40'
+            )}>
+              <ExclamationTriangleIcon className={cn(
+                'w-6 h-6',
+                variant === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+              )} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1 whitespace-pre-line">{description}</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={onClose}
+              disabled={isLoading}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isLoading}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer disabled:opacity-50',
+                variant === 'danger'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-amber-600 hover:bg-amber-700'
+              )}
+            >
+              {isLoading ? 'Deleting...' : confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============================================
 // HOLDINGS TABLE
 // ============================================
 
@@ -362,10 +436,11 @@ function HoldingsTable({ holdings }) {
 // ============================================
 
 // Import source item from coverage API
-function ImportSourceItem({ source }) {
+function ImportSourceItem({ source, onDelete, isDeleting }) {
   const isSuccess = source.status === 'completed';
   const filename = source.source_identifier || 'Unknown file';
   const totalRecords = source.stats?.total_records || 0;
+  const transactionCount = source.transaction_count || 0;
 
   return (
     <div className="flex items-start justify-between py-3">
@@ -389,15 +464,36 @@ function ImportSourceItem({ source }) {
               ? `${formatDateShort(source.start_date)} - ${formatDateShort(source.end_date)}`
               : 'Date range unknown'}
           </p>
+          {transactionCount > 0 && (
+            <p className="text-xs text-[var(--text-tertiary)]">
+              {transactionCount.toLocaleString()} transaction{transactionCount !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
       </div>
-      <div className="text-right">
-        <p className="text-sm font-medium text-[var(--text-primary)]">
-          {totalRecords.toLocaleString()} records
-        </p>
-        <p className="text-xs text-[var(--text-tertiary)]">
-          {source.source_type === 'file_upload' ? 'File upload' : 'API sync'}
-        </p>
+      <div className="flex items-start gap-3">
+        <div className="text-right">
+          <p className="text-sm font-medium text-[var(--text-primary)]">
+            {totalRecords.toLocaleString()} records
+          </p>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            {source.source_type === 'file_upload' ? 'File upload' : 'API sync'}
+          </p>
+        </div>
+        <button
+          onClick={() => onDelete?.(source)}
+          disabled={isDeleting}
+          className={cn(
+            'p-2 rounded-lg transition-colors',
+            'text-[var(--text-tertiary)] hover:text-red-600 dark:hover:text-red-400',
+            'hover:bg-red-50 dark:hover:bg-red-950/40',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            'cursor-pointer'
+          )}
+          title="Delete import"
+        >
+          <TrashIcon className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -1233,6 +1329,10 @@ export default function AccountDetail() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [hasApiCredentials, setHasApiCredentials] = useState(false);
 
+  // Delete source state
+  const [deleteDialogSource, setDeleteDialogSource] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Handle tab query parameter and scrolling to API credentials
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -1313,12 +1413,35 @@ export default function AccountDetail() {
         window.location.reload();
       } else {
         const errorData = await res.json();
-        alert(`Import failed: ${errorData.detail || 'Unknown error'}`);
+        // Handle both string and object error details
+        const detail = errorData.detail;
+        const errorMessage =
+          typeof detail === 'string'
+            ? detail
+            : detail?.message || detail?.error || JSON.stringify(detail);
+        alert(`Import failed: ${errorMessage}`);
       }
     } catch (err) {
       alert(`Upload failed: ${err.message}`);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Handle delete data source
+  const handleDeleteSource = async () => {
+    if (!deleteDialogSource) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteDataSource(deleteDialogSource.id);
+      // Close dialog and refresh page to reload all data
+      setDeleteDialogSource(null);
+      window.location.reload();
+    } catch (err) {
+      alert(`Failed to delete import: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -2359,7 +2482,12 @@ export default function AccountDetail() {
             {importHistory.length > 0 ? (
               <div className="divide-y divide-[var(--border-primary)]">
                 {importHistory.map((source, index) => (
-                  <ImportSourceItem key={index} source={source} />
+                  <ImportSourceItem
+                    key={source.id || index}
+                    source={source}
+                    onDelete={setDeleteDialogSource}
+                    isDeleting={isDeleting && deleteDialogSource?.id === source.id}
+                  />
                 ))}
               </div>
             ) : (
@@ -2407,6 +2535,18 @@ export default function AccountDetail() {
           setHasApiCredentials(true);
           window.location.reload();
         }}
+      />
+
+      {/* Delete Import Confirmation Dialog */}
+      <AlertDialog
+        isOpen={!!deleteDialogSource}
+        onClose={() => setDeleteDialogSource(null)}
+        onConfirm={handleDeleteSource}
+        title="Delete Import Source"
+        description={deleteDialogSource ? `Are you sure you want to delete this import?\n\n${deleteDialogSource.source_identifier || 'Unknown file'}\n\nThis will permanently delete ${(deleteDialogSource.transaction_count || 0).toLocaleString()} transaction${deleteDialogSource.transaction_count !== 1 ? 's' : ''} and all related data imported from this file. This action cannot be undone.` : ''}
+        confirmLabel="Delete Import"
+        variant="danger"
+        isLoading={isDeleting}
       />
     </PageContainer>
   );
