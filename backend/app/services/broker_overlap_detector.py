@@ -8,9 +8,11 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import BrokerDataSource
+from app.models.transaction import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -284,10 +286,6 @@ class BrokerOverlapDetector:
         Returns:
             OverlapAnalysis with detailed information about the overlap
         """
-        from sqlalchemy import func
-
-        from app.models.transaction import Transaction
-
         overlapping = self._get_overlapping_sources(db, account_id, broker_type, new_start, new_end)
 
         if not overlapping:
@@ -309,27 +307,23 @@ class BrokerOverlapDetector:
             or 0
         )
 
-        # Determine overlap type
+        # Categorize each overlapping source
         sources_to_delete = []
-        is_subset = False
+        has_subset = False
 
         for source in overlapping:
-            # New file fully contains old source
-            if new_start <= source.start_date and new_end >= source.end_date:
-                sources_to_delete.append(source)
-            # New file is subset of old source
-            elif source.start_date <= new_start and source.end_date >= new_end:
-                is_subset = True
+            new_file_contains_source = new_start <= source.start_date and new_end >= source.end_date
+            source_contains_new_file = source.start_date <= new_start and source.end_date >= new_end
 
-        if is_subset:
-            overlap_type = "subset"
-            message = "This file's date range is already covered by existing imports."
-        elif len(sources_to_delete) == len(overlapping):
-            overlap_type = "full_contains"
-            message = f"This will replace {len(sources_to_delete)} existing import(s)."
-        else:
-            overlap_type = "partial"
-            message = f"Partial overlap with {len(overlapping)} existing import(s)."
+            if new_file_contains_source:
+                sources_to_delete.append(source)
+            elif source_contains_new_file:
+                has_subset = True
+
+        # Determine overlap type based on categorization
+        overlap_type, message = self._determine_overlap_type(
+            overlapping, sources_to_delete, has_subset
+        )
 
         return OverlapAnalysis(
             overlapping_sources=overlapping,
@@ -340,6 +334,24 @@ class BrokerOverlapDetector:
             message=message,
         )
 
+    def _determine_overlap_type(
+        self,
+        overlapping: list[BrokerDataSource],
+        sources_to_delete: list[BrokerDataSource],
+        has_subset: bool,
+    ) -> tuple[str, str]:
+        """Determine overlap type and message based on source categorization."""
+        if has_subset:
+            return "subset", "This file's date range is already covered by existing imports."
+
+        if len(sources_to_delete) == len(overlapping):
+            return (
+                "full_contains",
+                f"This will replace {len(sources_to_delete)} existing import(s).",
+            )
+
+        return "partial", f"Partial overlap with {len(overlapping)} existing import(s)."
+
     def _get_overlapping_sources(
         self,
         db: Session,
@@ -348,18 +360,7 @@ class BrokerOverlapDetector:
         new_start: date,
         new_end: date,
     ) -> list[BrokerDataSource]:
-        """Get all sources that overlap with the given date range.
-
-        Args:
-            db: Database session
-            account_id: Account to check
-            broker_type: Broker type to check
-            new_start: Start date of new range
-            new_end: End date of new range
-
-        Returns:
-            List of overlapping BrokerDataSource records
-        """
+        """Get all sources that overlap with the given date range."""
         return (
             db.query(BrokerDataSource)
             .filter(
@@ -373,13 +374,10 @@ class BrokerOverlapDetector:
         )
 
 
-# Singleton instance for convenience
-_default_detector: BrokerOverlapDetector | None = None
-
-
 def get_overlap_detector() -> BrokerOverlapDetector:
-    """Get the default overlap detector instance."""
-    global _default_detector
-    if _default_detector is None:
-        _default_detector = BrokerOverlapDetector()
-    return _default_detector
+    """Get an overlap detector instance.
+
+    Note: BrokerOverlapDetector is stateless, so each call returns a new instance.
+    This factory function exists for consistency with other service patterns.
+    """
+    return BrokerOverlapDetector()
