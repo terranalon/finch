@@ -25,6 +25,7 @@ from app.schemas.mfa import (
     RecoveryCodesRequest,
     RecoveryCodesResponse,
     SendEmailOtpRequest,
+    SetPrimaryMethodRequest,
     TotpConfirmRequest,
     TotpSetupResponse,
 )
@@ -108,6 +109,39 @@ def get_mfa_status(
         "primary_method": mfa.primary_method,
         "has_recovery_codes": has_recovery_codes,
     }
+
+
+@router.put("/primary-method", response_model=MessageResponse)
+def set_primary_method(
+    data: SetPrimaryMethodRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Set the primary MFA method for login."""
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
+
+    if not mfa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled",
+        )
+
+    if data.method == "totp" and not mfa.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="TOTP is not enabled",
+        )
+    if data.method == "email" and not mfa.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email OTP is not enabled",
+        )
+
+    mfa.primary_method = data.method
+    db.commit()
+
+    logger.info(f"Primary MFA method set to {data.method} for user: {current_user.email}")
+    return {"message": f"Primary MFA method set to {data.method}"}
 
 
 @router.post("/setup/totp", response_model=TotpSetupResponse)

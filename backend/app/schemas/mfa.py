@@ -74,3 +74,9 @@ class MfaStatusResponse(BaseModel):
     email_otp_enabled: bool
     primary_method: str | None
     has_recovery_codes: bool
+
+
+class SetPrimaryMethodRequest(BaseModel):
+    """Request to set primary MFA method."""
+
+    method: str = Field(pattern="^(totp|email)$")

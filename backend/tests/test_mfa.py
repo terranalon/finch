@@ -523,6 +523,91 @@ class TestMfaStatus:
         assert data["has_recovery_codes"] is True
 
 
+class TestSetPrimaryMethod:
+    """Tests for PUT /auth/mfa/primary-method endpoint."""
+
+    def test_set_primary_method_success(self, auth_client):
+        """Can set primary method when method is enabled."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "primary_success@example.com", "Password123"
+        )
+
+        # Setup: enable both MFA methods via direct DB
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from app.models.user_recovery_code import UserRecoveryCode
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "primary_success@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            email_otp_enabled=True,
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        db.commit()
+        db.close()
+
+        # Change primary to email
+        response = test_client.put(
+            "/api/auth/mfa/primary-method",
+            json={"method": "email"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 200
+
+        # Verify it changed
+        status = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        ).json()
+        assert status["primary_method"] == "email"
+
+    def test_set_primary_method_not_enabled_fails(self, auth_client):
+        """Cannot set primary to a method that isn't enabled."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "primary_fail@example.com", "Password123"
+        )
+
+        # Only enable email
+        test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        # Try to set TOTP as primary (not enabled)
+        response = test_client.put(
+            "/api/auth/mfa/primary-method",
+            json={"method": "totp"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 400
+        assert "not enabled" in response.json()["detail"].lower()
+
+    def test_set_primary_method_no_mfa_fails(self, auth_client):
+        """Cannot set primary when no MFA is enabled."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "primary_nomfa@example.com", "Password123"
+        )
+
+        response = test_client.put(
+            "/api/auth/mfa/primary-method",
+            json={"method": "email"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 400
+
+
 class TestEmailOtpSend:
     """Tests for sending Email OTP codes."""
 
