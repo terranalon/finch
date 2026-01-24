@@ -211,19 +211,39 @@ const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-const getStatusInfo = (lastSync) => {
+function getStatusInfo(lastSync) {
   const date = new Date(lastSync);
   const now = new Date();
   const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
 
   if (diffDays <= 7) {
     return { status: 'connected', label: 'Connected', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500' };
-  } else if (diffDays <= 30) {
-    return { status: 'stale', label: 'Needs sync', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500' };
-  } else {
-    return { status: 'outdated', label: 'Outdated', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500' };
   }
-};
+  if (diffDays <= 30) {
+    return { status: 'stale', label: 'Needs sync', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500' };
+  }
+  return { status: 'outdated', label: 'Outdated', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500' };
+}
+
+function formatOverlapWarningDescription(warning) {
+  if (!warning) return '';
+
+  const sources = warning.affected_sources || [];
+  const sourcesList = sources.length > 0
+    ? sources.map(s => `- ${s.identifier} (${s.start_date} to ${s.end_date})`).join('\n')
+    : 'None';
+
+  return [
+    warning.message,
+    '',
+    'Affected sources:',
+    sourcesList,
+    '',
+    `Transactions affected: ${warning.affected_transaction_count || 0}`,
+    '',
+    'Continuing will transfer ownership of duplicate transactions to this new import.',
+  ].join('\n');
+}
 
 // ============================================
 // DATA COVERAGE BAR
@@ -2589,7 +2609,7 @@ export default function AccountDetail() {
         onClose={handleOverlapCancel}
         onConfirm={handleOverlapConfirm}
         title="Overlapping Date Range Detected"
-        description={overlapWarning ? `${overlapWarning.message}\n\nAffected sources:\n${overlapWarning.affected_sources?.map(s => `- ${s.identifier} (${s.start_date} to ${s.end_date})`).join('\n') || 'None'}\n\nTransactions affected: ${overlapWarning.affected_transaction_count || 0}\n\nContinuing will transfer ownership of duplicate transactions to this new import.` : ''}
+        description={formatOverlapWarningDescription(overlapWarning)}
         confirmLabel="Continue Import"
         loadingLabel="Importing..."
         variant="warning"
