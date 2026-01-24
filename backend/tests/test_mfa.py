@@ -608,6 +608,126 @@ class TestSetPrimaryMethod:
         assert response.status_code == 400
 
 
+class TestDisableIndividualMethod:
+    """Tests for DELETE /auth/mfa/method/{method} endpoint."""
+
+    @patch("app.routers.mfa._verify_totp_code")
+    def test_disable_totp_keeps_email(self, mock_verify, auth_client):
+        """Disabling TOTP keeps email OTP active and sets it as primary."""
+        test_client, db_session_maker = auth_client
+        mock_verify.return_value = True
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "disable_totp@example.com", "Password123"
+        )
+
+        # Setup: enable both methods via direct DB
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from app.models.user_recovery_code import UserRecoveryCode
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "disable_totp@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            email_otp_enabled=True,
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        recovery = UserRecoveryCode(user_id=user.id, code_hash="test_hash")
+        db.add(recovery)
+        db.commit()
+        db.close()
+
+        # Disable TOTP using verification code
+        response = test_client.request(
+            "DELETE",
+            "/api/auth/mfa/method/totp",
+            content=json.dumps({"mfa_code": "123456"}),
+            headers={
+                "Authorization": f"Bearer {tokens['access_token']}",
+                "Content-Type": "application/json",
+            },
+        )
+        assert response.status_code == 200
+
+        # Verify email is still enabled and now primary
+        status = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        ).json()
+        assert status["totp_enabled"] is False
+        assert status["email_otp_enabled"] is True
+        assert status["primary_method"] == "email"
+
+    def test_disable_last_method_cleans_up(self, auth_client):
+        """Disabling the only MFA method removes all MFA data."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "disable_last@example.com", "Password123"
+        )
+
+        # Setup: enable only email
+        setup_resp = test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        recovery_codes = setup_resp.json()["recovery_codes"]
+
+        # Disable email using recovery code (last method)
+        response = test_client.request(
+            "DELETE",
+            "/api/auth/mfa/method/email",
+            content=json.dumps({"recovery_code": recovery_codes[0]}),
+            headers={
+                "Authorization": f"Bearer {tokens['access_token']}",
+                "Content-Type": "application/json",
+            },
+        )
+        assert response.status_code == 200
+
+        # Verify MFA is completely disabled
+        status = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        ).json()
+        assert status["mfa_enabled"] is False
+        assert status["totp_enabled"] is False
+        assert status["email_otp_enabled"] is False
+        assert status["has_recovery_codes"] is False
+
+    def test_disable_method_invalid_code_fails(self, auth_client):
+        """Cannot disable method with invalid code."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "disable_invalid@example.com", "Password123"
+        )
+
+        # Enable email
+        test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        # Try to disable with invalid recovery code
+        response = test_client.request(
+            "DELETE",
+            "/api/auth/mfa/method/email",
+            content=json.dumps({"recovery_code": "invalid-code"}),
+            headers={
+                "Authorization": f"Bearer {tokens['access_token']}",
+                "Content-Type": "application/json",
+            },
+        )
+        assert response.status_code == 401
+
+
 class TestEmailOtpSend:
     """Tests for sending Email OTP codes."""
 

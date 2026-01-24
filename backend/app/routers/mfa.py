@@ -144,6 +144,92 @@ def set_primary_method(
     return {"message": f"Primary MFA method set to {data.method}"}
 
 
+@router.delete("/method/{method}", response_model=MessageResponse)
+def disable_mfa_method(
+    method: str,
+    data: MfaDisableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Disable a specific MFA method (totp or email)."""
+    if method not in ("totp", "email"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid method. Must be 'totp' or 'email'",
+        )
+
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
+    if not mfa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled",
+        )
+
+    # Verify using TOTP code or recovery code
+    verified = False
+    if data.mfa_code and mfa.totp_enabled:
+        verified = _verify_totp_code(mfa, data.mfa_code)
+    if not verified and data.recovery_code:
+        verified = _verify_recovery_code(db, current_user.id, data.recovery_code)
+
+    if not verified:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.MFA_FAILED, user_id=current_user.id,
+            details={"action": "disable_method", "method": method},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MFA code or recovery code",
+        )
+
+    # Disable the specific method
+    if method == "totp":
+        if not mfa.totp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="TOTP is not enabled",
+            )
+        mfa.totp_enabled = False
+        mfa.totp_secret_encrypted = None
+    else:  # email
+        if not mfa.email_otp_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email OTP is not enabled",
+            )
+        mfa.email_otp_enabled = False
+        # Clean up any pending email OTP codes
+        db.query(EmailOtpCode).filter(EmailOtpCode.user_id == current_user.id).delete()
+
+    # Update primary method if we just disabled it
+    if mfa.primary_method == method:
+        if method == "totp" and mfa.email_otp_enabled:
+            mfa.primary_method = "email"
+        elif method == "email" and mfa.totp_enabled:
+            mfa.primary_method = "totp"
+        else:
+            mfa.primary_method = None
+
+    # If no methods remain, clean up everything
+    if not mfa.totp_enabled and not mfa.email_otp_enabled:
+        db.delete(mfa)
+        db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == current_user.id).delete()
+        SecurityAuditService.log_event(
+            db, SecurityEventType.MFA_DISABLED, user_id=current_user.id,
+            details={"method": "all"},
+        )
+    else:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.MFA_DISABLED, user_id=current_user.id,
+            details={"method": method},
+        )
+
+    db.commit()
+    logger.info(f"{method.upper()} MFA disabled for user: {current_user.email}")
+    return {"message": f"{method.upper()} MFA disabled successfully"}
+
+
 @router.post("/setup/totp", response_model=TotpSetupResponse)
 def setup_totp(
     db: Session = Depends(get_db),
