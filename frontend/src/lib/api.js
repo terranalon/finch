@@ -343,6 +343,19 @@ export async function sendMfaEmailCode(tempToken) {
 }
 
 /**
+ * Send verification code to authenticated user's email.
+ * Used when adding a second MFA method.
+ *
+ * @returns {Promise<{message: string}>}
+ */
+export async function sendVerificationCode() {
+  const response = await api('/auth/mfa/send-verification-code', {
+    method: 'POST',
+  });
+  return handleResponse(response, 'Failed to send verification code');
+}
+
+/**
  * Start TOTP setup for authenticated user
  *
  * @returns {Promise<{secret: string, qr_code_base64: string}>}

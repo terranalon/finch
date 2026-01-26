@@ -385,6 +385,46 @@ def setup_email_otp(
     }
 
 
+@router.post("/send-verification-code", response_model=MessageResponse)
+def send_verification_code(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Send email verification code to authenticated user.
+
+    Used when adding a second MFA method and need to verify with existing email OTP.
+    """
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
+
+    if not mfa or not mfa.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email OTP is not enabled",
+        )
+
+    # Invalidate existing email OTP codes
+    db.query(EmailOtpCode).filter(
+        EmailOtpCode.user_id == current_user.id,
+        EmailOtpCode.used_at.is_(None),
+    ).delete()
+
+    # Generate and store new code
+    code = MfaService.generate_email_otp()
+    email_otp = EmailOtpCode(
+        user_id=current_user.id,
+        code_hash=AuthService.hash_token(code),
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+    db.add(email_otp)
+    db.commit()
+
+    # Send email
+    EmailService.send_mfa_otp_email(current_user.email, code)
+
+    logger.info(f"Verification code sent to authenticated user: {current_user.email}")
+    return {"message": "Verification code sent to your email"}
+
+
 @router.delete("", response_model=MessageResponse)
 def disable_mfa(
     data: MfaDisableRequest,

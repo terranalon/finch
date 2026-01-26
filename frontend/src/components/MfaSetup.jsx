@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { setupTotp, confirmTotp, setupEmailOtp, disableMfa, disableMfaMethod, regenerateRecoveryCodes } from '../lib/api';
+import { setupTotp, confirmTotp, setupEmailOtp, disableMfa, disableMfaMethod, regenerateRecoveryCodes, sendVerificationCode } from '../lib/api';
 
 // Reusable code input component for verification codes
 export function CodeInput({ value, onChange, placeholder = '000000', maxLength = 6 }) {
@@ -138,6 +138,30 @@ export function TotpSetup({ onComplete, onCancel, requireVerification = false })
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+
+  // Cooldown timer for resend button
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
+    setError('');
+    try {
+      await sendVerificationCode();
+      setResendCooldown(60);
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
+    } finally {
+      setResending(false);
+    }
+  };
 
   // Start setup on mount
   useEffect(() => {
@@ -146,7 +170,15 @@ export function TotpSetup({ onComplete, onCancel, requireVerification = false })
         const data = await setupTotp();
         setSecret(data.secret);
         setQrCode(data.qr_code_base64);
-        setStep(requireVerification ? 'verify-existing' : 'scan');
+
+        if (requireVerification) {
+          // Send verification code to user's email
+          await sendVerificationCode();
+          setResendCooldown(60);
+          setStep('verify-existing');
+        } else {
+          setStep('scan');
+        }
       } catch (err) {
         setError(err.message || 'Failed to start TOTP setup');
         setStep('error');
@@ -240,6 +272,21 @@ export function TotpSetup({ onComplete, onCancel, requireVerification = false })
             maxLength={6}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
           />
+        </div>
+
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={handleResendCode}
+            disabled={resending || resendCooldown > 0}
+            className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+          >
+            {resendCooldown > 0
+              ? `Resend code (${resendCooldown}s)`
+              : resending
+                ? 'Sending...'
+                : 'Resend code'}
+          </button>
         </div>
 
         <div className="flex gap-3">
