@@ -28,12 +28,15 @@ export default function MfaVerify() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [showMethodSelector, setShowMethodSelector] = useState(false);
 
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { tempToken, methods, email } = location.state || {};
+  const { tempToken, methods, email, primaryMethod } = location.state || {};
 
   // Redirect if no temp token
   useEffect(() => {
@@ -42,27 +45,58 @@ export default function MfaVerify() {
     }
   }, [tempToken, navigate]);
 
-  // Set default method
+  // Set default method based on primaryMethod from backend
   useEffect(() => {
     if (methods && methods.length > 0 && !method) {
-      setMethod(methods[0]);
+      if (primaryMethod && methods.includes(primaryMethod)) {
+        setMethod(primaryMethod);
+      } else {
+        setMethod(methods[0]);
+      }
     }
-  }, [methods, method]);
+  }, [methods, method, primaryMethod]);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const handleSendEmailCode = async () => {
+    if (resendCooldown > 0) return;
+
     setSendingCode(true);
     setError('');
     setMessage('');
 
     try {
       await sendMfaEmailCode(tempToken);
+      setEmailSent(true);
       setMessage('Verification code sent to your email');
+      setResendCooldown(60);
     } catch (err) {
       setError(err.message || 'Failed to send code');
     } finally {
       setSendingCode(false);
     }
   };
+
+  // Auto-send email code when email is the primary method
+  useEffect(() => {
+    const shouldAutoSend =
+      method === 'email' &&
+      !emailSent &&
+      !sendingCode &&
+      tempToken &&
+      (methods?.length === 1 || primaryMethod === 'email');
+
+    if (shouldAutoSend) {
+      handleSendEmailCode();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method, emailSent, tempToken]);
 
   // Get setUserFromMfa from context
   const { setUserFromMfa } = useAuth();
@@ -127,8 +161,8 @@ export default function MfaVerify() {
             </div>
           )}
 
-          {/* Method selector */}
-          {methods && methods.length > 1 && (
+          {/* Method selector - only show if user wants to switch */}
+          {methods && methods.length > 1 && showMethodSelector && (
             <div>
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                 Verification method
@@ -142,6 +176,10 @@ export default function MfaVerify() {
                       setMethod(m);
                       setCode('');
                       setError('');
+                      setMessage('');
+                      if (m !== 'email') {
+                        setEmailSent(false);
+                      }
                     }}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                       method === m
@@ -156,17 +194,37 @@ export default function MfaVerify() {
             </div>
           )}
 
-          {/* Email OTP - send code button */}
+          {/* Email OTP status/resend */}
           {method === 'email' && (
             <div className="text-center">
-              <button
-                type="button"
-                onClick={handleSendEmailCode}
-                disabled={sendingCode}
-                className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
-              >
-                {sendingCode ? 'Sending...' : 'Send code to my email'}
-              </button>
+              {!emailSent && sendingCode ? (
+                <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
+                  <span className="text-sm">Sending code to your email...</span>
+                </div>
+              ) : emailSent ? (
+                <button
+                  type="button"
+                  onClick={handleSendEmailCode}
+                  disabled={sendingCode || resendCooldown > 0}
+                  className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+                >
+                  {resendCooldown > 0
+                    ? `Resend code (${resendCooldown}s)`
+                    : sendingCode
+                      ? 'Sending...'
+                      : 'Resend code'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSendEmailCode}
+                  disabled={sendingCode}
+                  className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+                >
+                  {sendingCode ? 'Sending...' : 'Send code to my email'}
+                </button>
+              )}
             </div>
           )}
 
@@ -210,12 +268,26 @@ export default function MfaVerify() {
                 setMethod('recovery');
                 setCode('');
                 setError('');
+                setMessage('');
               }}
               className="text-accent hover:text-accent-hover text-sm font-medium"
             >
               Use a recovery code
             </button>
           </div>
+
+          {/* Use different method - only if multiple methods available */}
+          {methods && methods.length > 1 && !showMethodSelector && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowMethodSelector(true)}
+                className="text-accent hover:text-accent-hover text-sm font-medium"
+              >
+                Use a different verification method
+              </button>
+            </div>
+          )}
 
           <div className="text-center">
             <Link
