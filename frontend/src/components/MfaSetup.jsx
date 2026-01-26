@@ -78,11 +78,12 @@ ${codes.join('\n')}`;
 }
 
 // TOTP Setup Component
-export function TotpSetup({ onComplete, onCancel }) {
-  const [step, setStep] = useState('loading'); // loading, scan, verify, codes
+export function TotpSetup({ onComplete, onCancel, requireVerification = false }) {
+  const [step, setStep] = useState('loading'); // loading, verify-existing, scan, verify, codes
   const [secret, setSecret] = useState('');
   const [qrCode, setQrCode] = useState('');
   const [code, setCode] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -94,14 +95,14 @@ export function TotpSetup({ onComplete, onCancel }) {
         const data = await setupTotp();
         setSecret(data.secret);
         setQrCode(data.qr_code_base64);
-        setStep('scan');
+        setStep(requireVerification ? 'verify-existing' : 'scan');
       } catch (err) {
         setError(err.message || 'Failed to start TOTP setup');
         setStep('error');
       }
     }
     startSetup();
-  }, []);
+  }, [requireVerification]);
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -109,9 +110,13 @@ export function TotpSetup({ onComplete, onCancel }) {
     setLoading(true);
 
     try {
-      const data = await confirmTotp(secret, code);
-      setRecoveryCodes(data.recovery_codes);
-      setStep('codes');
+      const data = await confirmTotp(secret, code, requireVerification ? verificationCode : null);
+      if (data.recovery_codes) {
+        setRecoveryCodes(data.recovery_codes);
+        setStep('codes');
+      } else {
+        onComplete?.();
+      }
     } catch (err) {
       setError(err.message || 'Invalid code');
     } finally {
@@ -149,6 +154,61 @@ export function TotpSetup({ onComplete, onCancel }) {
         codes={recoveryCodes}
         onClose={() => onComplete?.()}
       />
+    );
+  }
+
+  // Step for verifying existing MFA when adding TOTP as second method
+  if (step === 'verify-existing') {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-[var(--text-primary)]">
+            Verify your identity
+          </h3>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Enter the code sent to your email to add a new authentication method.
+          </p>
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-negative-bg dark:bg-negative-bg-dark p-3">
+            <p className="text-sm text-negative dark:text-negative-dark">{error}</p>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+            Email verification code
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            placeholder="000000"
+            maxLength={6}
+            className="w-full px-3 py-2.5 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep('scan')}
+            disabled={verificationCode.length !== 6}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-50"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -229,8 +289,9 @@ export function TotpSetup({ onComplete, onCancel }) {
 }
 
 // Email OTP Setup Component
-export function EmailOtpSetup({ onComplete, onCancel }) {
-  const [step, setStep] = useState('confirm'); // confirm, codes
+export function EmailOtpSetup({ onComplete, onCancel, requireVerification = false }) {
+  const [step, setStep] = useState(requireVerification ? 'verify' : 'confirm'); // verify, confirm, codes
+  const [verificationCode, setVerificationCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -240,9 +301,13 @@ export function EmailOtpSetup({ onComplete, onCancel }) {
     setLoading(true);
 
     try {
-      const data = await setupEmailOtp();
-      setRecoveryCodes(data.recovery_codes);
-      setStep('codes');
+      const data = await setupEmailOtp(requireVerification ? verificationCode : null);
+      if (data.recovery_codes) {
+        setRecoveryCodes(data.recovery_codes);
+        setStep('codes');
+      } else {
+        onComplete?.();
+      }
     } catch (err) {
       setError(err.message || 'Failed to enable Email OTP');
     } finally {
@@ -256,6 +321,60 @@ export function EmailOtpSetup({ onComplete, onCancel }) {
         codes={recoveryCodes}
         onClose={() => onComplete?.()}
       />
+    );
+  }
+
+  // Step for verifying existing MFA when adding Email OTP as second method
+  if (step === 'verify') {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h3 className="text-lg font-medium text-[var(--text-primary)]">
+            Verify your identity
+          </h3>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Enter your authenticator code to add Email OTP.
+          </p>
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-negative-bg dark:bg-negative-bg-dark p-3">
+            <p className="text-sm text-negative dark:text-negative-dark">{error}</p>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+            Authenticator code
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            placeholder="000000"
+            maxLength={6}
+            className="w-full px-3 py-2.5 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleEnable}
+            disabled={loading || verificationCode.length !== 6}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Enabling...' : 'Enable Email OTP'}
+          </button>
+        </div>
+      </div>
     );
   }
 

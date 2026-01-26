@@ -385,12 +385,17 @@ export async function setupTotp() {
  *
  * @param {string} secret - TOTP secret from setup
  * @param {string} code - 6-digit code from authenticator app
- * @returns {Promise<{recovery_codes: string[]}>}
+ * @param {string|null} verificationCode - Email OTP code if adding as second method
+ * @returns {Promise<{recovery_codes: string[]|null}>}
  */
-export async function confirmTotp(secret, code) {
+export async function confirmTotp(secret, code, verificationCode = null) {
+  const body = { secret, code };
+  if (verificationCode) {
+    body.verification_code = verificationCode;
+  }
   const response = await api('/auth/mfa/confirm/totp', {
     method: 'POST',
-    body: JSON.stringify({ secret, code }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

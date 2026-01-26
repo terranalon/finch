@@ -7,9 +7,9 @@
  * After approval, it will be wired up to real API endpoints.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../lib';
-import { api } from '../lib/api';
+import { api, getMfaStatus, setPrimaryMfaMethod, disableMfaMethod } from '../lib/api';
 import { useTheme, useCurrency, usePortfolio, useAuth } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { ChangePassword } from '../components/ChangePassword';
@@ -124,6 +124,14 @@ function PlusIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+}
+
+function EnvelopeIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
     </svg>
   );
 }
@@ -596,27 +604,130 @@ function PortfolioManagement() {
 }
 
 // ============================================
+// DISABLE MFA METHOD COMPONENT
+// ============================================
+
+function DisableMfaMethod({ method, onComplete, onCancel }) {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await disableMfaMethod(method, code);
+      onComplete();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+        Disable {method === 'totp' ? 'Authenticator App' : 'Email OTP'}
+      </h3>
+
+      <p className="text-sm text-[var(--text-secondary)] mb-4">
+        Enter your authenticator code or recovery code to disable this method.
+      </p>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-negative/10 text-negative text-sm">
+          {error}
+        </div>
+      )}
+
+      <input
+        type="text"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        placeholder="Enter code"
+        className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-primary)] mb-4"
+        autoFocus
+      />
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading || !code}
+          className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-negative text-white hover:bg-negative/90 disabled:opacity-50"
+        >
+          {loading ? 'Disabling...' : 'Disable'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ============================================
 // SECURITY SECTION
 // ============================================
 
 function SecuritySection() {
-  const [modal, setModal] = useState(null); // null, 'password', 'totp', 'email', 'disable', 'regenerate'
-  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [mfaStatus, setMfaStatus] = useState({
+    mfa_enabled: false,
+    totp_enabled: false,
+    email_otp_enabled: false,
+    primary_method: null,
+    has_recovery_codes: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // In a real app, you'd fetch MFA status from the API
-  // For now, we track it locally after setup
+  // Fetch MFA status on mount
+  useEffect(() => {
+    async function fetchMfaStatus() {
+      try {
+        const status = await getMfaStatus();
+        setMfaStatus(status);
+      } catch (err) {
+        console.error('Failed to fetch MFA status:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchMfaStatus();
+  }, []);
+
+  const refreshMfaStatus = async () => {
+    try {
+      const status = await getMfaStatus();
+      setMfaStatus(status);
+    } catch (err) {
+      console.error('Failed to refresh MFA status:', err);
+    }
+  };
+
+  const handleMfaComplete = async () => {
+    await refreshMfaStatus();
+    setModal(null);
+  };
+
+  const handlePrimaryMethodChange = async (method) => {
+    setError('');
+    try {
+      await setPrimaryMfaMethod(method);
+      await refreshMfaStatus();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const closeModal = () => setModal(null);
-
-  const handleMfaComplete = () => {
-    setMfaEnabled(true);
-    closeModal();
-  };
-
-  const handleMfaDisabled = () => {
-    setMfaEnabled(false);
-    closeModal();
-  };
 
   return (
     <SettingsSection
@@ -639,57 +750,110 @@ function SecuritySection() {
           </button>
         </div>
 
-        {/* Two-Factor Authentication */}
+        {/* Two-Factor Authentication - Redesigned */}
         <div className="p-4 rounded-lg bg-[var(--bg-tertiary)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--text-primary)]">Two-factor authentication</p>
-              <p className="text-xs text-[var(--text-secondary)]">
-                {mfaEnabled
-                  ? 'Your account is protected with 2FA'
-                  : 'Add an extra layer of security to your account'}
-              </p>
-            </div>
-            {mfaEnabled ? (
-              <span className="px-2 py-1 rounded text-xs font-medium bg-positive/10 text-positive">
-                Enabled
-              </span>
-            ) : (
-              <span className="px-2 py-1 rounded text-xs font-medium bg-[var(--text-tertiary)]/10 text-[var(--text-tertiary)]">
-                Not enabled
-              </span>
-            )}
-          </div>
+          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-4">
+            Two-factor authentication
+          </h3>
 
-          {!mfaEnabled ? (
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setModal('totp')}
-                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
-              >
-                Set up Authenticator App
-              </button>
-              <button
-                onClick={() => setModal('email')}
-                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
-              >
-                Use Email OTP
-              </button>
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-negative/10 text-negative text-sm">
+              {error}
             </div>
+          )}
+
+          {loading ? (
+            <div className="text-sm text-[var(--text-secondary)]">Loading...</div>
           ) : (
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setModal('regenerate')}
-                className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
-              >
-                Regenerate Recovery Codes
-              </button>
-              <button
-                onClick={() => setModal('disable')}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-negative hover:bg-negative/10 transition-colors cursor-pointer"
-              >
-                Disable
-              </button>
+            <div className="space-y-3">
+              {/* Authenticator App Card */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
+                    <ShieldCheckIcon className="h-5 w-5 text-[var(--text-secondary)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      Authenticator App
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Use Google Authenticator, Authy, etc.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => mfaStatus.totp_enabled ? setModal('disable-totp') : setModal('totp')}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
+                    mfaStatus.totp_enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                      mfaStatus.totp_enabled ? 'translate-x-6' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* Email OTP Card */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
+                    <EnvelopeIcon className="h-5 w-5 text-[var(--text-secondary)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      Email OTP
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Codes sent to your email
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => mfaStatus.email_otp_enabled ? setModal('disable-email') : setModal('email')}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
+                    mfaStatus.email_otp_enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                      mfaStatus.email_otp_enabled ? 'translate-x-6' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* Default Method Dropdown - only when both enabled */}
+              {mfaStatus.totp_enabled && mfaStatus.email_otp_enabled && (
+                <div className="flex items-center justify-between pt-2">
+                  <label className="text-sm text-[var(--text-secondary)]">
+                    Default login method
+                  </label>
+                  <select
+                    value={mfaStatus.primary_method || 'totp'}
+                    onChange={(e) => handlePrimaryMethodChange(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] cursor-pointer"
+                  >
+                    <option value="totp">Authenticator App</option>
+                    <option value="email">Email OTP</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Recovery Codes Button */}
+              {mfaStatus.has_recovery_codes && (
+                <button
+                  onClick={() => setModal('regenerate')}
+                  className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+                >
+                  Regenerate Recovery Codes
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -705,13 +869,35 @@ function SecuritySection() {
                 <ChangePassword onComplete={closeModal} onCancel={closeModal} />
               )}
               {modal === 'totp' && (
-                <TotpSetup onComplete={handleMfaComplete} onCancel={closeModal} />
+                <TotpSetup
+                  onComplete={handleMfaComplete}
+                  onCancel={closeModal}
+                  requireVerification={mfaStatus.email_otp_enabled}
+                />
               )}
               {modal === 'email' && (
-                <EmailOtpSetup onComplete={handleMfaComplete} onCancel={closeModal} />
+                <EmailOtpSetup
+                  onComplete={handleMfaComplete}
+                  onCancel={closeModal}
+                  requireVerification={mfaStatus.totp_enabled}
+                />
+              )}
+              {modal === 'disable-totp' && (
+                <DisableMfaMethod
+                  method="totp"
+                  onComplete={handleMfaComplete}
+                  onCancel={closeModal}
+                />
+              )}
+              {modal === 'disable-email' && (
+                <DisableMfaMethod
+                  method="email"
+                  onComplete={handleMfaComplete}
+                  onCancel={closeModal}
+                />
               )}
               {modal === 'disable' && (
-                <DisableMfa onComplete={handleMfaDisabled} onCancel={closeModal} />
+                <DisableMfa onComplete={handleMfaComplete} onCancel={closeModal} />
               )}
               {modal === 'regenerate' && (
                 <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
