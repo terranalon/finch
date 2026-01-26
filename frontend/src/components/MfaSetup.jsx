@@ -4,7 +4,7 @@
  * Components for setting up and managing MFA (TOTP and Email OTP).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { setupTotp, confirmTotp, setupEmailOtp, disableMfa, disableMfaMethod, regenerateRecoveryCodes, sendVerificationCode } from '../lib/api';
 
 // Reusable code input component for verification codes
@@ -140,6 +140,7 @@ export function TotpSetup({ onComplete, onCancel, requireVerification = false })
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resending, setResending] = useState(false);
+  const setupStarted = useRef(false);
 
   // Cooldown timer for resend button
   useEffect(() => {
@@ -163,8 +164,11 @@ export function TotpSetup({ onComplete, onCancel, requireVerification = false })
     }
   };
 
-  // Start setup on mount
+  // Start setup on mount (guard against React Strict Mode double-invoke)
   useEffect(() => {
+    if (setupStarted.current) return;
+    setupStarted.current = true;
+
     async function startSetup() {
       try {
         const data = await setupTotp();
