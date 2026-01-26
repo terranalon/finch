@@ -75,4 +75,7 @@ htmlcov/
 *.bak
 *.tmp
 
+# Test data uploads (user broker files)
+backend/data/broker_uploads/*/
+
 .claude/settings.local.json
