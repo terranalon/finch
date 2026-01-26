@@ -200,12 +200,6 @@ export default function MfaVerify() {
             </div>
           )}
 
-          {message && (
-            <div className="rounded-md bg-positive-bg dark:bg-positive-bg-dark p-4">
-              <p className="text-sm text-positive dark:text-positive-dark">{message}</p>
-            </div>
-          )}
-
           {/* Method selector - only show if user wants to switch */}
           {methods && methods.length > 1 && showMethodSelector && (
             <div>
@@ -239,18 +233,6 @@ export default function MfaVerify() {
             </div>
           )}
 
-          {/* Email OTP status/resend */}
-          {method === 'email' && (
-            <div className="text-center">
-              <EmailOtpStatus
-                emailSent={emailSent}
-                sendingCode={sendingCode}
-                resendCooldown={resendCooldown}
-                onSendCode={handleSendEmailCode}
-              />
-            </div>
-          )}
-
           <div>
             <label htmlFor="code" className="block text-sm font-medium text-[var(--text-primary)]">
               {getCodeLabel(method)}
@@ -268,6 +250,17 @@ export default function MfaVerify() {
               placeholder="000000"
               maxLength={method === 'recovery' ? 14 : 6}
             />
+            {/* Email OTP resend - below the input */}
+            {method === 'email' && (
+              <div className="text-center mt-2">
+                <EmailOtpStatus
+                  emailSent={emailSent}
+                  sendingCode={sendingCode}
+                  resendCooldown={resendCooldown}
+                  onSendCode={handleSendEmailCode}
+                />
+              </div>
+            )}
           </div>
 
           <div>
