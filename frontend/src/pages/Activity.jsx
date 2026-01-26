@@ -11,7 +11,7 @@
  * - GET /api/accounts?is_active=true
  */
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';

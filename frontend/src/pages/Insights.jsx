@@ -7,7 +7,7 @@
  * After approval, it will be wired up to real API endpoints.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { cn, formatCurrency, formatPercent } from '../lib';
 import { useCurrency } from '../contexts';
 import { PageContainer } from '../components/layout';

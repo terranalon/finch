@@ -8,7 +8,7 @@
  * - GET /api/dashboard/summary (for account values)
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, api } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';

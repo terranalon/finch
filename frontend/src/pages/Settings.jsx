@@ -7,7 +7,7 @@
  * After approval, it will be wired up to real API endpoints.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { cn } from '../lib';
 import { api } from '../lib/api';
 import { useTheme, useCurrency, usePortfolio, useAuth } from '../contexts';
