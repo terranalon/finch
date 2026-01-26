@@ -478,9 +478,7 @@ async def upload_broker_file(
             # Use registry for all supported import services (meitav, kraken, bit2c, binance)
             parsed_data = parser.parse(content)
             import_service = BrokerImportServiceRegistry.get_import_service(broker_type, db)
-            import_stats = import_service.import_data(
-                account_id, parsed_data, source_id=source.id
-            )
+            import_stats = import_service.import_data(account_id, parsed_data, source_id=source.id)
 
             # Pass through all stats from service (unified structure)
             source.import_stats = {

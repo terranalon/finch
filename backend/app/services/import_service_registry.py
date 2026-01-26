@@ -65,7 +65,9 @@ class BrokerImportServiceRegistry:
 
         if broker_type not in cls._services:
             supported = list(cls._services.keys())
-            raise ValueError(f"No import service for broker type '{broker_type}'. Supported: {supported}")
+            raise ValueError(
+                f"No import service for broker type '{broker_type}'. Supported: {supported}"
+            )
 
         service_class = cls._services[broker_type]
         return service_class(db, broker_type)

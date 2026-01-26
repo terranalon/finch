@@ -26,8 +26,8 @@ from app.models.user import User
 from app.services.binance_client import BinanceClient, BinanceCredentials
 from app.services.bit2c_client import Bit2CClient, Bit2CCredentials
 from app.services.ibkr_flex_client import IBKRFlexClient
-from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.ibkr_flex_import_service import IBKRFlexImportService
+from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.kraken_client import KrakenClient, KrakenCredentials
 from app.services.staged_import_service import StagedImportService
 
