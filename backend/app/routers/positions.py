@@ -229,6 +229,9 @@ async def list_positions(
             previous_close_price = None
             day_change_date = None
             is_asset_market_closed = False
+        elif position["asset_class"] == "Crypto":
+            # Crypto markets are 24/7 - always use "market open" logic (current price vs previous close)
+            is_asset_market_closed = False
         else:
             # Determine which market this asset belongs to
             market = TradingCalendarService.get_market_for_symbol(symbol)
