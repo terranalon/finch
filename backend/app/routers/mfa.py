@@ -264,14 +264,19 @@ def confirm_totp(
     # Get or create MFA record
     mfa = _get_or_create_mfa(db, current_user.id)
 
+    # Check if this is the first MFA method being enabled
+    is_first_mfa = not (mfa.totp_enabled or mfa.email_otp_enabled)
+
     # Store encrypted secret and enable TOTP
     mfa.totp_secret_encrypted = MfaService.encrypt_secret(data.secret)
     mfa.totp_enabled = True
     mfa.primary_method = mfa.primary_method or "totp"
     mfa.enabled_at = mfa.enabled_at or datetime.now(UTC)
 
-    # Generate recovery codes
-    recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
+    # Only generate recovery codes if this is the first MFA method
+    recovery_codes = None
+    if is_first_mfa:
+        recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
 
     # Log MFA enabled
     SecurityAuditService.log_event(
@@ -292,17 +297,29 @@ def setup_email_otp(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Enable Email OTP MFA. Returns recovery codes."""
+    """Enable Email OTP MFA. Returns recovery codes only if first MFA method."""
     # Get or create MFA record
     mfa = _get_or_create_mfa(db, current_user.id)
+
+    # Check if email OTP is already enabled
+    if mfa.email_otp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email OTP is already enabled",
+        )
+
+    # Check if this is the first MFA method being enabled
+    is_first_mfa = not (mfa.totp_enabled or mfa.email_otp_enabled)
 
     # Enable email OTP
     mfa.email_otp_enabled = True
     mfa.primary_method = mfa.primary_method or "email"
     mfa.enabled_at = mfa.enabled_at or datetime.now(UTC)
 
-    # Generate recovery codes
-    recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
+    # Only generate recovery codes if this is the first MFA method
+    recovery_codes = None
+    if is_first_mfa:
+        recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
 
     # Log MFA enabled
     SecurityAuditService.log_event(

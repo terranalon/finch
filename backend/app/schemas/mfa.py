@@ -22,7 +22,7 @@ class MfaEnabledResponse(BaseModel):
     """Response when MFA is enabled, includes recovery codes."""
 
     message: str
-    recovery_codes: list[str]
+    recovery_codes: list[str] | None = None
 
 
 class MfaDisableRequest(BaseModel):

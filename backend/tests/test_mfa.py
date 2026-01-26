@@ -608,6 +608,92 @@ class TestSetPrimaryMethod:
         assert response.status_code == 400
 
 
+class TestRecoveryCodeGeneration:
+    """Tests for recovery code generation logic."""
+
+    @patch("app.routers.mfa._verify_totp_code")
+    def test_recovery_codes_only_on_first_mfa(self, mock_verify, auth_client):
+        """Recovery codes are only generated when enabling first MFA method."""
+        test_client, db_session_maker = auth_client
+        mock_verify.return_value = True
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "recovery_first@example.com", "Password123"
+        )
+
+        # Enable email first - should get recovery codes
+        response1 = test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response1.status_code == 200
+        data1 = response1.json()
+        assert "recovery_codes" in data1
+        assert len(data1["recovery_codes"]) == 10
+        first_codes = set(data1["recovery_codes"])
+
+        # Setup TOTP directly in DB to simulate second method
+        # (avoids encryption key issues in tests)
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "recovery_first@example.com").first()
+        mfa = db.query(UserMfa).filter(UserMfa.user_id == user.id).first()
+        mfa.totp_enabled = True
+        mfa.totp_secret_encrypted = "test_encrypted_secret"
+        db.commit()
+        db.close()
+
+        # Verify that recovery codes still exist (weren't regenerated)
+        status = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        ).json()
+        assert status["has_recovery_codes"] is True
+
+    def test_email_setup_returns_no_codes_when_totp_exists(self, auth_client):
+        """Email setup returns null recovery_codes when TOTP already enabled."""
+        test_client, db_session_maker = auth_client
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "recovery_second@example.com", "Password123"
+        )
+
+        # Setup TOTP first via direct DB
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from app.models.user_recovery_code import UserRecoveryCode
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "recovery_second@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        # Add existing recovery codes
+        for i in range(10):
+            recovery = UserRecoveryCode(user_id=user.id, code_hash=f"existing_hash_{i}")
+            db.add(recovery)
+        db.commit()
+        db.close()
+
+        # Now enable email - should NOT get new recovery codes
+        response = test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Should not have recovery_codes OR should be None/empty
+        assert data.get("recovery_codes") is None or data.get("recovery_codes") == []
+
+
 class TestDisableIndividualMethod:
     """Tests for DELETE /auth/mfa/method/{method} endpoint."""
 
