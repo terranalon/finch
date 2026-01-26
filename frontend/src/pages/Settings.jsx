@@ -9,11 +9,11 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from '../lib';
-import { api, getMfaStatus, setPrimaryMfaMethod, disableMfaMethod } from '../lib/api';
+import { api, getMfaStatus, setPrimaryMfaMethod } from '../lib/api';
 import { useTheme, useCurrency, usePortfolio, useAuth } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { ChangePassword } from '../components/ChangePassword';
-import { TotpSetup, EmailOtpSetup, DisableMfa, RegenerateRecoveryCodes } from '../components/MfaSetup';
+import { TotpSetup, EmailOtpSetup, DisableMfaMethod, RegenerateRecoveryCodes } from '../components/MfaSetup';
 
 // ============================================
 // MOCK DATA - Replace with real API data later
@@ -166,6 +166,25 @@ function FormField({ label, children, hint }) {
       {children}
       {hint && <p className="text-xs text-[var(--text-tertiary)]">{hint}</p>}
     </div>
+  );
+}
+
+function MfaToggle({ enabled, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
+        enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+          enabled ? 'translate-x-6' : 'translate-x-1'
+        )}
+      />
+    </button>
   );
 }
 
@@ -604,75 +623,6 @@ function PortfolioManagement() {
 }
 
 // ============================================
-// DISABLE MFA METHOD COMPONENT
-// ============================================
-
-function DisableMfaMethod({ method, onComplete, onCancel }) {
-  const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      await disableMfaMethod(method, code);
-      onComplete();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
-        Disable {method === 'totp' ? 'Authenticator App' : 'Email OTP'}
-      </h3>
-
-      <p className="text-sm text-[var(--text-secondary)] mb-4">
-        Enter your authenticator code or recovery code to disable this method.
-      </p>
-
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-negative/10 text-negative text-sm">
-          {error}
-        </div>
-      )}
-
-      <input
-        type="text"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="Enter code"
-        className="w-full px-3 py-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-primary)] mb-4"
-        autoFocus
-      />
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading || !code}
-          className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-negative text-white hover:bg-negative/90 disabled:opacity-50"
-        >
-          {loading ? 'Disabling...' : 'Disable'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-// ============================================
 // SECURITY SECTION
 // ============================================
 
@@ -781,20 +731,10 @@ function SecuritySection() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => mfaStatus.totp_enabled ? setModal('disable-totp') : setModal('totp')}
-                  className={cn(
-                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
-                    mfaStatus.totp_enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                      mfaStatus.totp_enabled ? 'translate-x-6' : 'translate-x-1'
-                    )}
-                  />
-                </button>
+                <MfaToggle
+                  enabled={mfaStatus.totp_enabled}
+                  onClick={() => setModal(mfaStatus.totp_enabled ? 'disable-totp' : 'totp')}
+                />
               </div>
 
               {/* Email OTP Card */}
@@ -812,20 +752,10 @@ function SecuritySection() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => mfaStatus.email_otp_enabled ? setModal('disable-email') : setModal('email')}
-                  className={cn(
-                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
-                    mfaStatus.email_otp_enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                      mfaStatus.email_otp_enabled ? 'translate-x-6' : 'translate-x-1'
-                    )}
-                  />
-                </button>
+                <MfaToggle
+                  enabled={mfaStatus.email_otp_enabled}
+                  onClick={() => setModal(mfaStatus.email_otp_enabled ? 'disable-email' : 'email')}
+                />
               </div>
 
               {/* Default Method Dropdown - only when both enabled */}
@@ -895,9 +825,6 @@ function SecuritySection() {
                   onComplete={handleMfaComplete}
                   onCancel={closeModal}
                 />
-              )}
-              {modal === 'disable' && (
-                <DisableMfa onComplete={handleMfaComplete} onCancel={closeModal} />
               )}
               {modal === 'regenerate' && (
                 <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />

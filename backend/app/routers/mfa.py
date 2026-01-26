@@ -98,6 +98,34 @@ def _cleanup_all_mfa(db: Session, user_id: str, mfa: UserMfa) -> None:
     db.query(EmailOtpCode).filter(EmailOtpCode.user_id == user_id).delete()
 
 
+def _verify_mfa_or_recovery(
+    db: Session, mfa: UserMfa | None, user_id: str, mfa_code: str | None, recovery_code: str | None
+) -> bool:
+    """Verify using TOTP code or recovery code. Returns True if valid."""
+    return (mfa_code and _verify_totp_code(mfa, mfa_code)) or (
+        recovery_code and _verify_recovery_code(db, user_id, recovery_code)
+    )
+
+
+def _enable_mfa_method(db: Session, mfa: UserMfa, method: str, user_id: str) -> list[str] | None:
+    """Enable an MFA method and handle recovery code generation.
+
+    Returns recovery codes if this is the first MFA method, otherwise None.
+    """
+    is_first_mfa = not (mfa.totp_enabled or mfa.email_otp_enabled)
+    mfa.primary_method = mfa.primary_method or method
+    mfa.enabled_at = mfa.enabled_at or datetime.now(UTC)
+
+    recovery_codes = None
+    if is_first_mfa:
+        recovery_codes = _generate_and_store_recovery_codes(db, user_id)
+
+    SecurityAuditService.log_event(
+        db, SecurityEventType.MFA_ENABLED, user_id=user_id, details={"method": method}
+    )
+    return recovery_codes
+
+
 @router.get("/status", response_model=MfaStatusResponse)
 def get_mfa_status(
     db: Session = Depends(get_db),
@@ -172,13 +200,7 @@ def disable_mfa_method(
     mfa = _get_mfa_or_raise(db, current_user.id)
 
     # Verify using TOTP code or recovery code
-    verified = False
-    if data.mfa_code and mfa.totp_enabled:
-        verified = _verify_totp_code(mfa, data.mfa_code)
-    if not verified and data.recovery_code:
-        verified = _verify_recovery_code(db, current_user.id, data.recovery_code)
-
-    if not verified:
+    if not _verify_mfa_or_recovery(db, mfa, current_user.id, data.mfa_code, data.recovery_code):
         SecurityAuditService.log_event(
             db,
             SecurityEventType.MFA_FAILED,

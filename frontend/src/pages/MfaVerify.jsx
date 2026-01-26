@@ -21,6 +21,51 @@ function getCodeLabel(method) {
   }
 }
 
+function EmailOtpStatus({ emailSent, sendingCode, resendCooldown, onSendCode }) {
+  // Sending initial code
+  if (!emailSent && sendingCode) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
+        <span className="text-sm">Sending code to your email...</span>
+      </div>
+    );
+  }
+
+  // Code sent - show resend button
+  if (emailSent) {
+    let buttonText = 'Resend code';
+    if (resendCooldown > 0) {
+      buttonText = `Resend code (${resendCooldown}s)`;
+    } else if (sendingCode) {
+      buttonText = 'Sending...';
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={onSendCode}
+        disabled={sendingCode || resendCooldown > 0}
+        className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+      >
+        {buttonText}
+      </button>
+    );
+  }
+
+  // Initial state - show send button
+  return (
+    <button
+      type="button"
+      onClick={onSendCode}
+      disabled={sendingCode}
+      className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+    >
+      {sendingCode ? 'Sending...' : 'Send code to my email'}
+    </button>
+  );
+}
+
 export default function MfaVerify() {
   const [code, setCode] = useState('');
   const [method, setMethod] = useState('');
@@ -197,34 +242,12 @@ export default function MfaVerify() {
           {/* Email OTP status/resend */}
           {method === 'email' && (
             <div className="text-center">
-              {!emailSent && sendingCode ? (
-                <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
-                  <span className="text-sm">Sending code to your email...</span>
-                </div>
-              ) : emailSent ? (
-                <button
-                  type="button"
-                  onClick={handleSendEmailCode}
-                  disabled={sendingCode || resendCooldown > 0}
-                  className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
-                >
-                  {resendCooldown > 0
-                    ? `Resend code (${resendCooldown}s)`
-                    : sendingCode
-                      ? 'Sending...'
-                      : 'Resend code'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSendEmailCode}
-                  disabled={sendingCode}
-                  className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
-                >
-                  {sendingCode ? 'Sending...' : 'Send code to my email'}
-                </button>
-              )}
+              <EmailOtpStatus
+                emailSent={emailSent}
+                sendingCode={sendingCode}
+                resendCooldown={resendCooldown}
+                onSendCode={handleSendEmailCode}
+              />
             </div>
           )}
 

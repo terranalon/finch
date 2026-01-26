@@ -138,6 +138,22 @@ export async function api(endpoint, options = {}) {
 }
 
 /**
+ * Handle API response: check for errors and parse JSON.
+ *
+ * @param {Response} response - fetch response
+ * @param {string} defaultError - default error message if none in response
+ * @returns {Promise<object>} parsed JSON response
+ * @throws {Error} if response is not ok
+ */
+async function handleResponse(response, defaultError) {
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || defaultError);
+  }
+  return response.json();
+}
+
+/**
  * Login with email and password
  *
  * @param {string} email
@@ -224,13 +240,7 @@ export async function verifyEmail(token) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Email verification failed');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Email verification failed');
 }
 
 /**
@@ -244,13 +254,7 @@ export async function resendVerification(email) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to resend verification email');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to resend verification email');
 }
 
 /**
@@ -265,13 +269,7 @@ export async function resetPassword(token, newPassword) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, new_password: newPassword }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Password reset failed');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Password reset failed');
 }
 
 /**
@@ -288,13 +286,7 @@ export async function changePassword(currentPassword, newPassword) {
       new_password: newPassword,
     }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to change password');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to change password');
 }
 
 /**
@@ -308,13 +300,7 @@ export async function forgotPassword(email) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to send reset email');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to send reset email');
 }
 
 /**
@@ -353,13 +339,7 @@ export async function sendMfaEmailCode(tempToken) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ temp_token: tempToken }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to send email code');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to send email code');
 }
 
 /**
@@ -371,13 +351,7 @@ export async function setupTotp() {
   const response = await api('/auth/mfa/setup/totp', {
     method: 'POST',
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to start TOTP setup');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to start TOTP setup');
 }
 
 /**
@@ -397,13 +371,7 @@ export async function confirmTotp(secret, code, verificationCode = null) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to confirm TOTP');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to confirm TOTP');
 }
 
 /**
@@ -418,13 +386,7 @@ export async function setupEmailOtp(verificationCode = null) {
     method: 'POST',
     body: JSON.stringify(body),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to enable email OTP');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to enable email OTP');
 }
 
 /**
@@ -442,13 +404,7 @@ export async function disableMfa(mfaCode, recoveryCode) {
       recovery_code: recoveryCode,
     }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to disable MFA');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to disable MFA');
 }
 
 /**
@@ -460,15 +416,9 @@ export async function disableMfa(mfaCode, recoveryCode) {
 export async function regenerateRecoveryCodes(code) {
   const response = await api('/auth/mfa/recovery-codes', {
     method: 'POST',
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ mfa_code: code }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to regenerate recovery codes');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to regenerate recovery codes');
 }
 
 /**
@@ -478,13 +428,7 @@ export async function regenerateRecoveryCodes(code) {
  */
 export async function getMfaStatus() {
   const response = await api('/auth/mfa/status');
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to get MFA status');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to get MFA status');
 }
 
 /**
@@ -498,13 +442,7 @@ export async function setPrimaryMfaMethod(method) {
     method: 'PUT',
     body: JSON.stringify({ method }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to set primary method');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to set primary method');
 }
 
 /**
@@ -519,13 +457,7 @@ export async function disableMfaMethod(method, verificationCode) {
     method: 'DELETE',
     body: JSON.stringify({ mfa_code: verificationCode }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to disable MFA method');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to disable MFA method');
 }
 
 /**
@@ -538,13 +470,7 @@ export async function deleteDataSource(sourceId) {
   const response = await api(`/broker-data/source/${sourceId}`, {
     method: 'DELETE',
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete data source');
-  }
-
-  return response.json();
+  return handleResponse(response, 'Failed to delete data source');
 }
 
 export default api;

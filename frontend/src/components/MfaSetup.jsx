@@ -5,7 +5,58 @@
  */
 
 import { useState, useEffect } from 'react';
-import { setupTotp, confirmTotp, setupEmailOtp, disableMfa, regenerateRecoveryCodes } from '../lib/api';
+import { setupTotp, confirmTotp, setupEmailOtp, disableMfa, disableMfaMethod, regenerateRecoveryCodes } from '../lib/api';
+
+// Reusable code input component for verification codes
+export function CodeInput({ value, onChange, placeholder = '000000', maxLength = 6 }) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      className="w-full px-3 py-2.5 rounded-lg text-sm bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent"
+    />
+  );
+}
+
+// Reusable error alert component
+export function ErrorAlert({ message }) {
+  if (!message) return null;
+  return (
+    <div className="rounded-md bg-negative-bg dark:bg-negative-bg-dark p-3">
+      <p className="text-sm text-negative dark:text-negative-dark">{message}</p>
+    </div>
+  );
+}
+
+// Reusable form buttons component
+export function FormButtons({ onCancel, submitLabel, loading, disabled, variant = 'primary' }) {
+  const submitClassName = variant === 'danger'
+    ? 'flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-negative text-white hover:bg-negative/90 transition-colors disabled:opacity-50'
+    : 'flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-50';
+
+  return (
+    <div className="flex gap-3">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        disabled={loading || disabled}
+        className={submitClassName}
+      >
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
 
 // Recovery Codes Display
 export function RecoveryCodesDisplay({ codes, onClose }) {
@@ -609,5 +660,63 @@ export function RegenerateRecoveryCodes({ onComplete, onCancel }) {
         </div>
       </form>
     </div>
+  );
+}
+
+// Disable Individual MFA Method Component
+export function DisableMfaMethod({ method, onComplete, onCancel }) {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await disableMfaMethod(method, code);
+      onComplete();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const methodLabel = method === 'totp' ? 'Authenticator App' : 'Email OTP';
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+        Disable {methodLabel}
+      </h3>
+
+      <p className="text-sm text-[var(--text-secondary)]">
+        Enter your authenticator code or recovery code to disable this method.
+      </p>
+
+      <ErrorAlert message={error} />
+
+      <div>
+        <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+          Verification code
+        </label>
+        <CodeInput
+          value={code}
+          onChange={setCode}
+          placeholder="Enter code"
+          maxLength={14}
+        />
+      </div>
+
+      <FormButtons
+        onCancel={onCancel}
+        submitLabel={loading ? 'Disabling...' : 'Disable'}
+        loading={loading}
+        disabled={!code}
+        variant="danger"
+      />
+    </form>
   );
 }
