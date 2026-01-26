@@ -35,6 +35,7 @@ export default function Login() {
             tempToken: result.temp_token,
             methods: result.methods,
             email,
+            primaryMethod: result.primary_method,
           },
         });
         return;
