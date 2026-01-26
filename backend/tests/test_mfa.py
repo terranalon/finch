@@ -488,10 +488,11 @@ class TestMfaStatus:
         )
 
         # Setup TOTP by directly creating MFA record (to avoid encryption key issue in tests)
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
         from app.models.user_recovery_code import UserRecoveryCode
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "status_totp@example.com").first()
@@ -535,10 +536,10 @@ class TestSetPrimaryMethod:
         )
 
         # Setup: enable both MFA methods via direct DB
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
-        from app.models.user_recovery_code import UserRecoveryCode
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "primary_success@example.com").first()
@@ -616,10 +617,11 @@ class TestLoginMfaResponse:
         test_client, db_session_maker = auth_client
 
         # Register and verify user
-        from tests.conftest import register_and_verify_user
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
-        from datetime import UTC, datetime
+        from tests.conftest import register_and_verify_user
 
         register_and_verify_user(
             test_client, db_session_maker, "mfa_login@example.com", "Password123"
@@ -665,9 +667,10 @@ class TestSecondMethodVerification:
         )
 
         # Enable TOTP first via direct DB
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "second_email@example.com").first()
@@ -701,9 +704,10 @@ class TestSecondMethodVerification:
         )
 
         # Enable TOTP first via direct DB
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "second_email_ok@example.com").first()
@@ -757,7 +761,6 @@ class TestRecoveryCodeGeneration:
         data1 = response1.json()
         assert "recovery_codes" in data1
         assert len(data1["recovery_codes"]) == 10
-        first_codes = set(data1["recovery_codes"])
 
         # Setup TOTP directly in DB to simulate second method
         # (avoids encryption key issues in tests)
@@ -779,19 +782,22 @@ class TestRecoveryCodeGeneration:
         ).json()
         assert status["has_recovery_codes"] is True
 
-    def test_email_setup_returns_no_codes_when_totp_exists(self, auth_client):
+    @patch("app.routers.mfa._verify_totp_code")
+    def test_email_setup_returns_no_codes_when_totp_exists(self, mock_verify, auth_client):
         """Email setup returns null recovery_codes when TOTP already enabled."""
         test_client, db_session_maker = auth_client
+        mock_verify.return_value = True
 
         tokens = register_and_verify_user(
             test_client, db_session_maker, "recovery_second@example.com", "Password123"
         )
 
         # Setup TOTP first via direct DB
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
         from app.models.user_recovery_code import UserRecoveryCode
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "recovery_second@example.com").first()
@@ -810,9 +816,10 @@ class TestRecoveryCodeGeneration:
         db.commit()
         db.close()
 
-        # Now enable email - should NOT get new recovery codes
+        # Now enable email with TOTP verification - should NOT get new recovery codes
         response = test_client.post(
             "/api/auth/mfa/setup/email",
+            json={"verification_code": "123456"},
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert response.status_code == 200
@@ -835,10 +842,11 @@ class TestDisableIndividualMethod:
         )
 
         # Setup: enable both methods via direct DB
+        from datetime import UTC, datetime
+
         from app.models.user import User
         from app.models.user_mfa import UserMfa
         from app.models.user_recovery_code import UserRecoveryCode
-        from datetime import UTC, datetime
 
         db = db_session_maker()
         user = db.query(User).filter(User.email == "disable_totp@example.com").first()

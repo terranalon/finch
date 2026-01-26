@@ -80,6 +80,24 @@ def _get_or_create_mfa(db: Session, user_id: str) -> UserMfa:
     return mfa
 
 
+def _get_mfa_or_raise(db: Session, user_id: str) -> UserMfa:
+    """Get MFA record or raise 400 if not enabled."""
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == user_id).first()
+    if not mfa:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled",
+        )
+    return mfa
+
+
+def _cleanup_all_mfa(db: Session, user_id: str, mfa: UserMfa) -> None:
+    """Delete MFA record, recovery codes, and pending email OTP codes."""
+    db.delete(mfa)
+    db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == user_id).delete()
+    db.query(EmailOtpCode).filter(EmailOtpCode.user_id == user_id).delete()
+
+
 @router.get("/status", response_model=MfaStatusResponse)
 def get_mfa_status(
     db: Session = Depends(get_db),
@@ -119,13 +137,7 @@ def set_primary_method(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Set the primary MFA method for login."""
-    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
-
-    if not mfa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled",
-        )
+    mfa = _get_mfa_or_raise(db, current_user.id)
 
     if data.method == "totp" and not mfa.totp_enabled:
         raise HTTPException(
@@ -159,12 +171,7 @@ def disable_mfa_method(
             detail="Invalid method. Must be 'totp' or 'email'",
         )
 
-    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
-    if not mfa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled",
-        )
+    mfa = _get_mfa_or_raise(db, current_user.id)
 
     # Verify using TOTP code or recovery code
     verified = False
@@ -214,8 +221,7 @@ def disable_mfa_method(
 
     # If no methods remain, clean up everything
     if not mfa.totp_enabled and not mfa.email_otp_enabled:
-        db.delete(mfa)
-        db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == current_user.id).delete()
+        _cleanup_all_mfa(db, current_user.id, mfa)
         SecurityAuditService.log_event(
             db, SecurityEventType.MFA_DISABLED, user_id=current_user.id,
             details={"method": "all"},
@@ -362,12 +368,7 @@ def disable_mfa(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Disable all MFA methods. Requires MFA code or recovery code."""
-    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
-    if not mfa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled",
-        )
+    mfa = _get_mfa_or_raise(db, current_user.id)
 
     # Verify using either TOTP code or recovery code
     verified = (data.mfa_code and _verify_totp_code(mfa, data.mfa_code)) or (
@@ -375,15 +376,18 @@ def disable_mfa(
     )
 
     if not verified:
+        SecurityAuditService.log_event(
+            db, SecurityEventType.MFA_FAILED, user_id=current_user.id,
+            details={"action": "disable_all"},
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid MFA code or recovery code",
         )
 
-    # Delete MFA record and recovery codes
-    db.delete(mfa)
-    db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == current_user.id).delete()
-    db.query(EmailOtpCode).filter(EmailOtpCode.user_id == current_user.id).delete()
+    # Delete MFA record, recovery codes, and pending email OTP codes
+    _cleanup_all_mfa(db, current_user.id, mfa)
 
     # Log MFA disabled
     SecurityAuditService.log_event(
