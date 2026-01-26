@@ -18,6 +18,7 @@ from app.models.user_mfa import UserMfa
 from app.models.user_recovery_code import UserRecoveryCode
 from app.schemas.auth import MessageResponse, TokenResponse, UserInfo
 from app.schemas.mfa import (
+    EmailOtpSetupRequest,
     MfaDisableRequest,
     MfaEnabledResponse,
     MfaStatusResponse,
@@ -294,19 +295,38 @@ def confirm_totp(
 
 @router.post("/setup/email", response_model=MfaEnabledResponse)
 def setup_email_otp(
+    data: EmailOtpSetupRequest | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Enable Email OTP MFA. Returns recovery codes only if first MFA method."""
-    # Get or create MFA record
-    mfa = _get_or_create_mfa(db, current_user.id)
+    # Get existing MFA record to check state
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
 
     # Check if email OTP is already enabled
-    if mfa.email_otp_enabled:
+    if mfa and mfa.email_otp_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email OTP is already enabled",
         )
+
+    # If TOTP is already enabled, require verification
+    if mfa and mfa.totp_enabled:
+        if not data or not data.verification_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification code required. Enter your authenticator code.",
+            )
+        # Verify the TOTP code
+        if not _verify_totp_code(mfa, data.verification_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid verification code",
+            )
+
+    # Get or create MFA record
+    if not mfa:
+        mfa = _get_or_create_mfa(db, current_user.id)
 
     # Check if this is the first MFA method being enabled
     is_first_mfa = not (mfa.totp_enabled or mfa.email_otp_enabled)

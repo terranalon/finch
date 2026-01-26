@@ -80,3 +80,9 @@ class SetPrimaryMethodRequest(BaseModel):
     """Request to set primary MFA method."""
 
     method: str = Field(pattern="^(totp|email)$")
+
+
+class EmailOtpSetupRequest(BaseModel):
+    """Request to setup email OTP."""
+
+    verification_code: str | None = None  # Required if adding as second method

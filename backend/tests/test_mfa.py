@@ -608,6 +608,90 @@ class TestSetPrimaryMethod:
         assert response.status_code == 400
 
 
+class TestSecondMethodVerification:
+    """Tests for requiring existing MFA when adding second method."""
+
+    @patch("app.routers.mfa._verify_totp_code")
+    def test_adding_email_requires_totp_verification(self, mock_verify, auth_client):
+        """When TOTP is enabled, adding email OTP requires TOTP verification."""
+        test_client, db_session_maker = auth_client
+        mock_verify.return_value = False  # Verification will fail
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "second_email@example.com", "Password123"
+        )
+
+        # Enable TOTP first via direct DB
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "second_email@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        db.commit()
+        db.close()
+
+        # Try to enable email without verification - should fail
+        response = test_client.post(
+            "/api/auth/mfa/setup/email",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 400
+        assert "verification" in response.json()["detail"].lower()
+
+    @patch("app.routers.mfa._verify_totp_code")
+    def test_adding_email_with_valid_totp_succeeds(self, mock_verify, auth_client):
+        """Can add email OTP when providing valid TOTP verification."""
+        test_client, db_session_maker = auth_client
+        mock_verify.return_value = True  # Verification succeeds
+
+        tokens = register_and_verify_user(
+            test_client, db_session_maker, "second_email_ok@example.com", "Password123"
+        )
+
+        # Enable TOTP first via direct DB
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from datetime import UTC, datetime
+
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "second_email_ok@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            totp_enabled=True,
+            totp_secret_encrypted="test_encrypted_secret",
+            primary_method="totp",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        db.commit()
+        db.close()
+
+        # Add email with TOTP verification
+        response = test_client.post(
+            "/api/auth/mfa/setup/email",
+            json={"verification_code": "123456"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert response.status_code == 200
+
+        # Verify both are now enabled
+        status = test_client.get(
+            "/api/auth/mfa/status",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        ).json()
+        assert status["totp_enabled"] is True
+        assert status["email_otp_enabled"] is True
+
+
 class TestRecoveryCodeGeneration:
     """Tests for recovery code generation logic."""
 
