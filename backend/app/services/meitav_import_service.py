@@ -17,6 +17,7 @@ from app.services.base_broker_parser import (
     ParsedPosition,
     ParsedTransaction,
 )
+from app.services.base_import_service import BaseBrokerImportService
 from app.services.tase_api_service import TASEApiService
 from app.services.transaction_hash_service import (
     DedupResult,
@@ -27,7 +28,7 @@ from app.services.transaction_hash_service import (
 logger = logging.getLogger(__name__)
 
 
-class MeitavImportService:
+class MeitavImportService(BaseBrokerImportService):
     """Service for importing Meitav Trade broker data into the database.
 
     Handles:
@@ -38,13 +39,19 @@ class MeitavImportService:
     - Dividend tracking
     """
 
-    def __init__(self, db: Session) -> None:
-        """Initialize with database session.
+    @classmethod
+    def supported_broker_types(cls) -> list[str]:
+        """Return list of broker types this service handles."""
+        return ["meitav"]
+
+    def __init__(self, db: Session, broker_type: str = "meitav") -> None:
+        """Initialize with database session and broker type.
 
         Args:
             db: SQLAlchemy database session
+            broker_type: Broker type identifier (default: 'meitav')
         """
-        self.db = db
+        super().__init__(db, broker_type)
         self.tase_service = TASEApiService()
 
     def import_data(
