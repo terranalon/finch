@@ -219,23 +219,23 @@ async def list_positions(
         )
 
         # Calculate day change from closing prices (per-asset market detection)
-        # Skip Cash assets - they don't have market prices (1 USD = 1 USD always)
         asset_id = position["asset_id"]
         symbol = position["symbol"]
 
         if position["asset_class"] == "Cash":
+            # Cash assets don't have market prices (1 USD = 1 USD always)
             day_change = None
             day_change_pct = None
             previous_close_price = None
             day_change_date = None
             is_asset_market_closed = False
-        elif position["asset_class"] == "Crypto":
-            # Crypto markets are 24/7 - always use "market open" logic (current price vs previous close)
-            is_asset_market_closed = False
         else:
-            # Determine which market this asset belongs to
-            market = TradingCalendarService.get_market_for_symbol(symbol)
-            is_asset_market_closed = TradingCalendarService.is_market_closed(today, market)
+            # Determine market status: crypto is 24/7, others check trading calendar
+            if position["asset_class"] == "Crypto":
+                is_asset_market_closed = False
+            else:
+                market = TradingCalendarService.get_market_for_symbol(symbol)
+                is_asset_market_closed = TradingCalendarService.is_market_closed(today, market)
 
             if is_asset_market_closed:
                 # Market closed: compare two most recent closing prices
@@ -253,7 +253,7 @@ async def list_positions(
                     previous_close_price = None
                     day_change_date = None
             else:
-                # Market open: compare current price vs previous closing price
+                # Market open (or crypto 24/7): compare current price vs previous close
                 price_for_day_change = current_price
                 previous_close_price = previous_close_map.get(asset_id)
                 day_change_date = today

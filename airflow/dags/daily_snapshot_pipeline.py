@@ -1,12 +1,13 @@
 """
 Daily Snapshot Pipeline DAG
 
-Creates end-of-day portfolio snapshots after market close:
+Creates end-of-day portfolio snapshots at midnight UTC:
 1. Fetch exchange rates for all currency pairs
-2. Fetch today's closing prices for all assets
-3. Create portfolio snapshots with accurate valuations
+2. Fetch yesterday's closing prices for stocks (via Yahoo Finance)
+3. Fetch crypto closing prices at midnight UTC (via CoinGecko)
+4. Create portfolio snapshots with accurate valuations
 
-Schedule: Daily at 9:30 PM UTC (after US market close)
+Schedule: Daily at midnight UTC (00:00)
 """
 
 import logging
@@ -65,7 +66,7 @@ default_args = {
     dag_id="daily_snapshot_pipeline",
     default_args=default_args,
     description="Daily end-of-day snapshots with exchange rates and asset prices",
-    schedule="30 21 * * *",  # 9:30 PM UTC daily (after US market close)
+    schedule="0 0 * * *",  # Midnight UTC daily
     start_date=datetime(2026, 1, 1),
     catchup=False,  # Don't run historical DAGs
     tags=["portfolio", "daily", "snapshots"],
@@ -79,19 +80,22 @@ def daily_snapshot_pipeline():
         session = SessionLocal()
 
         try:
-            today = date.today()
+            # Running at midnight UTC, capture yesterday's rates
+            snapshot_date = date.today() - timedelta(days=1)
             stats = {"total": len(CURRENCY_PAIRS), "updated": 0, "failed": 0, "pairs": []}
 
             for from_curr, to_curr in CURRENCY_PAIRS:
                 try:
-                    # Check if rate already exists for today
+                    # Check if rate already exists for snapshot_date
                     existing = session.execute(
                         text(CHECK_EXCHANGE_RATE_EXISTS),
-                        {"from_curr": from_curr, "to_curr": to_curr, "date": today},
+                        {"from_curr": from_curr, "to_curr": to_curr, "date": snapshot_date},
                     ).first()
 
                     if existing:
-                        logger.info(f"Rate {from_curr}/{to_curr} already exists for {today}")
+                        logger.info(
+                            f"Rate {from_curr}/{to_curr} already exists for {snapshot_date}"
+                        )
                         stats["updated"] += 1
                         continue
 
@@ -110,7 +114,7 @@ def daily_snapshot_pipeline():
                                 "from_curr": from_curr,
                                 "to_curr": to_curr,
                                 "rate": rate,
-                                "date": today,
+                                "date": snapshot_date,
                             },
                         )
                         session.commit()
@@ -142,10 +146,10 @@ def daily_snapshot_pipeline():
     @task(task_id="fetch_asset_prices", pool="db_write_pool")
     def fetch_asset_prices() -> dict[str, int | list[str] | str]:
         """
-        Fetch and store TODAY'S closing prices for all active assets.
+        Fetch and store YESTERDAY'S closing prices for non-crypto assets.
 
-        NOTE: This DAG runs after US market close (9:30 PM UTC), so we fetch
-        today's closing prices for accurate end-of-day snapshots.
+        NOTE: This DAG runs at midnight UTC, so we fetch yesterday's
+        closing prices for accurate end-of-day snapshots.
         """
         session = SessionLocal()
 
@@ -153,32 +157,35 @@ def daily_snapshot_pipeline():
             # Get all assets that have holdings
             assets = session.execute(text(GET_ACTIVE_HOLDINGS_ASSETS)).fetchall()
 
-            # Store closing prices for TODAY (running after market close)
-            today = date.today()
+            # Running at midnight UTC, capture yesterday's close
+            snapshot_date = date.today() - timedelta(days=1)
 
             stats: dict[str, int | list[str] | str] = {
                 "total": len(assets),
                 "updated": 0,
                 "failed": 0,
                 "errors": [],
-                "target_date": str(today),
+                "target_date": str(snapshot_date),
             }
 
             for asset_id, symbol, currency in assets:
                 try:
-                    # Check if we already have a closing price for today
+                    # Check if we already have a closing price for snapshot_date
                     existing = session.execute(
-                        text(CHECK_ASSET_PRICE_EXISTS), {"asset_id": asset_id, "date": today}
+                        text(CHECK_ASSET_PRICE_EXISTS),
+                        {"asset_id": asset_id, "date": snapshot_date},
                     ).first()
 
                     if existing:
-                        logger.info(f"Already have closing price for {symbol} on {today}")
+                        logger.info(f"Already have closing price for {symbol} on {snapshot_date}")
                         stats["updated"] += 1
                         continue
 
-                    # Fetch today's closing price (running after market close)
+                    # Fetch yesterday's closing price (running at midnight UTC)
                     ticker = yf.Ticker(symbol)
-                    hist = ticker.history(start=today, end=today + timedelta(days=1))
+                    hist = ticker.history(
+                        start=snapshot_date, end=snapshot_date + timedelta(days=1)
+                    )
 
                     if not hist.empty and "Close" in hist.columns:
                         closing_price = float(hist["Close"].iloc[0])
@@ -188,12 +195,12 @@ def daily_snapshot_pipeline():
                         if symbol.endswith(".TA"):
                             closing_price = closing_price / 100
 
-                        # Store today's closing price
+                        # Store yesterday's closing price
                         session.execute(
                             text(INSERT_ASSET_PRICE),
                             {
                                 "asset_id": asset_id,
-                                "date": today,
+                                "date": snapshot_date,
                                 "closing_price": closing_price,
                                 "currency": currency,
                                 "source": "Yahoo Finance",
@@ -206,7 +213,7 @@ def daily_snapshot_pipeline():
                         )
                         stats["updated"] += 1
                     else:
-                        error_msg = f"{symbol}: No closing price data for {today}"
+                        error_msg = f"{symbol}: No closing price data for {snapshot_date}"
                         stats["errors"].append(error_msg)
                         stats["failed"] += 1
                         logger.warning(error_msg)
@@ -235,7 +242,7 @@ def daily_snapshot_pipeline():
         exchange_rate_stats: dict[str, int | list[str]],
         asset_price_stats: dict[str, int | list[str] | str],
     ) -> dict[str, int | str | float]:
-        """Create portfolio snapshots for today (running after market close)."""
+        """Create portfolio snapshots for yesterday (running at midnight UTC)."""
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
 
@@ -247,8 +254,8 @@ def daily_snapshot_pipeline():
             # Get all active accounts
             accounts = session.execute(text(GET_ACTIVE_ACCOUNTS)).fetchall()
 
-            # Snapshot date is TODAY (running after market close at 9:30 PM UTC)
-            snapshot_date = date.today()
+            # Running at midnight UTC, snapshot is for yesterday
+            snapshot_date = date.today() - timedelta(days=1)
 
             stats = {
                 "date": str(snapshot_date),
