@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,7 @@ from app.models.user import User
 from app.services.broker_file_storage import get_file_storage
 from app.services.broker_overlap_detector import get_overlap_detector
 from app.services.broker_parser_registry import BrokerParserRegistry
+from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ def _get_parser_for_file(broker_type: str, filename: str):
 class BrokerSourceResponse(BaseModel):
     """Response model for a data source."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     source_type: str
     source_identifier: str
@@ -76,9 +79,6 @@ class BrokerSourceResponse(BaseModel):
     status: str
     stats: dict | None
     transaction_count: int | None = None  # Count of linked transactions
-
-    class Config:
-        from_attributes = True
 
 
 class GapResponse(BaseModel):
@@ -473,39 +473,16 @@ async def upload_broker_file(
                     + len(stmt_funds_balances)
                 ),
             }
-        elif broker_type == "meitav":
-            # For Meitav, use the MeitavImportService
-            from app.services.meitav_import_service import MeitavImportService
-
+        elif BrokerImportServiceRegistry.is_supported(broker_type):
+            # Use registry for all supported import services (meitav, kraken, bit2c, binance)
             parsed_data = parser.parse(content)
-            import_service = MeitavImportService(db)
-            import_stats = import_service.import_data(account_id, parsed_data)
+            import_service = BrokerImportServiceRegistry.get_import_service(broker_type, db)
+            import_stats = import_service.import_data(account_id, parsed_data, source_id=source.id)
 
+            # Pass through all stats from service (unified structure)
             source.import_stats = {
-                "transactions": import_stats.get("transactions", {}),
-                "positions": import_stats.get("positions", {}),
-                "cash_transactions": import_stats.get("cash_transactions", {}),
-                "dividends": import_stats.get("dividends", {}),
+                **import_stats,
                 "total_records": parsed_data.total_records,
-                "errors": import_stats.get("errors", []),
-            }
-        elif broker_type in ("kraken", "bit2c", "binance"):
-            # For crypto brokers, use the CryptoImportService
-            from app.services.crypto_import_service import CryptoImportService
-
-            parsed_data = parser.parse(content)
-            import_service = CryptoImportService(db)
-            import_stats = import_service.import_data(
-                account_id, parsed_data, broker_type.capitalize(), source_id=source.id
-            )
-
-            source.import_stats = {
-                "transactions": import_stats.get("transactions", {}),
-                "cash_transactions": import_stats.get("cash_transactions", {}),
-                "dividends": import_stats.get("dividends", {}),
-                "holdings_reconstruction": import_stats.get("holdings_reconstruction", {}),
-                "total_records": parsed_data.total_records,
-                "errors": import_stats.get("errors", []),
             }
         else:
             # For other broker types, use the generic parser (future)

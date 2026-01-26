@@ -14,6 +14,7 @@ from app.services.base_broker_parser import (
     ParsedPosition,
     ParsedTransaction,
 )
+from app.services.base_import_service import BaseBrokerImportService
 from app.services.coingecko_client import CoinGeckoClient
 from app.services.transaction_hash_service import create_or_transfer_transaction
 
@@ -22,33 +23,42 @@ logger = logging.getLogger(__name__)
 FIAT_CURRENCIES = {"USD", "EUR", "ILS", "GBP"}
 
 
-class CryptoImportService:
+class CryptoImportService(BaseBrokerImportService):
     """Service for importing crypto exchange data into the database."""
 
-    def __init__(self, db: Session) -> None:
-        self.db = db
+    @classmethod
+    def supported_broker_types(cls) -> list[str]:
+        """Return list of broker types this service handles."""
+        return ["kraken", "bit2c", "binance"]
+
+    def __init__(self, db: Session, broker_type: str) -> None:
+        """Initialize with database session and broker type.
+
+        Args:
+            db: SQLAlchemy database session
+            broker_type: Broker type identifier (e.g., 'kraken', 'bit2c', 'binance')
+        """
+        super().__init__(db, broker_type)
 
     def import_data(
         self,
         account_id: int,
         data: BrokerImportData,
-        broker_name: str,
-        import_positions: bool = False,
         source_id: int | None = None,
+        import_positions: bool = False,
     ) -> dict:
         """Import complete crypto broker data into database.
 
         Args:
             account_id: Account ID to import data for
             data: Parsed broker data
-            broker_name: Name of the broker for logging
+            source_id: Optional broker source ID for tracking import lineage
             import_positions: If True, import positions from API (not recommended).
                               If False (default), calculate balances from transactions.
-            source_id: Optional broker source ID for tracking import lineage
         """
         stats = {
             "account_id": account_id,
-            "broker": broker_name,
+            "broker": self.broker_type.capitalize(),
             "start_time": datetime.now().isoformat(),
             "positions": {},
             "transactions": {},
@@ -83,13 +93,13 @@ class CryptoImportService:
                 self.db.commit()
 
             # Create BrokerDataSource record to track this import
-            self._create_broker_data_source(account_id, broker_name, data, stats)
+            self._create_broker_data_source(account_id, self.broker_type.capitalize(), data, stats)
             self.db.commit()
 
             stats["status"] = "completed"
 
         except Exception as e:
-            logger.exception("%s import failed", broker_name)
+            logger.exception("%s import failed", self.broker_type)
             self.db.rollback()
             stats["status"] = "failed"
             stats["errors"].append(str(e))
