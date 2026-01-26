@@ -287,7 +287,24 @@ def confirm_totp(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Confirm TOTP setup with valid code. Enables TOTP and returns recovery codes."""
-    # Verify the code against the provided secret
+    # Get existing MFA record to check if email OTP is enabled
+    mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
+
+    # If email OTP is already enabled, require verification
+    if mfa and mfa.email_otp_enabled:
+        if not data.verification_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification code required. Check your email for the code.",
+            )
+        # Verify the email OTP code
+        if not _verify_email_otp_code(db, current_user.id, mfa, data.verification_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email verification code",
+            )
+
+    # Verify the TOTP code against the provided secret
     if not MfaService.verify_totp(data.secret, data.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -295,7 +312,8 @@ def confirm_totp(
         )
 
     # Get or create MFA record
-    mfa = _get_or_create_mfa(db, current_user.id)
+    if not mfa:
+        mfa = _get_or_create_mfa(db, current_user.id)
 
     # Check if this is the first MFA method being enabled
     is_first_mfa = not (mfa.totp_enabled or mfa.email_otp_enabled)

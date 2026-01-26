@@ -16,6 +16,7 @@ class TotpConfirmRequest(BaseModel):
 
     secret: str
     code: str = Field(min_length=6, max_length=6)
+    verification_code: str | None = None  # Required if adding as second method
 
 
 class MfaEnabledResponse(BaseModel):
