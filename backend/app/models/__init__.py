@@ -8,7 +8,6 @@ from app.models.corporate_action import CorporateAction
 from app.models.daily_cash_balance import DailyCashBalance
 from app.models.email_otp_code import EmailOtpCode
 from app.models.email_verification_token import EmailVerificationToken
-from app.models.security_audit_log import SecurityAuditLog
 from app.models.exchange_rate import ExchangeRate
 from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
@@ -16,6 +15,7 @@ from app.models.holding_lot import HoldingLot
 from app.models.mfa_temp_session import MfaTempSession
 from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.session import Session
 from app.models.tase_security import TASESecurity
 from app.models.transaction import Transaction
