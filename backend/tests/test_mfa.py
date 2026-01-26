@@ -608,6 +608,49 @@ class TestSetPrimaryMethod:
         assert response.status_code == 400
 
 
+class TestLoginMfaResponse:
+    """Tests for MFA fields in login response."""
+
+    def test_login_mfa_response_includes_primary_method(self, auth_client):
+        """Login response includes primary_method when MFA is required."""
+        test_client, db_session_maker = auth_client
+
+        # Register and verify user
+        from tests.conftest import register_and_verify_user
+        from app.models.user import User
+        from app.models.user_mfa import UserMfa
+        from datetime import UTC, datetime
+
+        register_and_verify_user(
+            test_client, db_session_maker, "mfa_login@example.com", "Password123"
+        )
+
+        # Enable MFA with email as primary
+        db = db_session_maker()
+        user = db.query(User).filter(User.email == "mfa_login@example.com").first()
+        mfa = UserMfa(
+            user_id=user.id,
+            email_otp_enabled=True,
+            primary_method="email",
+            enabled_at=datetime.now(UTC),
+        )
+        db.add(mfa)
+        db.commit()
+        db.close()
+
+        # Login should return MFA required with primary_method
+        response = test_client.post(
+            "/api/auth/login",
+            json={"email": "mfa_login@example.com", "password": "Password123"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mfa_required"] is True
+        assert "primary_method" in data
+        assert data["primary_method"] == "email"
+
+
 class TestSecondMethodVerification:
     """Tests for requiring existing MFA when adding second method."""
 

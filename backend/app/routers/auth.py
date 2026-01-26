@@ -237,6 +237,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
             "mfa_required": True,
             "temp_token": temp_token,
             "methods": methods,
+            "primary_method": mfa.primary_method,
         }
 
     # No MFA - create full tokens
