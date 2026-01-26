@@ -404,11 +404,14 @@ export async function confirmTotp(secret, code) {
 /**
  * Enable email OTP for authenticated user
  *
- * @returns {Promise<{recovery_codes: string[]}>}
+ * @param {string|null} verificationCode - TOTP code if adding as second method
+ * @returns {Promise<{recovery_codes: string[]|null}>}
  */
-export async function setupEmailOtp() {
+export async function setupEmailOtp(verificationCode = null) {
+  const body = verificationCode ? { verification_code: verificationCode } : {};
   const response = await api('/auth/mfa/setup/email', {
     method: 'POST',
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -458,6 +461,63 @@ export async function regenerateRecoveryCodes(code) {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Failed to regenerate recovery codes');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get current user's MFA status
+ *
+ * @returns {Promise<{mfa_enabled: boolean, totp_enabled: boolean, email_otp_enabled: boolean, primary_method: string|null, has_recovery_codes: boolean}>}
+ */
+export async function getMfaStatus() {
+  const response = await api('/auth/mfa/status');
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to get MFA status');
+  }
+
+  return response.json();
+}
+
+/**
+ * Set the primary MFA method for login
+ *
+ * @param {string} method - 'totp' or 'email'
+ * @returns {Promise<{message: string}>}
+ */
+export async function setPrimaryMfaMethod(method) {
+  const response = await api('/auth/mfa/primary-method', {
+    method: 'PUT',
+    body: JSON.stringify({ method }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to set primary method');
+  }
+
+  return response.json();
+}
+
+/**
+ * Disable a specific MFA method
+ *
+ * @param {string} method - 'totp' or 'email'
+ * @param {string} verificationCode - TOTP code or recovery code
+ * @returns {Promise<{message: string}>}
+ */
+export async function disableMfaMethod(method, verificationCode) {
+  const response = await api(`/auth/mfa/method/${method}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ mfa_code: verificationCode }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to disable MFA method');
   }
 
   return response.json();
