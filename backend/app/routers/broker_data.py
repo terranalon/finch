@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -69,6 +69,8 @@ def _get_parser_for_file(broker_type: str, filename: str):
 class BrokerSourceResponse(BaseModel):
     """Response model for a data source."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     source_type: str
     source_identifier: str
@@ -77,9 +79,6 @@ class BrokerSourceResponse(BaseModel):
     status: str
     stats: dict | None
     transaction_count: int | None = None  # Count of linked transactions
-
-    class Config:
-        from_attributes = True
 
 
 class GapResponse(BaseModel):

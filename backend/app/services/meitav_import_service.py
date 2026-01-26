@@ -44,12 +44,12 @@ class MeitavImportService(BaseBrokerImportService):
         """Return list of broker types this service handles."""
         return ["meitav"]
 
-    def __init__(self, db: Session, broker_type: str = "meitav") -> None:
+    def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.
 
         Args:
             db: SQLAlchemy database session
-            broker_type: Broker type identifier (default: 'meitav')
+            broker_type: Broker type identifier (e.g., 'meitav')
         """
         super().__init__(db, broker_type)
         self.tase_service = TASEApiService()

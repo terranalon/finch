@@ -15,6 +15,11 @@ class TestBrokerImportServiceRegistry:
         BrokerImportServiceRegistry._services = {}
         BrokerImportServiceRegistry._initialized = False
 
+    def teardown_method(self):
+        """Reset registry state after each test."""
+        BrokerImportServiceRegistry._services = {}
+        BrokerImportServiceRegistry._initialized = False
+
     def test_get_import_service_meitav(self):
         """Test getting import service for meitav broker."""
         mock_db = MagicMock()
