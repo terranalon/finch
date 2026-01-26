@@ -25,8 +25,8 @@ from app.models.user import User
 # Import broker clients and services at module level for testability
 from app.services.binance_client import BinanceClient, BinanceCredentials
 from app.services.bit2c_client import Bit2CClient, Bit2CCredentials
-from app.services.crypto_import_service import CryptoImportService
 from app.services.ibkr_flex_client import IBKRFlexClient
+from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.ibkr_flex_import_service import IBKRFlexImportService
 from app.services.kraken_client import KrakenClient, KrakenCredentials
 from app.services.staged_import_service import StagedImportService
@@ -270,8 +270,8 @@ def _import_crypto_broker(
     logger.info(f"Fetching {config.name} data for account {account_id}")
     broker_data = client.fetch_all_data()
 
-    import_service = CryptoImportService(db)
-    return import_service.import_data(account_id, broker_data, config.name)
+    import_service = BrokerImportServiceRegistry.get_import_service(config.key, db)
+    return import_service.import_data(account_id, broker_data, source_id=None)
 
 
 def _import_ibkr(
