@@ -127,9 +127,12 @@ def _check_account_lockout(user: User, db: Session, ip_address: str | None, user
             locked_until = locked_until.replace(tzinfo=UTC)
         if locked_until > datetime.now(UTC):
             SecurityAuditService.log_event(
-                db, SecurityEventType.LOGIN_BLOCKED_LOCKOUT, user_id=user.id,
-                ip_address=ip_address, user_agent=user_agent,
-                details={"locked_until": user.locked_until.isoformat()}
+                db,
+                SecurityEventType.LOGIN_BLOCKED_LOCKOUT,
+                user_id=user.id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details={"locked_until": user.locked_until.isoformat()},
             )
             db.commit()
             # Return same error as invalid credentials to prevent email enumeration
@@ -139,20 +142,30 @@ def _check_account_lockout(user: User, db: Session, ip_address: str | None, user
             )
 
 
-def _record_failed_login(user: User, db: Session, ip_address: str | None, user_agent: str | None, reason: str):
+def _record_failed_login(
+    user: User, db: Session, ip_address: str | None, user_agent: str | None, reason: str
+):
     """Record a failed login attempt and lock account if threshold reached."""
     user.failed_login_attempts += 1
 
     if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
         user.locked_until = datetime.now(UTC) + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
         SecurityAuditService.log_event(
-            db, SecurityEventType.LOGIN_FAILED, user_id=user.id, ip_address=ip_address,
-            user_agent=user_agent, details={"reason": reason, "account_locked": True}
+            db,
+            SecurityEventType.LOGIN_FAILED,
+            user_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details={"reason": reason, "account_locked": True},
         )
     else:
         SecurityAuditService.log_event(
-            db, SecurityEventType.LOGIN_FAILED, user_id=user.id, ip_address=ip_address,
-            user_agent=user_agent, details={"reason": reason, "attempts": user.failed_login_attempts}
+            db,
+            SecurityEventType.LOGIN_FAILED,
+            user_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details={"reason": reason, "attempts": user.failed_login_attempts},
         )
     db.commit()
 
@@ -175,8 +188,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
         # Perform dummy password verification to prevent timing-based email enumeration
         AuthService.verify_password(data.password, AuthService.get_dummy_hash())
         SecurityAuditService.log_event(
-            db, SecurityEventType.LOGIN_FAILED, ip_address=ip_address,
-            user_agent=user_agent, details={"email": data.email, "reason": "user_not_found"}
+            db,
+            SecurityEventType.LOGIN_FAILED,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details={"email": data.email, "reason": "user_not_found"},
         )
         db.commit()
         raise HTTPException(
@@ -201,8 +217,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
     # Check if user is active
     if not user.is_active:
         SecurityAuditService.log_event(
-            db, SecurityEventType.LOGIN_BLOCKED_DISABLED, user_id=user.id,
-            ip_address=ip_address, user_agent=user_agent
+            db,
+            SecurityEventType.LOGIN_BLOCKED_DISABLED,
+            user_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         db.commit()
         raise HTTPException(
@@ -213,8 +232,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
     # Check if email is verified (service accounts bypass this check)
     if not user.email_verified and not user.is_service_account:
         SecurityAuditService.log_event(
-            db, SecurityEventType.LOGIN_BLOCKED_UNVERIFIED, user_id=user.id,
-            ip_address=ip_address, user_agent=user_agent
+            db,
+            SecurityEventType.LOGIN_BLOCKED_UNVERIFIED,
+            user_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         db.commit()
         raise HTTPException(
@@ -254,8 +276,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
 
     # Log successful login
     SecurityAuditService.log_event(
-        db, SecurityEventType.LOGIN_SUCCESS, user_id=user.id,
-        ip_address=ip_address, user_agent=user_agent
+        db,
+        SecurityEventType.LOGIN_SUCCESS,
+        user_id=user.id,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     db.commit()
 
@@ -427,8 +452,11 @@ def change_password(
 
     # Log password change
     SecurityAuditService.log_event(
-        db, SecurityEventType.PASSWORD_CHANGED, user_id=current_user.id,
-        ip_address=ip_address, user_agent=user_agent
+        db,
+        SecurityEventType.PASSWORD_CHANGED,
+        user_id=current_user.id,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     db.commit()
 
@@ -457,8 +485,11 @@ def forgot_password(
 
         # Log password reset request
         SecurityAuditService.log_event(
-            db, SecurityEventType.PASSWORD_RESET_REQUESTED, user_id=user.id,
-            ip_address=ip_address, user_agent=user_agent
+            db,
+            SecurityEventType.PASSWORD_RESET_REQUESTED,
+            user_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         db.commit()
 
@@ -501,8 +532,11 @@ def reset_password(
 
     # Log password reset completion
     SecurityAuditService.log_event(
-        db, SecurityEventType.PASSWORD_RESET_COMPLETED, user_id=reset_token.user_id,
-        ip_address=ip_address, user_agent=user_agent
+        db,
+        SecurityEventType.PASSWORD_RESET_COMPLETED,
+        user_id=reset_token.user_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     db.commit()
 

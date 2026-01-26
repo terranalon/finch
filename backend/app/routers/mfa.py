@@ -106,9 +106,7 @@ def get_mfa_status(
     """Get current user's MFA configuration status."""
     mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
     has_recovery_codes = (
-        db.query(UserRecoveryCode)
-        .filter(UserRecoveryCode.user_id == current_user.id)
-        .first()
+        db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id == current_user.id).first()
         is not None
     )
 
@@ -182,7 +180,9 @@ def disable_mfa_method(
 
     if not verified:
         SecurityAuditService.log_event(
-            db, SecurityEventType.MFA_FAILED, user_id=current_user.id,
+            db,
+            SecurityEventType.MFA_FAILED,
+            user_id=current_user.id,
             details={"action": "disable_method", "method": method},
         )
         db.commit()
@@ -223,12 +223,16 @@ def disable_mfa_method(
     if not mfa.totp_enabled and not mfa.email_otp_enabled:
         _cleanup_all_mfa(db, current_user.id, mfa)
         SecurityAuditService.log_event(
-            db, SecurityEventType.MFA_DISABLED, user_id=current_user.id,
+            db,
+            SecurityEventType.MFA_DISABLED,
+            user_id=current_user.id,
             details={"method": "all"},
         )
     else:
         SecurityAuditService.log_event(
-            db, SecurityEventType.MFA_DISABLED, user_id=current_user.id,
+            db,
+            SecurityEventType.MFA_DISABLED,
+            user_id=current_user.id,
             details={"method": method},
         )
 
@@ -287,8 +291,7 @@ def confirm_totp(
 
     # Log MFA enabled
     SecurityAuditService.log_event(
-        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id,
-        details={"method": "totp"}
+        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id, details={"method": "totp"}
     )
     db.commit()
     logger.info(f"TOTP MFA enabled for user: {current_user.email}")
@@ -349,8 +352,7 @@ def setup_email_otp(
 
     # Log MFA enabled
     SecurityAuditService.log_event(
-        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id,
-        details={"method": "email"}
+        db, SecurityEventType.MFA_ENABLED, user_id=current_user.id, details={"method": "email"}
     )
     db.commit()
     logger.info(f"Email OTP MFA enabled for user: {current_user.email}")
@@ -377,7 +379,9 @@ def disable_mfa(
 
     if not verified:
         SecurityAuditService.log_event(
-            db, SecurityEventType.MFA_FAILED, user_id=current_user.id,
+            db,
+            SecurityEventType.MFA_FAILED,
+            user_id=current_user.id,
             details={"action": "disable_all"},
         )
         db.commit()
@@ -390,9 +394,7 @@ def disable_mfa(
     _cleanup_all_mfa(db, current_user.id, mfa)
 
     # Log MFA disabled
-    SecurityAuditService.log_event(
-        db, SecurityEventType.MFA_DISABLED, user_id=current_user.id
-    )
+    SecurityAuditService.log_event(db, SecurityEventType.MFA_DISABLED, user_id=current_user.id)
     db.commit()
 
     # Send notification
@@ -542,8 +544,7 @@ def verify_mfa(
 
     if not verified:
         SecurityAuditService.log_event(
-            db, SecurityEventType.MFA_FAILED, user_id=user.id,
-            details={"method": data.method}
+            db, SecurityEventType.MFA_FAILED, user_id=user.id, details={"method": data.method}
         )
         db.commit()
         raise HTTPException(
@@ -567,11 +568,12 @@ def verify_mfa(
     db.add(session)
 
     # Log successful MFA verification
-    event_type = SecurityEventType.RECOVERY_CODE_USED if data.method == "recovery" else SecurityEventType.MFA_VERIFIED
-    SecurityAuditService.log_event(
-        db, event_type, user_id=user.id,
-        details={"method": data.method}
+    event_type = (
+        SecurityEventType.RECOVERY_CODE_USED
+        if data.method == "recovery"
+        else SecurityEventType.MFA_VERIFIED
     )
+    SecurityAuditService.log_event(db, event_type, user_id=user.id, details={"method": data.method})
     db.commit()
 
     logger.info(f"MFA verified for user: {user.email} using {data.method}")
