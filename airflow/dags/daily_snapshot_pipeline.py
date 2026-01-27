@@ -23,7 +23,8 @@ from queries import (
     CHECK_ASSET_PRICE_EXISTS,
     CHECK_EXCHANGE_RATE_EXISTS,
     GET_ACTIVE_ACCOUNTS,
-    GET_ACTIVE_HOLDINGS_ASSETS,
+    GET_CRYPTO_ASSETS,
+    GET_NON_CRYPTO_ASSETS,
     INSERT_ASSET_PRICE,
     INSERT_EXCHANGE_RATE,
 )
@@ -154,8 +155,8 @@ def daily_snapshot_pipeline():
         session = SessionLocal()
 
         try:
-            # Get all assets that have holdings
-            assets = session.execute(text(GET_ACTIVE_HOLDINGS_ASSETS)).fetchall()
+            # Only fetch non-crypto assets (crypto handled by fetch_crypto_prices)
+            assets = session.execute(text(GET_NON_CRYPTO_ASSETS)).fetchall()
 
             # Running at midnight UTC, capture yesterday's close
             snapshot_date = date.today() - timedelta(days=1)
@@ -237,14 +238,115 @@ def daily_snapshot_pipeline():
         finally:
             session.close()
 
+    @task(task_id="fetch_crypto_prices", pool="db_write_pool")
+    def fetch_crypto_prices() -> dict[str, int | list[str] | str]:
+        """
+        Fetch and store closing prices for crypto assets using CoinGecko.
+
+        Crypto markets are 24/7, so we use the price at midnight UTC as the
+        "closing price" for the previous day.
+        """
+        import sys
+
+        sys.path.insert(0, "/opt/airflow/backend")
+        from app.services.coingecko_client import CoinGeckoClient
+
+        session = SessionLocal()
+
+        try:
+            assets = session.execute(text(GET_CRYPTO_ASSETS)).fetchall()
+
+            # Running at midnight UTC, capture yesterday's close
+            snapshot_date = date.today() - timedelta(days=1)
+
+            stats: dict[str, int | list[str] | str] = {
+                "total": len(assets),
+                "updated": 0,
+                "failed": 0,
+                "errors": [],
+                "target_date": str(snapshot_date),
+            }
+
+            if not assets:
+                logger.info("No crypto assets found")
+                return stats
+
+            # Filter out assets that already have prices for this date
+            assets_needing_prices = []
+            for asset_id, symbol, currency in assets:
+                existing = session.execute(
+                    text(CHECK_ASSET_PRICE_EXISTS),
+                    {"asset_id": asset_id, "date": snapshot_date},
+                ).first()
+
+                if existing:
+                    logger.info(f"Already have closing price for {symbol} on {snapshot_date}")
+                    stats["updated"] += 1
+                else:
+                    assets_needing_prices.append((asset_id, symbol, currency))
+
+            if not assets_needing_prices:
+                logger.info("All crypto prices already up to date")
+                return stats
+
+            # Batch fetch only the prices we need in one API call
+            symbols = [symbol for _, symbol, _ in assets_needing_prices]
+            client = CoinGeckoClient()
+            prices = client.get_current_prices(symbols, "usd")
+
+            for asset_id, symbol, _ in assets_needing_prices:
+                try:
+                    price = prices.get(symbol)
+                    if price is not None:
+                        session.execute(
+                            text(INSERT_ASSET_PRICE),
+                            {
+                                "asset_id": asset_id,
+                                "date": snapshot_date,
+                                "closing_price": float(price),
+                                "currency": "USD",
+                                "source": "CoinGecko",
+                            },
+                        )
+                        session.commit()
+
+                        logger.info(f"Stored closing price for {symbol}: {price} USD")
+                        stats["updated"] += 1
+                    else:
+                        error_msg = f"{symbol}: No price from CoinGecko"
+                        stats["errors"].append(error_msg)
+                        stats["failed"] += 1
+                        logger.warning(error_msg)
+
+                except Exception as e:
+                    error_msg = f"{symbol}: {str(e)}"
+                    stats["errors"].append(error_msg)
+                    stats["failed"] += 1
+                    logger.error(f"Failed to store closing price for {symbol}: {str(e)}")
+                    session.rollback()
+                    continue
+
+            logger.info(
+                f"Crypto price update complete: {stats['updated']} updated, {stats['failed']} failed"
+            )
+            return stats
+
+        except Exception as e:
+            logger.error(f"Crypto price update failed: {str(e)}")
+            raise
+        finally:
+            session.close()
+
     @task(task_id="create_snapshots")
     def create_snapshots(
         exchange_rate_stats: dict[str, int | list[str]],
         asset_price_stats: dict[str, int | list[str] | str],
+        crypto_price_stats: dict[str, int | list[str] | str],
     ) -> dict[str, int | str | float]:
         """Create portfolio snapshots for yesterday (running at midnight UTC)."""
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
+        logger.info(f"Crypto prices updated: {crypto_price_stats['updated']}")
 
         import requests
 
@@ -326,10 +428,11 @@ def daily_snapshot_pipeline():
     # Define task dependencies
     exchange_rate_stats = fetch_exchange_rates()
     asset_price_stats = fetch_asset_prices()
-    snapshot_stats = create_snapshots(exchange_rate_stats, asset_price_stats)
+    crypto_price_stats = fetch_crypto_prices()
+    snapshot_stats = create_snapshots(exchange_rate_stats, asset_price_stats, crypto_price_stats)
 
-    # Both rates and prices must complete before snapshots
-    [exchange_rate_stats, asset_price_stats] >> snapshot_stats
+    # All price fetches must complete before snapshots
+    [exchange_rate_stats, asset_price_stats, crypto_price_stats] >> snapshot_stats
 
 
 # Instantiate the DAG
