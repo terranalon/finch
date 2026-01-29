@@ -1,9 +1,9 @@
 """Tests for SnapshotService.generate_account_snapshots."""
 
 import os
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, text

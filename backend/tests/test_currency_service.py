@@ -1,7 +1,7 @@
 """Tests for CurrencyService historical rate fetching."""
 
 import os
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
