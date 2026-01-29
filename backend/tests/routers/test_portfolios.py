@@ -238,3 +238,76 @@ def test_get_linkable_accounts(client, auth_headers, test_user, db_session):
     # Kraken is already in Crypto, so only IBKR should be linkable
     assert account2.id in account_ids
     assert account1.id not in account_ids
+
+
+def test_deletion_preview_shows_exclusive_and_shared(client, auth_headers, test_user, db_session):
+    """GET /portfolios/{id}/deletion-preview categorizes accounts correctly."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="All", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    # Exclusive to Crypto
+    account1 = Account(
+        name="Bit2C", institution="Bit2C", account_type="CryptoExchange", currency="ILS"
+    )
+    account1.portfolios = [portfolio1]
+
+    # Shared between both
+    account2 = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account2.portfolios = [portfolio1, portfolio2]
+
+    db_session.add_all([account1, account2])
+    db_session.commit()
+
+    response = client.get(f"/api/portfolios/{portfolio1.id}/deletion-preview", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    exclusive_ids = [a["id"] for a in data["exclusive_accounts"]]
+    shared_ids = [a["id"] for a in data["shared_accounts"]]
+
+    assert account1.id in exclusive_ids  # Will be deleted
+    assert account2.id in shared_ids  # Will be unlinked only
+
+
+def test_delete_portfolio_removes_exclusive_keeps_shared(
+    client, auth_headers, test_user, db_session
+):
+    """DELETE /portfolios/{id}?confirm=true deletes exclusive accounts, unlinks shared."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="All", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account1 = Account(
+        name="Bit2C", institution="Bit2C", account_type="CryptoExchange", currency="ILS"
+    )
+    account1.portfolios = [portfolio1]
+
+    account2 = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account2.portfolios = [portfolio1, portfolio2]
+
+    db_session.add_all([account1, account2])
+    db_session.commit()
+
+    account1_id = account1.id
+    account2_id = account2.id
+
+    response = client.delete(f"/api/portfolios/{portfolio1.id}?confirm=true", headers=auth_headers)
+
+    assert response.status_code == 200
+
+    # Exclusive account should be deleted
+    assert db_session.query(Account).filter(Account.id == account1_id).first() is None
+
+    # Shared account should still exist, only in portfolio2
+    account2_refreshed = db_session.query(Account).filter(Account.id == account2_id).first()
+    assert account2_refreshed is not None
+    assert len(account2_refreshed.portfolios) == 1
+    assert account2_refreshed.portfolios[0].id == portfolio2.id

@@ -20,12 +20,14 @@ from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.portfolio import (
-    Portfolio as PortfolioSchema,
-)
-from app.schemas.portfolio import (
+    DeletionPreview,
     PortfolioCreate,
     PortfolioUpdate,
     PortfolioWithAccountCount,
+    SharedAccountInfo,
+)
+from app.schemas.portfolio import (
+    Portfolio as PortfolioSchema,
 )
 from app.services.currency_service import CurrencyService
 
@@ -185,46 +187,90 @@ async def update_portfolio(
     return db_portfolio
 
 
-@router.delete("/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_portfolio(
+def _categorize_accounts(
+    portfolio: Portfolio,
+) -> tuple[list[Account], list[SharedAccountInfo]]:
+    """Categorize portfolio accounts into exclusive (will be deleted) and shared (will be unlinked)."""
+    exclusive: list[Account] = []
+    shared: list[SharedAccountInfo] = []
+
+    for account in portfolio.accounts:
+        other_portfolios = [p for p in account.portfolios if p.id != portfolio.id]
+        if other_portfolios:
+            shared.append(
+                SharedAccountInfo(
+                    id=account.id,
+                    name=account.name,
+                    other_portfolios=[p.name for p in other_portfolios],
+                )
+            )
+        else:
+            exclusive.append(account)
+
+    return exclusive, shared
+
+
+@router.get("/{portfolio_id}/deletion-preview", response_model=DeletionPreview)
+async def get_deletion_preview(
     portfolio_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Delete a portfolio (must belong to user).
-    Returns error if portfolio has accounts or is the user's only portfolio.
-    """
-    db_portfolio = (
-        db.query(Portfolio)
-        .filter(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id)
-        .first()
-    )
-    if not db_portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Portfolio with id {portfolio_id} not found",
-        )
+    """Preview what happens when this portfolio is deleted."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
 
-    # Check if this is the user's only portfolio
+    exclusive, shared = _categorize_accounts(portfolio)
+
+    warning = ""
+    if exclusive:
+        warning = f"This will permanently delete {len(exclusive)} account(s) and all their data."
+
+    return DeletionPreview(
+        portfolio_name=portfolio.name,
+        exclusive_accounts=exclusive,
+        shared_accounts=shared,
+        warning=warning,
+    )
+
+
+@router.delete("/{portfolio_id}")
+async def delete_portfolio(
+    portfolio_id: str,
+    confirm: bool = Query(False, description="Must be true to delete portfolio with accounts"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a portfolio. Exclusive accounts are deleted, shared accounts are unlinked."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
     portfolio_count = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
     if portfolio_count <= 1:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete your only portfolio",
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your only portfolio"
         )
 
-    # Check if portfolio has accounts
-    account_count = len(db_portfolio.accounts)
-    if account_count > 0:
+    if portfolio.accounts and not confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete portfolio with {account_count} account(s). Move or delete accounts first.",
+            detail="Portfolio has accounts. Use ?confirm=true or call deletion-preview first.",
         )
 
-    db.delete(db_portfolio)
+    exclusive, _ = _categorize_accounts(portfolio)
+
+    for account in list(portfolio.accounts):
+        if account in exclusive:
+            db.delete(account)
+        else:
+            account.portfolios.remove(portfolio)
+
+    db.delete(portfolio)
     db.commit()
-    return None
+
+    return {"message": "Portfolio deleted successfully"}
 
 
 @router.put("/{portfolio_id}/set-default", response_model=PortfolioSchema)
