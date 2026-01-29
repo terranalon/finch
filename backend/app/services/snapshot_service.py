@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Account, HistoricalSnapshot
 from app.services.currency_service import CurrencyService
+from app.services.historical_data_fetcher import HistoricalDataFetcher
 from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
 from app.services.price_fetcher import PriceFetcher
 
@@ -481,3 +482,170 @@ class SnapshotService:
         )
 
         return stats
+
+    @staticmethod
+    def generate_account_snapshots(
+        db: Session,
+        account_id: int,
+        start_date: date,
+        end_date: date,
+        invalidate_existing: bool = False,
+    ) -> dict:
+        """
+        Generate historical snapshots using streaming reconstruction.
+
+        This is the unified entry point for snapshot generation, used by both
+        background import tasks and the daily DAG.
+
+        Args:
+            db: Database session
+            account_id: Account to generate snapshots for
+            start_date: First date to generate
+            end_date: Last date to generate
+            invalidate_existing: If True, delete existing snapshots in range first
+
+        Returns:
+            Stats dict with created, skipped, errors counts
+        """
+        stats = {
+            "account_id": account_id,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "created": 0,
+            "skipped": 0,
+            "errors": [],
+        }
+
+        # Optionally delete existing snapshots
+        if invalidate_existing:
+            deleted = (
+                db.query(HistoricalSnapshot)
+                .filter(
+                    HistoricalSnapshot.account_id == account_id,
+                    HistoricalSnapshot.date >= start_date,
+                    HistoricalSnapshot.date <= end_date,
+                )
+                .delete(synchronize_session=False)
+            )
+            db.commit()
+            logger.info(f"Deleted {deleted} existing snapshots for account {account_id}")
+
+        # Ensure historical data exists
+        try:
+            HistoricalDataFetcher.ensure_historical_data(db, account_id, start_date, end_date)
+        except Exception as e:
+            logger.error(f"Failed to fetch historical data: {e}")
+            stats["errors"].append(f"Historical data fetch failed: {e}")
+
+        # Stream through reconstruction and create snapshots
+        for snapshot_date, holdings in PortfolioReconstructionService.reconstruct_holdings_timeline(
+            db, account_id, start_date, end_date
+        ):
+            try:
+                # Check if snapshot already exists
+                existing = db.execute(
+                    select(HistoricalSnapshot).where(
+                        and_(
+                            HistoricalSnapshot.account_id == account_id,
+                            HistoricalSnapshot.date == snapshot_date,
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing:
+                    stats["skipped"] += 1
+                    continue
+
+                # Value holdings
+                total_usd, total_ils = SnapshotService._value_holdings(db, holdings, snapshot_date)
+
+                # Create snapshot
+                snapshot = HistoricalSnapshot(
+                    account_id=account_id,
+                    date=snapshot_date,
+                    total_value_usd=total_usd,
+                    total_value_ils=total_ils,
+                )
+                db.add(snapshot)
+                stats["created"] += 1
+
+                # Commit in batches of 100
+                if stats["created"] % 100 == 0:
+                    db.commit()
+                    logger.info(f"Generated {stats['created']} snapshots...")
+
+            except Exception as e:
+                logger.error(f"Error creating snapshot for {snapshot_date}: {e}")
+                stats["errors"].append(f"{snapshot_date}: {e}")
+
+        # Final commit
+        db.commit()
+        logger.info(
+            f"Snapshot generation complete: {stats['created']} created, "
+            f"{stats['skipped']} skipped, {len(stats['errors'])} errors"
+        )
+
+        return stats
+
+    @staticmethod
+    def _value_holdings(
+        db: Session,
+        holdings: list[dict],
+        snapshot_date: date,
+    ) -> tuple[Decimal, Decimal]:
+        """
+        Value holdings and return total in USD and ILS.
+
+        Args:
+            db: Database session
+            holdings: List of holding dicts with quantity, currency, asset_class, etc.
+            snapshot_date: Date for price/rate lookups
+
+        Returns:
+            Tuple of (total_value_usd, total_value_ils)
+        """
+        total_value_usd = Decimal("0")
+
+        for holding in holdings:
+            quantity = holding["quantity"]
+            currency = holding["currency"]
+            asset_class = holding.get("asset_class", "")
+            asset_id = holding.get("asset_id")
+
+            # Handle cash
+            if asset_class == "Cash":
+                if quantity <= 0:
+                    continue
+                if currency != "USD":
+                    rate = CurrencyService.get_exchange_rate(db, currency, "USD", snapshot_date)
+                    if rate:
+                        total_value_usd += quantity * rate
+                    else:
+                        total_value_usd += quantity
+                else:
+                    total_value_usd += quantity
+                continue
+
+            # Get price for non-cash
+            price = PriceFetcher.get_price_for_date(db, asset_id, snapshot_date)
+            if not price or price <= 0:
+                continue
+
+            market_value = quantity * price
+
+            # Convert to USD
+            if currency != "USD":
+                rate = CurrencyService.get_exchange_rate(db, currency, "USD", snapshot_date)
+                if rate:
+                    market_value = market_value * rate
+
+            total_value_usd += market_value
+
+        # Convert to ILS
+        usd_ils_rate = CurrencyService.get_exchange_rate(db, "USD", "ILS", snapshot_date)
+        if usd_ils_rate:
+            total_value_ils = total_value_usd * usd_ils_rate
+        else:
+            total_value_ils = total_value_usd
+
+        return total_value_usd, total_value_ils
