@@ -1,7 +1,7 @@
 """Price fetching service for asset prices."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import yfinance as yf
@@ -292,6 +292,97 @@ class PriceFetcher:
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
             return None
+
+    @staticmethod
+    def fetch_and_store_historical_prices(
+        db: Session,
+        asset_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> int:
+        """Fetch historical prices and store in asset_prices table.
+
+        For stocks: uses yfinance for the full date range in one API call.
+        Skips dates that already have prices in the database.
+
+        Args:
+            db: Database session
+            asset_id: Asset to fetch prices for
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+
+        Returns:
+            Number of new prices inserted
+        """
+        asset = db.get(Asset, asset_id)
+        if not asset:
+            logger.warning(f"Asset {asset_id} not found")
+            return 0
+
+        # Skip cash assets
+        if asset.asset_class == "Cash":
+            return 0
+
+        # Get existing dates to skip
+        existing_dates = set(
+            row[0]
+            for row in db.query(AssetPrice.date)
+            .filter(
+                AssetPrice.asset_id == asset_id,
+                AssetPrice.date >= start_date,
+                AssetPrice.date <= end_date,
+            )
+            .all()
+        )
+
+        # Fetch from yfinance (end_date + 1 day because yfinance end is exclusive)
+        try:
+            ticker = yf.Ticker(asset.symbol)
+            history = ticker.history(
+                start=start_date.isoformat(),
+                end=(end_date + timedelta(days=1)).isoformat(),
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch history for {asset.symbol}: {e}")
+            return 0
+
+        if history.empty:
+            logger.warning(f"No historical data for {asset.symbol}")
+            return 0
+
+        # Convert .TA stocks from Agorot to ILS
+        is_israeli = asset.symbol.endswith(".TA")
+
+        count = 0
+        for idx, row in history.iterrows():
+            price_date = idx.date()
+
+            if price_date in existing_dates:
+                continue
+
+            close_price = row.get("Close")
+            if close_price is None or close_price <= 0:
+                continue
+
+            # Agorot conversion
+            if is_israeli:
+                close_price = close_price / 100
+
+            price_record = AssetPrice(
+                asset_id=asset_id,
+                date=price_date,
+                closing_price=Decimal(str(close_price)),
+                currency=asset.currency,
+                source="Yahoo Finance",
+            )
+            db.add(price_record)
+            count += 1
+
+        if count > 0:
+            db.commit()
+            logger.info(f"Inserted {count} historical prices for {asset.symbol}")
+
+        return count
 
     @staticmethod
     def get_price_for_date(db: Session, asset_id: int, target_date: date) -> Decimal | None:
