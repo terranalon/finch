@@ -61,37 +61,24 @@ def _generate_snapshots_background(account_id: int, start_date: date) -> None:
 
     db = SessionLocal()
     try:
-        # Update status to generating
-        account = db.get(Account, account_id)
-        if account:
-            account.snapshot_status = "generating"
-            db.commit()
-
-        # Generate snapshots
-        end_date = date.today()
         SnapshotService.generate_account_snapshots(
-            db, account_id, start_date, end_date, invalidate_existing=True
+            db, account_id, start_date, date.today(), invalidate_existing=True
         )
-
-        # Update status to ready
-        account = db.get(Account, account_id)
-        if account:
-            account.snapshot_status = "ready"
-            db.commit()
-
-        logger.info(f"Background snapshot generation complete for account {account_id}")
-
-    except Exception as e:
-        logger.exception(f"Background snapshot generation failed for account {account_id}: {e}")
-        try:
-            account = db.get(Account, account_id)
-            if account:
-                account.snapshot_status = "failed"
-                db.commit()
-        except Exception:
-            pass
+        _update_snapshot_status(db, account_id, "ready")
+        logger.info("Background snapshot generation complete for account %d", account_id)
+    except Exception:
+        logger.exception("Background snapshot generation failed for account %d", account_id)
+        _update_snapshot_status(db, account_id, "failed")
     finally:
         db.close()
+
+
+def _update_snapshot_status(db: Session, account_id: int, status: str | None) -> None:
+    """Update the snapshot_status field for an account."""
+    account = db.get(Account, account_id)
+    if account:
+        account.snapshot_status = status
+        db.commit()
 
 
 def _validate_account_access(account_id: int, current_user: User, db: Session) -> None:
@@ -560,10 +547,7 @@ async def upload_broker_file(
 
         # Trigger background snapshot generation
         if background_tasks:
-            account = db.get(Account, account_id)
-            if account:
-                account.snapshot_status = "generating"
-                db.commit()
+            _update_snapshot_status(db, account_id, "generating")
             background_tasks.add_task(_generate_snapshots_background, account_id, start_date)
 
         logger.info(
@@ -796,8 +780,7 @@ async def delete_data_source(
         holdings_stats["zeroed"],
     )
 
-    # Trigger snapshot regeneration
-    # Find earliest transaction date for this account
+    # Trigger snapshot regeneration or cleanup
     earliest_txn = (
         db.query(func.min(Transaction.date))
         .filter(
@@ -808,19 +791,16 @@ async def delete_data_source(
         .scalar()
     )
 
-    account = db.get(Account, account_id)
-    if earliest_txn and account:
-        # There are still transactions - regenerate snapshots
-        account.snapshot_status = "generating"
-        db.commit()
+    if earliest_txn:
+        # Transactions remain - regenerate snapshots from earliest date
+        _update_snapshot_status(db, account_id, "generating")
         background_tasks.add_task(_generate_snapshots_background, account_id, earliest_txn)
-    elif account:
-        # No transactions remain - delete all snapshots
+    else:
+        # No transactions remain - delete all snapshots and clear status
         db.query(HistoricalSnapshot).filter(HistoricalSnapshot.account_id == account_id).delete(
             synchronize_session=False
         )
-        account.snapshot_status = None
-        db.commit()
+        _update_snapshot_status(db, account_id, None)
 
     return {
         "status": "deleted",
