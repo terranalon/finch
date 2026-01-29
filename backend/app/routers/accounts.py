@@ -7,6 +7,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import Account
+from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
@@ -32,18 +33,11 @@ async def list_accounts(
         - is_active: Filter by active status
         - portfolio_id: Filter by specific portfolio (must belong to user)
     """
-    # Get user's portfolio IDs
-    portfolio_ids = [p.id for p in current_user.portfolios]
-    if not portfolio_ids:
+    allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
+    if not allowed_account_ids:
         return []
 
-    # If portfolio_id specified, validate it belongs to user
-    if portfolio_id:
-        if portfolio_id not in portfolio_ids:
-            return []  # Portfolio doesn't belong to user
-        portfolio_ids = [portfolio_id]
-
-    query = db.query(Account).filter(Account.portfolio_id.in_(portfolio_ids))
+    query = db.query(Account).filter(Account.id.in_(allowed_account_ids))
 
     if is_active is not None:
         query = query.filter(Account.is_active == is_active)
@@ -76,19 +70,28 @@ async def create_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new account (must specify user's portfolio_id)."""
-    # Verify portfolio belongs to user
-    portfolio_ids = [p.id for p in current_user.portfolios]
-    if account.portfolio_id not in portfolio_ids:
+    """Create a new account linked to specified portfolios."""
+    # Validate all portfolio_ids belong to user
+    user_portfolio_ids = {p.id for p in current_user.portfolios}
+    invalid_ids = set(account.portfolio_ids) - user_portfolio_ids
+    if invalid_ids:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot create account in a portfolio you don't own",
+            detail=f"Portfolio {next(iter(invalid_ids))} not found or doesn't belong to you",
         )
 
-    db_account = Account(**account.model_dump())
+    # Create account
+    account_data = account.model_dump(exclude={"portfolio_ids"})
+    db_account = Account(**account_data)
+
+    # Link to portfolios
+    portfolios = db.query(Portfolio).filter(Portfolio.id.in_(account.portfolio_ids)).all()
+    db_account.portfolios = portfolios
+
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
+
     return db_account
 
 
