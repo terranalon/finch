@@ -57,7 +57,6 @@ def seed_data(db: Session):
     # Create accounts
     print("Creating accounts...")
     brokerage = Account(
-        portfolio_id=portfolio.id,
         name="Interactive Brokers",
         institution="Interactive Brokers",
         account_type="Brokerage",
@@ -65,8 +64,9 @@ def seed_data(db: Session):
         account_number="U1234567",
         is_active=True,
     )
+    brokerage.portfolios = [portfolio]
+
     pension = Account(
-        portfolio_id=portfolio.id,
         name="Meitav Pension",
         institution="Meitav Dash",
         account_type="Pension",
@@ -74,14 +74,17 @@ def seed_data(db: Session):
         account_number="P987654",
         is_active=True,
     )
+    pension.portfolios = [portfolio]
+
     crypto_wallet = Account(
-        portfolio_id=portfolio.id,
         name="Hardware Wallet",
         institution=None,
         account_type="SelfCustodied",
         currency="USD",
         is_active=True,
     )
+    crypto_wallet.portfolios = [portfolio]
+
     db.add_all([brokerage, pension, crypto_wallet])
     db.flush()
 
