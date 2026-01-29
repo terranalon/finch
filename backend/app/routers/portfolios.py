@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.models.account import Account
 from app.models.asset import Asset
 from app.models.holding import Holding
 from app.models.portfolio import Portfolio
@@ -34,44 +33,34 @@ async def list_portfolios(
     """
     Get list of portfolios for the current user with account counts and optional values.
     """
-    portfolios = (
-        db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
+    portfolios = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
+
+    return [
+        _to_portfolio_with_account_count(portfolio, db, include_values) for portfolio in portfolios
+    ]
+
+
+def _to_portfolio_with_account_count(
+    portfolio: Portfolio,
+    db: Session,
+    include_values: bool = False,
+) -> PortfolioWithAccountCount:
+    """Convert a Portfolio model to PortfolioWithAccountCount schema."""
+    total_value = _calculate_portfolio_value(db, portfolio) if include_values else None
+    base = PortfolioSchema.model_validate(portfolio)
+    return PortfolioWithAccountCount(
+        **base.model_dump(),
+        account_count=len(portfolio.accounts),
+        total_value=total_value,
     )
-
-    # Get account counts and optionally calculate values for each portfolio
-    result = []
-    for portfolio in portfolios:
-        account_count = (
-            db.query(Account).filter(Account.portfolio_id == portfolio.id).count()
-        )
-
-        total_value = None
-        if include_values:
-            total_value = _calculate_portfolio_value(db, portfolio)
-
-        portfolio_dict = {
-            "id": portfolio.id,
-            "user_id": portfolio.user_id,
-            "name": portfolio.name,
-            "description": portfolio.description,
-            "default_currency": portfolio.default_currency,
-            "is_default": portfolio.is_default,
-            "created_at": portfolio.created_at,
-            "updated_at": portfolio.updated_at,
-            "account_count": account_count,
-            "total_value": total_value,
-        }
-        result.append(PortfolioWithAccountCount(**portfolio_dict))
-
-    return result
 
 
 def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
     """Calculate total portfolio value in the portfolio's default currency."""
     total_value_usd = Decimal("0")
 
-    # Get all accounts in this portfolio
-    accounts = db.query(Account).filter(Account.portfolio_id == portfolio.id).all()
+    # Get all accounts in this portfolio via relationship
+    accounts = portfolio.accounts
 
     for account in accounts:
         # Get active holdings for this account
@@ -157,20 +146,7 @@ async def get_portfolio(
             detail=f"Portfolio with id {portfolio_id} not found",
         )
 
-    account_count = (
-        db.query(Account).filter(Account.portfolio_id == portfolio.id).count()
-    )
-    return PortfolioWithAccountCount(
-        id=portfolio.id,
-        user_id=portfolio.user_id,
-        name=portfolio.name,
-        description=portfolio.description,
-        default_currency=portfolio.default_currency,
-        is_default=portfolio.is_default,
-        created_at=portfolio.created_at,
-        updated_at=portfolio.updated_at,
-        account_count=account_count,
-    )
+    return _to_portfolio_with_account_count(portfolio, db)
 
 
 @router.put("/{portfolio_id}", response_model=PortfolioSchema)
@@ -223,9 +199,7 @@ async def delete_portfolio(
         )
 
     # Check if this is the user's only portfolio
-    portfolio_count = (
-        db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
-    )
+    portfolio_count = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
     if portfolio_count <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -233,9 +207,7 @@ async def delete_portfolio(
         )
 
     # Check if portfolio has accounts
-    account_count = (
-        db.query(Account).filter(Account.portfolio_id == portfolio_id).count()
-    )
+    account_count = len(db_portfolio.accounts)
     if account_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
