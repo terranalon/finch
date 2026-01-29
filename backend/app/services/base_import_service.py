@@ -6,12 +6,31 @@ with different broker types uniformly.
 """
 
 from abc import ABC, abstractmethod
+from datetime import date as date_type
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from app.services.base_broker_parser import BrokerImportData
+
+
+def extract_date_range(dates: list[date_type]) -> dict[str, date_type] | None:
+    """Extract min/max date range from a list of dates.
+
+    Args:
+        dates: List of date objects (None values are filtered out)
+
+    Returns:
+        Dict with 'start_date' and 'end_date' keys, or None if no valid dates
+    """
+    valid_dates = [d for d in dates if d is not None]
+    if not valid_dates:
+        return None
+    return {
+        "start_date": min(valid_dates),
+        "end_date": max(valid_dates),
+    }
 
 
 class BaseBrokerImportService(ABC):

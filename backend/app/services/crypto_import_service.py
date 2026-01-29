@@ -14,7 +14,7 @@ from app.services.base_broker_parser import (
     ParsedPosition,
     ParsedTransaction,
 )
-from app.services.base_import_service import BaseBrokerImportService
+from app.services.base_import_service import BaseBrokerImportService, extract_date_range
 from app.services.coingecko_client import CoinGeckoClient
 from app.services.transaction_hash_service import create_or_transfer_transaction
 
@@ -95,6 +95,16 @@ class CryptoImportService(BaseBrokerImportService):
             # Create BrokerDataSource record to track this import
             self._create_broker_data_source(account_id, self.broker_type.capitalize(), data, stats)
             self.db.commit()
+
+            # Calculate date range from imported data for snapshot generation
+            all_dates = (
+                [txn.trade_date for txn in data.transactions]
+                + [cash_txn.date for cash_txn in data.cash_transactions]
+                + [div.trade_date for div in data.dividends]
+            )
+            date_range = extract_date_range(all_dates)
+            if date_range:
+                stats["date_range"] = date_range
 
             stats["status"] = "completed"
 

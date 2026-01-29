@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -29,6 +29,7 @@ from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_flex_import_service import IBKRFlexImportService
 from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.kraken_client import KrakenClient, KrakenCredentials
+from app.services.snapshot_service import generate_snapshots_background, update_snapshot_status
 from app.services.staged_import_service import StagedImportService
 
 logger = logging.getLogger(__name__)
@@ -319,6 +320,7 @@ async def import_broker_data(
         default=True,
         description="Use staged import for better UI responsiveness (IBKR only)",
     ),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -365,6 +367,14 @@ async def import_broker_data(
             )
 
         _update_last_import(account, config.key, db)
+
+        # Trigger background snapshot generation if date_range available
+        if background_tasks and stats.get("date_range"):
+            date_range = stats["date_range"]
+            start_date = date_range.get("start_date")
+            if start_date:
+                update_snapshot_status(db, account_id, "generating")
+                background_tasks.add_task(generate_snapshots_background, account_id, start_date)
 
         logger.info(f"{config.name} import completed for account {account_id}: {stats}")
 

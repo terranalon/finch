@@ -16,6 +16,47 @@ from app.services.price_fetcher import PriceFetcher
 logger = logging.getLogger(__name__)
 
 
+def update_snapshot_status(db: Session, account_id: int, status: str | None) -> None:
+    """Update the snapshot_status field for an account.
+
+    Args:
+        db: Database session
+        account_id: Account to update
+        status: New status value ('generating', 'ready', 'failed', or None to clear)
+    """
+    account = db.get(Account, account_id)
+    if account:
+        account.snapshot_status = status
+        db.commit()
+
+
+def generate_snapshots_background(account_id: int, start_date: date) -> None:
+    """Background task to generate historical snapshots after import.
+
+    This function runs in a separate thread/task after the HTTP response
+    has been sent. It generates historical snapshots for the account
+    from the start_date to today.
+
+    Args:
+        account_id: Account to generate snapshots for
+        start_date: Earliest date from the imported data
+    """
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        SnapshotService.generate_account_snapshots(
+            db, account_id, start_date, date.today(), invalidate_existing=True
+        )
+        update_snapshot_status(db, account_id, "ready")
+        logger.info("Background snapshot generation complete for account %d", account_id)
+    except Exception:
+        logger.exception("Background snapshot generation failed for account %d", account_id)
+        update_snapshot_status(db, account_id, "failed")
+    finally:
+        db.close()
+
+
 class SnapshotService:
     """Service for creating and managing portfolio snapshots."""
 

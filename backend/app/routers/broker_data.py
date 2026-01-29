@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
-from app.models import Account, BrokerDataSource
+from app.models import BrokerDataSource
 from app.models.daily_cash_balance import DailyCashBalance
 from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
@@ -39,46 +39,11 @@ from app.services.broker_overlap_detector import get_overlap_detector
 from app.services.broker_parser_registry import BrokerParserRegistry
 from app.services.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+from app.services.snapshot_service import generate_snapshots_background, update_snapshot_status
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/broker-data", tags=["broker-data"])
-
-
-def _generate_snapshots_background(account_id: int, start_date: date) -> None:
-    """Background task to generate historical snapshots after import.
-
-    This function runs in a separate thread/task after the HTTP response
-    has been sent. It generates historical snapshots for the account
-    from the start_date to today.
-
-    Args:
-        account_id: Account to generate snapshots for
-        start_date: Earliest date from the imported data
-    """
-    from app.database import SessionLocal
-    from app.services.snapshot_service import SnapshotService
-
-    db = SessionLocal()
-    try:
-        SnapshotService.generate_account_snapshots(
-            db, account_id, start_date, date.today(), invalidate_existing=True
-        )
-        _update_snapshot_status(db, account_id, "ready")
-        logger.info("Background snapshot generation complete for account %d", account_id)
-    except Exception:
-        logger.exception("Background snapshot generation failed for account %d", account_id)
-        _update_snapshot_status(db, account_id, "failed")
-    finally:
-        db.close()
-
-
-def _update_snapshot_status(db: Session, account_id: int, status: str | None) -> None:
-    """Update the snapshot_status field for an account."""
-    account = db.get(Account, account_id)
-    if account:
-        account.snapshot_status = status
-        db.commit()
 
 
 def _validate_account_access(account_id: int, current_user: User, db: Session) -> None:
@@ -547,8 +512,15 @@ async def upload_broker_file(
 
         # Trigger background snapshot generation
         if background_tasks:
-            _update_snapshot_status(db, account_id, "generating")
-            background_tasks.add_task(_generate_snapshots_background, account_id, start_date)
+            # Prefer import service date_range, fall back to parser's date
+            snapshot_start = start_date  # from parser
+            if isinstance(source.import_stats, dict):
+                date_range_stats = source.import_stats.get("date_range", {})
+                if date_range_stats.get("start_date"):
+                    snapshot_start = date_range_stats["start_date"]
+
+            update_snapshot_status(db, account_id, "generating")
+            background_tasks.add_task(generate_snapshots_background, account_id, snapshot_start)
 
         logger.info(
             "Uploaded %s file for account %d: %d records from %s to %s",
@@ -793,14 +765,14 @@ async def delete_data_source(
 
     if earliest_txn:
         # Transactions remain - regenerate snapshots from earliest date
-        _update_snapshot_status(db, account_id, "generating")
-        background_tasks.add_task(_generate_snapshots_background, account_id, earliest_txn)
+        update_snapshot_status(db, account_id, "generating")
+        background_tasks.add_task(generate_snapshots_background, account_id, earliest_txn)
     else:
         # No transactions remain - delete all snapshots and clear status
         db.query(HistoricalSnapshot).filter(HistoricalSnapshot.account_id == account_id).delete(
             synchronize_session=False
         )
-        _update_snapshot_status(db, account_id, None)
+        update_snapshot_status(db, account_id, None)
 
     return {
         "status": "deleted",
