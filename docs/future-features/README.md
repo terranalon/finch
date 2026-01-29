@@ -7,7 +7,15 @@ Implementation-ready plans for features not yet scheduled.
 1. **Brainstorm**: Discuss the idea with Claude using `/brainstorming`
 2. **Plan**: Claude writes the plan using `/writing-plans` structure
 3. **Save**: Plan saved to `docs/future-features/NNN-feature-name.md`
-4. **Implement**: When ready, open a session and run `/executing-plans` on the plan file
+4. **Track**: Create a GitHub issue linking to the plan file
+5. **Implement**: When ready, open a session and run `/executing-plans` on the plan file
+
+### Why Both Issue + Markdown File?
+
+- **GitHub Issue**: Provides visibility, prioritization, and discussion in the project backlog
+- **Markdown File**: Contains the complete, implementation-ready plan with TDD steps and code snippets
+
+The issue links to the markdown file, keeping the backlog clean while preserving detailed plans in version control.
 
 ## Creating a New Plan
 
@@ -19,9 +27,9 @@ Claude will use the brainstorming and writing-plans skills to create an implemen
 
 ## Feature Index
 
-| ID | Feature | Status |
-|----|---------|--------|
-| - | - | - |
+| ID  | Feature                                                                         | Issue                                                    | Status  |
+| --- | ------------------------------------------------------------------------------- | -------------------------------------------------------- | ------- |
+| 001 | [Many-to-Many Portfolio-Account Relationship](001-many-to-many-portfolios.md)   | [#11](https://github.com/terranalon/finch/issues/11)     | Planned |
 
 ## What Makes a Good Plan
 
