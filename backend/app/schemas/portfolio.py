@@ -44,3 +44,30 @@ class PortfolioWithAccountCount(Portfolio):
 
     account_count: int = 0
     total_value: float | None = None  # Total portfolio value in default_currency
+
+
+class AccountSummary(BaseModel):
+    """Minimal account info for deletion preview."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    institution: str | None
+
+
+class SharedAccountInfo(BaseModel):
+    """Account info with other portfolio names."""
+
+    id: int
+    name: str
+    other_portfolios: list[str]
+
+
+class DeletionPreview(BaseModel):
+    """Preview of what happens when portfolio is deleted."""
+
+    portfolio_name: str
+    exclusive_accounts: list[AccountSummary]
+    shared_accounts: list[SharedAccountInfo]
+    warning: str

@@ -7,18 +7,27 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.user_scope import (
+    get_user_account,
+    get_user_account_ids,
+    validate_user_portfolio,
+)
 from app.models.account import Account
 from app.models.asset import Asset
 from app.models.holding import Holding
 from app.models.portfolio import Portfolio
+from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
+from app.schemas.account import Account as AccountSchema
 from app.schemas.portfolio import (
-    Portfolio as PortfolioSchema,
-)
-from app.schemas.portfolio import (
+    DeletionPreview,
     PortfolioCreate,
     PortfolioUpdate,
     PortfolioWithAccountCount,
+    SharedAccountInfo,
+)
+from app.schemas.portfolio import (
+    Portfolio as PortfolioSchema,
 )
 from app.services.currency_service import CurrencyService
 
@@ -34,44 +43,34 @@ async def list_portfolios(
     """
     Get list of portfolios for the current user with account counts and optional values.
     """
-    portfolios = (
-        db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
+    portfolios = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
+
+    return [
+        _to_portfolio_with_account_count(portfolio, db, include_values) for portfolio in portfolios
+    ]
+
+
+def _to_portfolio_with_account_count(
+    portfolio: Portfolio,
+    db: Session,
+    include_values: bool = False,
+) -> PortfolioWithAccountCount:
+    """Convert a Portfolio model to PortfolioWithAccountCount schema."""
+    total_value = _calculate_portfolio_value(db, portfolio) if include_values else None
+    base = PortfolioSchema.model_validate(portfolio)
+    return PortfolioWithAccountCount(
+        **base.model_dump(),
+        account_count=len(portfolio.accounts),
+        total_value=total_value,
     )
-
-    # Get account counts and optionally calculate values for each portfolio
-    result = []
-    for portfolio in portfolios:
-        account_count = (
-            db.query(Account).filter(Account.portfolio_id == portfolio.id).count()
-        )
-
-        total_value = None
-        if include_values:
-            total_value = _calculate_portfolio_value(db, portfolio)
-
-        portfolio_dict = {
-            "id": portfolio.id,
-            "user_id": portfolio.user_id,
-            "name": portfolio.name,
-            "description": portfolio.description,
-            "default_currency": portfolio.default_currency,
-            "is_default": portfolio.is_default,
-            "created_at": portfolio.created_at,
-            "updated_at": portfolio.updated_at,
-            "account_count": account_count,
-            "total_value": total_value,
-        }
-        result.append(PortfolioWithAccountCount(**portfolio_dict))
-
-    return result
 
 
 def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
     """Calculate total portfolio value in the portfolio's default currency."""
     total_value_usd = Decimal("0")
 
-    # Get all accounts in this portfolio
-    accounts = db.query(Account).filter(Account.portfolio_id == portfolio.id).all()
+    # Get all accounts in this portfolio via relationship
+    accounts = portfolio.accounts
 
     for account in accounts:
         # Get active holdings for this account
@@ -157,20 +156,7 @@ async def get_portfolio(
             detail=f"Portfolio with id {portfolio_id} not found",
         )
 
-    account_count = (
-        db.query(Account).filter(Account.portfolio_id == portfolio.id).count()
-    )
-    return PortfolioWithAccountCount(
-        id=portfolio.id,
-        user_id=portfolio.user_id,
-        name=portfolio.name,
-        description=portfolio.description,
-        default_currency=portfolio.default_currency,
-        is_default=portfolio.is_default,
-        created_at=portfolio.created_at,
-        updated_at=portfolio.updated_at,
-        account_count=account_count,
-    )
+    return _to_portfolio_with_account_count(portfolio, db)
 
 
 @router.put("/{portfolio_id}", response_model=PortfolioSchema)
@@ -201,50 +187,90 @@ async def update_portfolio(
     return db_portfolio
 
 
-@router.delete("/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_portfolio(
+def _categorize_accounts(
+    portfolio: Portfolio,
+) -> tuple[list[Account], list[SharedAccountInfo]]:
+    """Categorize portfolio accounts into exclusive (will be deleted) and shared (will be unlinked)."""
+    exclusive: list[Account] = []
+    shared: list[SharedAccountInfo] = []
+
+    for account in portfolio.accounts:
+        other_portfolios = [p for p in account.portfolios if p.id != portfolio.id]
+        if other_portfolios:
+            shared.append(
+                SharedAccountInfo(
+                    id=account.id,
+                    name=account.name,
+                    other_portfolios=[p.name for p in other_portfolios],
+                )
+            )
+        else:
+            exclusive.append(account)
+
+    return exclusive, shared
+
+
+@router.get("/{portfolio_id}/deletion-preview", response_model=DeletionPreview)
+async def get_deletion_preview(
     portfolio_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Delete a portfolio (must belong to user).
-    Returns error if portfolio has accounts or is the user's only portfolio.
-    """
-    db_portfolio = (
-        db.query(Portfolio)
-        .filter(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id)
-        .first()
-    )
-    if not db_portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Portfolio with id {portfolio_id} not found",
-        )
+    """Preview what happens when this portfolio is deleted."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
 
-    # Check if this is the user's only portfolio
-    portfolio_count = (
-        db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
+    exclusive, shared = _categorize_accounts(portfolio)
+
+    warning = ""
+    if exclusive:
+        warning = f"This will permanently delete {len(exclusive)} account(s) and all their data."
+
+    return DeletionPreview(
+        portfolio_name=portfolio.name,
+        exclusive_accounts=exclusive,
+        shared_accounts=shared,
+        warning=warning,
     )
+
+
+@router.delete("/{portfolio_id}")
+async def delete_portfolio(
+    portfolio_id: str,
+    confirm: bool = Query(False, description="Must be true to delete portfolio with accounts"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a portfolio. Exclusive accounts are deleted, shared accounts are unlinked."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    portfolio_count = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
     if portfolio_count <= 1:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete your only portfolio",
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your only portfolio"
         )
 
-    # Check if portfolio has accounts
-    account_count = (
-        db.query(Account).filter(Account.portfolio_id == portfolio_id).count()
-    )
-    if account_count > 0:
+    if portfolio.accounts and not confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete portfolio with {account_count} account(s). Move or delete accounts first.",
+            detail="Portfolio has accounts. Use ?confirm=true or call deletion-preview first.",
         )
 
-    db.delete(db_portfolio)
+    exclusive, _ = _categorize_accounts(portfolio)
+
+    for account in list(portfolio.accounts):
+        if account in exclusive:
+            db.delete(account)
+        else:
+            account.portfolios.remove(portfolio)
+
+    db.delete(portfolio)
     db.commit()
-    return None
+
+    return {"message": "Portfolio deleted successfully"}
 
 
 @router.put("/{portfolio_id}/set-default", response_model=PortfolioSchema)
@@ -280,3 +306,93 @@ async def set_default_portfolio(
     db.commit()
     db.refresh(db_portfolio)
     return db_portfolio
+
+
+@router.post("/{portfolio_id}/accounts/{account_id}/link")
+async def link_account_to_portfolio(
+    portfolio_id: str,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Link an existing account to a portfolio."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    account = get_user_account(current_user, db, account_id)
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    # Check if already linked
+    existing = db.execute(
+        portfolio_accounts.select().where(
+            portfolio_accounts.c.portfolio_id == portfolio_id,
+            portfolio_accounts.c.account_id == account_id,
+        )
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account already linked to this portfolio",
+        )
+
+    db.execute(portfolio_accounts.insert().values(portfolio_id=portfolio_id, account_id=account_id))
+    db.commit()
+
+    return {"message": "Account linked successfully"}
+
+
+@router.delete("/{portfolio_id}/accounts/{account_id}/unlink")
+async def unlink_account_from_portfolio(
+    portfolio_id: str,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Unlink an account from a portfolio. Blocked if it's the only portfolio."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    account = get_user_account(current_user, db, account_id)
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    if len(account.portfolios) == 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot unlink account from its only portfolio. Delete the account instead.",
+        )
+
+    db.execute(
+        portfolio_accounts.delete().where(
+            portfolio_accounts.c.portfolio_id == portfolio_id,
+            portfolio_accounts.c.account_id == account_id,
+        )
+    )
+    db.commit()
+
+    return {"message": "Account unlinked successfully"}
+
+
+@router.get("/{portfolio_id}/linkable-accounts", response_model=list[AccountSchema])
+async def get_linkable_accounts(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get accounts that can be linked to this portfolio (not already linked)."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    all_account_ids = get_user_account_ids(current_user, db)
+    current_account_ids = {a.id for a in portfolio.accounts}
+    linkable_ids = set(all_account_ids) - current_account_ids
+
+    if not linkable_ids:
+        return []
+
+    return db.query(Account).filter(Account.id.in_(linkable_ids)).all()

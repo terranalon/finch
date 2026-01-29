@@ -1,6 +1,12 @@
 # [Feature Name] Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+>
+> **Before starting:** Ask the user whether to implement in a separate git worktree or a feature branch.
+>
+> **After each task:** Run the `code-simplifier` agent to review and refine the code written in that task before committing.
+>
+> **Before PR:** Run `/code-review` to review all changes before creating the pull request.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -129,6 +135,24 @@ pytest backend/tests/ -v
 # Manual verification
 # 1. Do X
 # 2. Verify Y
+```
+
+---
+
+## Final Steps
+
+**Step 1: Run code review**
+
+```bash
+/code-review
+```
+
+Review all changes and address any issues found.
+
+**Step 2: Create pull request**
+
+```bash
+gh pr create --title "feat: [feature name]" --body "..."
 ```
 
 ---

@@ -229,6 +229,7 @@ function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLa
 // ============================================
 
 function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolioId }) {
+  const [mode, setMode] = useState('create'); // 'create' or 'link'
   const [formData, setFormData] = useState({
     name: '',
     broker_type: '',
@@ -237,16 +238,48 @@ function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolio
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [linkableAccounts, setLinkableAccounts] = useState([]);
+  const [loadingLinkable, setLoadingLinkable] = useState(false);
+
+  // Fetch linkable accounts when switching to link mode
+  useEffect(() => {
+    if (isOpen && mode === 'link' && portfolioId) {
+      setLoadingLinkable(true);
+      setError(null);
+      api(`/portfolios/${portfolioId}/linkable-accounts`)
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error('Failed to fetch linkable accounts');
+        })
+        .then((data) => setLinkableAccounts(data))
+        .catch((err) => setError(err.message))
+        .finally(() => setLoadingLinkable(false));
+    }
+  }, [isOpen, mode, portfolioId]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setMode('create');
+      setFormData({
+        name: '',
+        broker_type: '',
+        account_type: 'Investment',
+        currency: 'USD',
+      });
+      setError(null);
+      setLinkableAccounts([]);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      // Get the broker name from the selected broker type
       const selectedBroker = brokers.find((b) => b.type === formData.broker_type);
 
       const res = await api('/accounts', {
@@ -257,7 +290,7 @@ function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolio
           institution: selectedBroker?.name || formData.broker_type,
           account_type: formData.account_type,
           currency: formData.currency,
-          portfolio_id: portfolioId,
+          portfolio_ids: [portfolioId],
         }),
       });
 
@@ -266,17 +299,34 @@ function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolio
         throw new Error(data.detail || 'Failed to create account');
       }
 
-      // Reset form and close modal
-      setFormData({
-        name: '',
-        broker_type: '',
-        account_type: 'Investment',
-        currency: 'USD',
-      });
       onClose();
       onAccountCreated?.();
     } catch (err) {
       console.error('Error creating account:', err);
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLinkAccount = async (accountId) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await api(`/portfolios/${portfolioId}/accounts/${accountId}/link`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to link account');
+      }
+
+      onClose();
+      onAccountCreated?.();
+    } catch (err) {
+      console.error('Error linking account:', err);
       setError(err.message);
     } finally {
       setIsSubmitting(false);
@@ -302,60 +352,69 @@ function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolio
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-                Account Name
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Main Portfolio"
-                className={cn(
-                  'w-full px-3 py-2.5 rounded-lg text-sm',
-                  'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-                  'text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]',
-                  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent'
-                )}
-              />
-            </div>
+          {/* Tab Switcher */}
+          <div className="flex border-b border-[var(--border-primary)]">
+            <button
+              onClick={() => setMode('create')}
+              className={cn(
+                'flex-1 px-4 py-3 text-sm font-medium transition-colors cursor-pointer',
+                mode === 'create'
+                  ? 'text-accent border-b-2 border-accent'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              )}
+            >
+              Create New
+            </button>
+            <button
+              onClick={() => setMode('link')}
+              className={cn(
+                'flex-1 px-4 py-3 text-sm font-medium transition-colors cursor-pointer',
+                mode === 'link'
+                  ? 'text-accent border-b-2 border-accent'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              )}
+            >
+              Link Existing
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-                Broker
-              </label>
-              <select
-                required
-                value={formData.broker_type}
-                onChange={(e) => setFormData({ ...formData, broker_type: e.target.value })}
-                className={cn(
-                  'w-full px-3 py-2.5 rounded-lg text-sm',
-                  'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-                  'text-[var(--text-primary)]',
-                  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
-                  'cursor-pointer'
-                )}
-              >
-                <option value="">Select broker...</option>
-                {brokers.map((broker) => (
-                  <option key={broker.type} value={broker.type}>
-                    {broker.name}
-                  </option>
-                ))}
-              </select>
+          {/* Error Display */}
+          {error && (
+            <div className="mx-6 mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-4">
+          {/* Create New Account Form */}
+          {mode === 'create' && (
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-                  Account Type
+                  Account Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Main Portfolio"
+                  className={cn(
+                    'w-full px-3 py-2.5 rounded-lg text-sm',
+                    'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+                    'text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]',
+                    'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent'
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                  Broker
                 </label>
                 <select
-                  value={formData.account_type}
-                  onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                  required
+                  value={formData.broker_type}
+                  onChange={(e) => setFormData({ ...formData, broker_type: e.target.value })}
                   className={cn(
                     'w-full px-3 py-2.5 rounded-lg text-sm',
                     'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
@@ -364,61 +423,141 @@ function AddAccountModal({ isOpen, onClose, onAccountCreated, brokers, portfolio
                     'cursor-pointer'
                   )}
                 >
-                  <option value="Investment">Investment</option>
-                  <option value="IRA">IRA</option>
-                  <option value="401k">401(k)</option>
-                  <option value="Crypto">Crypto</option>
-                  <option value="Savings">Savings</option>
+                  <option value="">Select broker...</option>
+                  {brokers.map((broker) => (
+                    <option key={broker.type} value={broker.type}>
+                      {broker.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-                  Currency
-                </label>
-                <select
-                  value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className={cn(
-                    'w-full px-3 py-2.5 rounded-lg text-sm',
-                    'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-                    'text-[var(--text-primary)]',
-                    'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
-                    'cursor-pointer'
-                  )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                    Account Type
+                  </label>
+                  <select
+                    value={formData.account_type}
+                    onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                    className={cn(
+                      'w-full px-3 py-2.5 rounded-lg text-sm',
+                      'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+                      'text-[var(--text-primary)]',
+                      'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
+                      'cursor-pointer'
+                    )}
+                  >
+                    <option value="Investment">Investment</option>
+                    <option value="IRA">IRA</option>
+                    <option value="401k">401(k)</option>
+                    <option value="Crypto">Crypto</option>
+                    <option value="Savings">Savings</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                    Currency
+                  </label>
+                  <select
+                    value={formData.currency}
+                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                    className={cn(
+                      'w-full px-3 py-2.5 rounded-lg text-sm',
+                      'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+                      'text-[var(--text-primary)]',
+                      'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
+                      'cursor-pointer'
+                    )}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="ILS">ILS</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="ILS">ILS</option>
-                </select>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Link Existing Account */}
+          {mode === 'link' && (
+            <div className="p-6">
+              {loadingLinkable ? (
+                <div className="text-center py-8">
+                  <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-sm text-[var(--text-secondary)] mt-2">Loading accounts...</p>
+                </div>
+              ) : linkableAccounts.length === 0 ? (
+                <div className="text-center py-8">
+                  <BuildingLibraryIcon className="w-12 h-12 text-[var(--text-tertiary)] mx-auto mb-3" />
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    No accounts available to link.
+                  </p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                    All your accounts are already in this portfolio, or you need to create a new one.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  <p className="text-sm text-[var(--text-secondary)] mb-3">
+                    Select an account to add to this portfolio:
+                  </p>
+                  {linkableAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-primary)] hover:border-accent transition-colors"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                          {account.name}
+                        </p>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {account.institution} · {account.account_type} · {account.currency}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleLinkAccount(account.id)}
+                        disabled={isSubmitting}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Linking...' : 'Link'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4 mt-4 border-t border-[var(--border-primary)]">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
-
-            {error && (
-              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {isSubmitting ? 'Creating...' : 'Create Account'}
-              </button>
-            </div>
-          </form>
+          )}
         </div>
       </div>
     </>
@@ -497,9 +636,14 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
   const [showApiModal, setShowApiModal] = useState(false);
   const [hasApiCredentials, setHasApiCredentials] = useState(false);
   const navigate = useNavigate();
+  const { selectedPortfolioId } = usePortfolio();
   const statusInfo = getStatusInfo(account.last_sync);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Determine if this is a shared account (in multiple portfolios)
+  const isSharedAccount = account.portfolio_ids && account.portfolio_ids.length > 1;
+  const willUnlink = selectedPortfolioId && isSharedAccount;
 
   // Get broker config (API support and file formats)
   const supportsApi = brokerConfig?.has_api ?? false;
@@ -806,8 +950,17 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
           </div>
 
           {/* Danger Zone */}
-          <div className="p-5 bg-red-50/50 dark:bg-red-950/20">
-            <h4 className="text-sm font-medium text-red-600 dark:text-red-400 mb-3">Danger Zone</h4>
+          <div className={cn(
+            'p-5',
+            willUnlink
+              ? 'bg-amber-50/50 dark:bg-amber-950/20'
+              : 'bg-red-50/50 dark:bg-red-950/20'
+          )}>
+            {!willUnlink && (
+              <h4 className="text-sm font-medium mb-3 text-red-600 dark:text-red-400">
+                Danger Zone
+              </h4>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -815,15 +968,19 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
               }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium',
-                'border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400',
-                'hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors cursor-pointer'
+                'transition-colors cursor-pointer',
+                willUnlink
+                  ? 'border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+                  : 'border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40'
               )}
             >
               <TrashIcon className="w-4 h-4" />
-              Delete Account
+              {willUnlink ? 'Unlink from Portfolio' : 'Delete Account'}
             </button>
             <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              This will permanently delete this account and all associated data.
+              {willUnlink
+                ? 'This account is in multiple portfolios. Unlinking will only remove it from this portfolio.'
+                : 'This will permanently delete this account and all associated data.'}
             </p>
           </div>
         </div>
@@ -1001,24 +1158,47 @@ export default function Accounts() {
   }, [currency, selectedPortfolioId, refreshKey]);
 
   const handleDeleteAccount = (account) => {
-    setDeleteDialog({ isOpen: true, account });
+    // Determine if this is an unlink or delete operation
+    // Unlink if: viewing a specific portfolio AND account belongs to multiple portfolios
+    const isSharedAccount = account.portfolio_ids && account.portfolio_ids.length > 1;
+    const shouldUnlink = selectedPortfolioId && isSharedAccount;
+
+    setDeleteDialog({
+      isOpen: true,
+      account,
+      isUnlink: shouldUnlink,
+    });
   };
 
   const confirmDelete = async () => {
+    const { account, isUnlink } = deleteDialog;
+
     try {
-      const res = await api(`/accounts/${deleteDialog.account.id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        throw new Error('Failed to delete account');
+      let res;
+      if (isUnlink && selectedPortfolioId) {
+        // Unlink from current portfolio only
+        res = await api(`/portfolios/${selectedPortfolioId}/accounts/${account.id}/unlink`, {
+          method: 'DELETE',
+        });
+      } else {
+        // Delete account entirely
+        res = await api(`/accounts/${account.id}`, {
+          method: 'DELETE',
+        });
       }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || `Failed to ${isUnlink ? 'unlink' : 'delete'} account`);
+      }
+
       // Remove from local state
-      setAccounts((prev) => prev.filter((a) => a.id !== deleteDialog.account.id));
+      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
     } catch (err) {
-      console.error('Error deleting account:', err);
-      alert('Failed to delete account');
+      console.error(`Error ${deleteDialog.isUnlink ? 'unlinking' : 'deleting'} account:`, err);
+      alert(err.message);
     }
-    setDeleteDialog({ isOpen: false, account: null });
+    setDeleteDialog({ isOpen: false, account: null, isUnlink: false });
   };
 
   const confirmRename = async (accountId, newName) => {
@@ -1134,15 +1314,19 @@ export default function Accounts() {
         portfolioId={selectedPortfolioId}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete/Unlink Confirmation Dialog */}
       <AlertDialog
         isOpen={deleteDialog.isOpen}
-        onClose={() => setDeleteDialog({ isOpen: false, account: null })}
+        onClose={() => setDeleteDialog({ isOpen: false, account: null, isUnlink: false })}
         onConfirm={confirmDelete}
-        title="Delete Account"
-        description={`Are you sure you want to delete "${deleteDialog.account?.name}"? This action cannot be undone and all associated transaction data will be permanently removed.`}
-        confirmLabel="Delete Account"
-        variant="danger"
+        title={deleteDialog.isUnlink ? 'Unlink from Portfolio' : 'Delete Account'}
+        description={
+          deleteDialog.isUnlink
+            ? `Are you sure you want to unlink "${deleteDialog.account?.name}" from this portfolio? The account will remain in your other portfolios.`
+            : `Are you sure you want to delete "${deleteDialog.account?.name}"? This action cannot be undone and all associated transaction data will be permanently removed.`
+        }
+        confirmLabel={deleteDialog.isUnlink ? 'Unlink' : 'Delete Account'}
+        variant={deleteDialog.isUnlink ? 'warning' : 'danger'}
       />
     </PageContainer>
   );

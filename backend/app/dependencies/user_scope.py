@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.account import Account
 from app.models.portfolio import Portfolio
+from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
 
 
@@ -26,14 +27,17 @@ def get_user_account_ids(user: User, db: Session, portfolio_id: str | None = Non
     if not portfolio_ids:
         return []
 
-    # If portfolio_id is specified, validate it belongs to user
+    query = db.query(portfolio_accounts.c.account_id).filter(
+        portfolio_accounts.c.portfolio_id.in_(portfolio_ids)
+    )
+
     if portfolio_id:
         if portfolio_id not in portfolio_ids:
             return []  # Portfolio doesn't belong to user
-        portfolio_ids = [portfolio_id]
+        query = query.filter(portfolio_accounts.c.portfolio_id == portfolio_id)
 
-    accounts = db.query(Account.id).filter(Account.portfolio_id.in_(portfolio_ids)).all()
-    return [a[0] for a in accounts]
+    # DISTINCT to avoid duplicates when account is in multiple portfolios
+    return [row[0] for row in query.distinct().all()]
 
 
 def validate_user_portfolio(user: User, db: Session, portfolio_id: str) -> Portfolio | None:
@@ -60,15 +64,11 @@ def get_user_account(user: User, db: Session, account_id: int) -> Account | None
         )
 
     # Regular users: verify ownership via portfolio relationship
-    portfolio_ids = get_user_portfolio_ids(user)
-    if not portfolio_ids:
+    allowed_ids = get_user_account_ids(user, db)
+    if account_id not in allowed_ids:
         return None
 
-    return (
-        db.query(Account)
-        .filter(Account.id == account_id, Account.portfolio_id.in_(portfolio_ids))
-        .first()
-    )
+    return db.query(Account).filter(Account.id == account_id).first()
 
 
 def get_broker_credentials(account: Account, broker_key: str) -> tuple[str | None, str | None]:

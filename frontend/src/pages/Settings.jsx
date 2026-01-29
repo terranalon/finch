@@ -282,7 +282,7 @@ function PortfolioModal({ isOpen, onClose, portfolio, onSave, loading }) {
   const isEditing = !!portfolio;
 
   // Reset form when modal opens/closes or portfolio changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       if (portfolio) {
         setName(portfolio.name || '');
