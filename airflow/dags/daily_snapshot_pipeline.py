@@ -241,14 +241,22 @@ def daily_snapshot_pipeline():
     @task(task_id="fetch_crypto_prices", pool="db_write_pool")
     def fetch_crypto_prices() -> dict[str, int | list[str] | str]:
         """
-        Fetch and store closing prices for crypto assets using CoinGecko.
+        Fetch and store crypto prices using CoinGecko.
 
-        Crypto markets are 24/7, so we use the price at midnight UTC as the
-        "closing price" for the previous day.
+        Crypto markets are 24/7, so there's no true "closing price". We fetch the
+        current spot price at midnight UTC and use it as the day's reference price.
+        This is acceptable for day-change calculations since DAG runs immediately
+        at midnight with minimal scheduler delay.
+
+        Note: If the DAG retries significantly later (e.g., 00:15+), prices may
+        differ slightly from midnight. The idempotency check prevents overwrites.
         """
         import sys
 
-        sys.path.insert(0, "/opt/airflow/backend")
+        # Add backend to path for CoinGecko client import
+        # (backend package not on Airflow worker's PYTHONPATH)
+        if "/opt/airflow/backend" not in sys.path:
+            sys.path.insert(0, "/opt/airflow/backend")
         from app.services.coingecko_client import CoinGeckoClient
 
         session = SessionLocal()
@@ -256,12 +264,13 @@ def daily_snapshot_pipeline():
         try:
             assets = session.execute(text(GET_CRYPTO_ASSETS)).fetchall()
 
-            # Running at midnight UTC, capture yesterday's close
+            # Running at midnight UTC, store as yesterday's price
             snapshot_date = date.today() - timedelta(days=1)
 
             stats: dict[str, int | list[str] | str] = {
                 "total": len(assets),
-                "updated": 0,
+                "inserted": 0,
+                "skipped": 0,
                 "failed": 0,
                 "errors": [],
                 "target_date": str(snapshot_date),
@@ -273,7 +282,7 @@ def daily_snapshot_pipeline():
 
             # Filter out assets that already have prices for this date
             assets_needing_prices = []
-            for asset_id, symbol, currency in assets:
+            for asset_id, symbol, _currency in assets:
                 existing = session.execute(
                     text(CHECK_ASSET_PRICE_EXISTS),
                     {"asset_id": asset_id, "date": snapshot_date},
@@ -281,20 +290,26 @@ def daily_snapshot_pipeline():
 
                 if existing:
                     logger.info(f"Already have closing price for {symbol} on {snapshot_date}")
-                    stats["updated"] += 1
+                    stats["skipped"] += 1
                 else:
-                    assets_needing_prices.append((asset_id, symbol, currency))
+                    assets_needing_prices.append((asset_id, symbol))
 
             if not assets_needing_prices:
                 logger.info("All crypto prices already up to date")
                 return stats
 
             # Batch fetch only the prices we need in one API call
-            symbols = [symbol for _, symbol, _ in assets_needing_prices]
+            symbols = [symbol for _, symbol in assets_needing_prices]
             client = CoinGeckoClient()
             prices = client.get_current_prices(symbols, "usd")
 
-            for asset_id, symbol, _ in assets_needing_prices:
+            # Check for total API failure (empty response when we expected prices)
+            if not prices and assets_needing_prices:
+                error_msg = "CoinGecko API returned no prices - possible API outage"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            for asset_id, symbol in assets_needing_prices:
                 try:
                     price = prices.get(symbol)
                     if price is not None:
@@ -311,7 +326,7 @@ def daily_snapshot_pipeline():
                         session.commit()
 
                         logger.info(f"Stored closing price for {symbol}: {price} USD")
-                        stats["updated"] += 1
+                        stats["inserted"] += 1
                     else:
                         error_msg = f"{symbol}: No price from CoinGecko"
                         stats["errors"].append(error_msg)
@@ -327,7 +342,8 @@ def daily_snapshot_pipeline():
                     continue
 
             logger.info(
-                f"Crypto price update complete: {stats['updated']} updated, {stats['failed']} failed"
+                f"Crypto price update complete: {stats['inserted']} inserted, "
+                f"{stats['skipped']} skipped, {stats['failed']} failed"
             )
             return stats
 
@@ -346,7 +362,10 @@ def daily_snapshot_pipeline():
         """Create portfolio snapshots for yesterday (running at midnight UTC)."""
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
-        logger.info(f"Crypto prices updated: {crypto_price_stats['updated']}")
+        logger.info(
+            f"Crypto prices: {crypto_price_stats.get('inserted', 0)} inserted, "
+            f"{crypto_price_stats.get('skipped', 0)} skipped"
+        )
 
         import requests
 
@@ -425,14 +444,11 @@ def daily_snapshot_pipeline():
         finally:
             session.close()
 
-    # Define task dependencies
+    # Define task dependencies (TaskFlow API creates implicit deps via argument passing)
     exchange_rate_stats = fetch_exchange_rates()
     asset_price_stats = fetch_asset_prices()
     crypto_price_stats = fetch_crypto_prices()
-    snapshot_stats = create_snapshots(exchange_rate_stats, asset_price_stats, crypto_price_stats)
-
-    # All price fetches must complete before snapshots
-    [exchange_rate_stats, asset_price_stats, crypto_price_stats] >> snapshot_stats
+    create_snapshots(exchange_rate_stats, asset_price_stats, crypto_price_stats)
 
 
 # Instantiate the DAG
