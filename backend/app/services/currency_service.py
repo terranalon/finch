@@ -1,7 +1,7 @@
 """Currency exchange rate service."""
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import yfinance as yf
@@ -202,3 +202,84 @@ class CurrencyService:
             stats["updated"] = 0
 
         return stats
+
+    @staticmethod
+    def fetch_and_store_historical_rates(
+        db: Session,
+        from_currency: str,
+        to_currency: str,
+        start_date: date,
+        end_date: date,
+    ) -> int:
+        """Fetch historical exchange rates and store in exchange_rates table.
+
+        Uses yfinance for the full date range in one API call.
+        Skips dates that already have rates in the database.
+
+        Args:
+            db: Database session
+            from_currency: Source currency (e.g., "USD")
+            to_currency: Target currency (e.g., "ILS")
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+
+        Returns:
+            Number of new rates inserted
+        """
+        if from_currency == to_currency:
+            return 0
+
+        # Get existing dates to skip
+        existing_dates = set(
+            row[0]
+            for row in db.query(ExchangeRate.date)
+            .filter(
+                ExchangeRate.from_currency == from_currency,
+                ExchangeRate.to_currency == to_currency,
+                ExchangeRate.date >= start_date,
+                ExchangeRate.date <= end_date,
+            )
+            .all()
+        )
+
+        # Fetch from yfinance
+        symbol = f"{from_currency}{to_currency}=X"
+        try:
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(
+                start=start_date.isoformat(),
+                end=(end_date + timedelta(days=1)).isoformat(),
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch exchange rate history for {symbol}: {e}")
+            return 0
+
+        if history.empty:
+            logger.warning(f"No exchange rate data for {symbol}")
+            return 0
+
+        count = 0
+        for idx, row in history.iterrows():
+            rate_date = idx.date()
+
+            if rate_date in existing_dates:
+                continue
+
+            close_rate = row.get("Close")
+            if close_rate is None or close_rate <= 0:
+                continue
+
+            rate_record = ExchangeRate(
+                from_currency=from_currency,
+                to_currency=to_currency,
+                date=rate_date,
+                rate=Decimal(str(close_rate)),
+            )
+            db.add(rate_record)
+            count += 1
+
+        if count > 0:
+            db.commit()
+            logger.info(f"Inserted {count} historical rates for {symbol}")
+
+        return count
