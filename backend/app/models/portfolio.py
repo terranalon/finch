@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
+from app.models.portfolio_account import portfolio_accounts
 
 if TYPE_CHECKING:
     from app.models.account import Account
@@ -33,7 +34,11 @@ class Portfolio(Base):
 
     # Relationships
     user: Mapped["User"] = relationship(back_populates="portfolios")
-    accounts: Mapped[list["Account"]] = relationship(back_populates="portfolio")
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
+        secondary=portfolio_accounts,
+        back_populates="portfolios",
+    )
 
     def __repr__(self) -> str:
         return f"<Portfolio(id={self.id}, name='{self.name}')>"
