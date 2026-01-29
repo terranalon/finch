@@ -34,6 +34,8 @@ class Account(Base):
     account_number: Mapped[str | None] = mapped_column(String(100))
     external_id: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    snapshot_status: Mapped[str | None] = mapped_column(String(20), default=None)
+    # Values: None, "generating", "ready", "failed"
     broker_type: Mapped[str | None] = mapped_column(String(50))  # 'ibkr', 'binance', 'ibi', etc.
     meta_data: Mapped[dict | None] = mapped_column("metadata", JSONB)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
