@@ -8,7 +8,7 @@
  * - GET /api/dashboard/summary (for account values)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, api } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
@@ -498,8 +498,8 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
   const [hasApiCredentials, setHasApiCredentials] = useState(false);
   const navigate = useNavigate();
   const statusInfo = getStatusInfo(account.last_sync);
-  const inputRef = React.useRef(null);
-  const fileInputRef = React.useRef(null);
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Get broker config (API support and file formats)
   const supportsApi = brokerConfig?.has_api ?? false;
