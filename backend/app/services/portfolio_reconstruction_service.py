@@ -1,7 +1,8 @@
 """Portfolio reconstruction service for historical performance tracking."""
 
 import logging
-from datetime import date
+from collections.abc import Generator
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -605,3 +606,262 @@ class PortfolioReconstructionService:
             "total_holdings_reconstructed": len(reconstructed_map),
             "discrepancies": discrepancies,
         }
+
+    @staticmethod
+    def reconstruct_holdings_timeline(
+        db: Session,
+        account_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> Generator[tuple[date, list[dict]], None, None]:
+        """
+        Streaming reconstruction that yields holdings state at each date boundary.
+
+        Unlike reconstruct_holdings() which replays all transactions for a single date,
+        this method does ONE chronological pass through all transactions and yields
+        the holdings state for each calendar day in the range.
+
+        Complexity: O(transactions + days) instead of O(days * transactions)
+
+        Args:
+            db: Database session
+            account_id: Account to reconstruct
+            start_date: First date to yield
+            end_date: Last date to yield
+
+        Yields:
+            Tuples of (date, holdings_list) for each calendar day
+        """
+        from sqlalchemy import func
+
+        from app.models import DailyCashBalance
+
+        # Fetch ALL transactions ordered chronologically (no date filter)
+        transactions = (
+            db.query(Transaction, Holding, Asset)
+            .join(Holding, Transaction.holding_id == Holding.id)
+            .join(Asset, Holding.asset_id == Asset.id)
+            .filter(Holding.account_id == account_id)
+            .order_by(Transaction.date, Transaction.id)
+            .all()
+        )
+
+        # Filter out forex pairs
+        transactions = [
+            (txn, holding, asset)
+            for txn, holding, asset in transactions
+            if not _is_forex_pair(asset.symbol)
+        ]
+
+        # Pre-fetch DailyCashBalance organized by currency and date
+        cash_balances = (
+            db.query(DailyCashBalance)
+            .filter(
+                DailyCashBalance.account_id == account_id,
+                DailyCashBalance.date >= start_date,
+                DailyCashBalance.date <= end_date,
+            )
+            .all()
+        )
+        stmt_funds_by_date: dict[date, dict[str, Decimal]] = {}
+        for bal in cash_balances:
+            if bal.date not in stmt_funds_by_date:
+                stmt_funds_by_date[bal.date] = {}
+            stmt_funds_by_date[bal.date][bal.currency] = bal.balance
+
+        # Also fetch the most recent StmtFunds before start_date for each currency
+        initial_balances_subq = (
+            db.query(
+                DailyCashBalance.currency,
+                func.max(DailyCashBalance.date).label("max_date"),
+            )
+            .filter(
+                DailyCashBalance.account_id == account_id,
+                DailyCashBalance.date < start_date,
+            )
+            .group_by(DailyCashBalance.currency)
+            .subquery()
+        )
+        initial_balances = (
+            db.query(DailyCashBalance)
+            .join(
+                initial_balances_subq,
+                (DailyCashBalance.currency == initial_balances_subq.c.currency)
+                & (DailyCashBalance.date == initial_balances_subq.c.max_date),
+            )
+            .filter(DailyCashBalance.account_id == account_id)
+            .all()
+        )
+        last_known_cash: dict[str, Decimal] = {
+            bal.currency: bal.balance for bal in initial_balances
+        }
+
+        # Initialize holdings map
+        holdings_map: dict[int, dict] = {}
+        txn_index = 0
+
+        # Walk through each calendar day
+        current_date = start_date
+        while current_date <= end_date:
+            # Process all transactions for current_date and earlier
+            while txn_index < len(transactions):
+                txn, holding, asset = transactions[txn_index]
+                if txn.date > current_date:
+                    break  # Done with this date
+
+                # Initialize holding entry if needed
+                if asset.id not in holdings_map:
+                    holdings_map[asset.id] = {
+                        "asset": asset,
+                        "quantity": Decimal("0"),
+                        "cost_basis": Decimal("0"),
+                        "lots": [],
+                    }
+
+                # Process transaction
+                h = holdings_map[asset.id]
+                PortfolioReconstructionService._process_transaction(txn, asset, h)
+
+                txn_index += 1
+
+            # Apply StmtFunds override for today if available
+            if current_date in stmt_funds_by_date:
+                for currency, balance in stmt_funds_by_date[current_date].items():
+                    last_known_cash[currency] = balance
+
+            # Build snapshot of non-zero holdings
+            snapshot = []
+            for asset_id, h in holdings_map.items():
+                quantity = h["quantity"]
+
+                # Apply cash balance override for cash assets
+                if h["asset"].asset_class == "Cash":
+                    currency = h["asset"].symbol
+                    if currency in last_known_cash:
+                        quantity = last_known_cash[currency]
+
+                if quantity != 0:
+                    snapshot.append(
+                        {
+                            "asset_id": asset_id,
+                            "symbol": h["asset"].symbol,
+                            "name": h["asset"].name,
+                            "asset_class": h["asset"].asset_class,
+                            "currency": h["asset"].currency,
+                            "quantity": quantity,
+                            "cost_basis": h["cost_basis"],
+                        }
+                    )
+
+            yield (current_date, snapshot)
+            current_date += timedelta(days=1)
+
+    @staticmethod
+    def _process_transaction(txn: Transaction, asset: Asset, h: dict) -> None:
+        """Process a single transaction and update holdings state.
+
+        Extracted from reconstruct_holdings to share logic with streaming reconstruction.
+        """
+        if txn.type == "Buy":
+            quantity = txn.quantity or Decimal("0")
+            price = txn.price_per_unit or Decimal("0")
+            fees = txn.fees or Decimal("0")
+            h["quantity"] += quantity
+            if txn.amount is not None:
+                cost = txn.amount + fees
+            else:
+                cost = (quantity * price) + fees
+            h["cost_basis"] += cost
+            h["lots"].append(
+                {
+                    "quantity": quantity,
+                    "remaining": quantity,
+                    "cost_per_unit": price,
+                    "fees": fees,
+                    "date": txn.date,
+                }
+            )
+
+        elif txn.type == "Sell":
+            quantity = abs(txn.quantity or Decimal("0"))
+            h["quantity"] -= quantity
+            remaining_to_sell = quantity
+            for lot in h["lots"]:
+                if remaining_to_sell <= 0:
+                    break
+                sold = min(lot["remaining"], remaining_to_sell)
+                lot["remaining"] -= sold
+                cost_per_unit = lot.get("cost_per_unit") or Decimal("0")
+                cost_reduction = sold * cost_per_unit
+                lot_qty = lot.get("quantity") or Decimal("0")
+                lot_fees = lot.get("fees") or Decimal("0")
+                if lot_qty > 0:
+                    fee_proportion = (sold / lot_qty) * lot_fees
+                    cost_reduction += fee_proportion
+                h["cost_basis"] -= cost_reduction
+                remaining_to_sell -= sold
+
+        elif txn.type == "Dividend":
+            if asset.asset_class == "Cash" and txn.amount is not None:
+                h["quantity"] += txn.amount
+                h["cost_basis"] += abs(txn.amount)
+
+        elif txn.type == "Forex Conversion":
+            if txn.amount is not None:
+                h["quantity"] += txn.amount
+
+        elif txn.type == "Deposit":
+            deposit_qty = _resolve_quantity(txn)
+            if deposit_qty is not None:
+                h["quantity"] += deposit_qty
+                if asset.asset_class == "Cash":
+                    h["cost_basis"] += abs(deposit_qty)
+                elif txn.price_per_unit is not None:
+                    cost = abs(deposit_qty) * txn.price_per_unit
+                    h["cost_basis"] += cost
+                    h["lots"].append(
+                        {
+                            "quantity": abs(deposit_qty),
+                            "remaining": abs(deposit_qty),
+                            "cost_per_unit": txn.price_per_unit,
+                            "fees": Decimal("0"),
+                            "date": txn.date,
+                        }
+                    )
+
+        elif txn.type == "Withdrawal":
+            withdrawal_qty = _resolve_quantity(txn)
+            if withdrawal_qty is not None:
+                h["quantity"] -= abs(withdrawal_qty)
+                if txn.fees and txn.fees > 0:
+                    h["quantity"] -= txn.fees
+
+        elif txn.type == "Trade Settlement":
+            if txn.amount is not None:
+                h["quantity"] += txn.amount
+
+        elif txn.type == "Staking":
+            if txn.quantity is not None:
+                h["quantity"] += txn.quantity
+
+        elif txn.type == "Transfer":
+            transfer_qty = _resolve_quantity(txn)
+            if transfer_qty is not None:
+                h["quantity"] += transfer_qty
+
+        elif txn.type in ("Withdrawal Fee", "Custody Fee"):
+            fee_qty = _resolve_quantity(txn)
+            if fee_qty is not None:
+                h["quantity"] += fee_qty
+
+        elif txn.type in ("Refund Fee", "Refund Withdrawal"):
+            refund_qty = _resolve_quantity(txn)
+            if refund_qty is not None:
+                h["quantity"] += refund_qty
+
+        elif txn.type == "Interest":
+            interest_qty = _resolve_quantity(txn)
+            if interest_qty is not None:
+                h["quantity"] += interest_qty
+                if asset.asset_class == "Cash":
+                    h["cost_basis"] += abs(interest_qty)
