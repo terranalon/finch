@@ -46,6 +46,7 @@ def test_db():
                 account_number TEXT,
                 external_id TEXT,
                 is_active BOOLEAN DEFAULT 1,
+                snapshot_status TEXT,
                 broker_type TEXT,
                 metadata TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -488,3 +489,89 @@ class TestIBKRImport:
         data = response.json()
         assert data["status"] == "completed"
         assert data["import_method"] == "atomic"
+
+
+class TestApiImportTriggersSnapshotGeneration:
+    """Tests for background snapshot generation on API import."""
+
+    def test_import_with_date_range_triggers_snapshot_generation(
+        self, client_with_user, auth_headers
+    ):
+        """Should trigger snapshot generation when import returns date_range."""
+        client, _ = client_with_user
+
+        with (
+            patch("app.routers.brokers._import_crypto_broker") as mock_import,
+            patch("app.routers.brokers.update_snapshot_status") as mock_status,
+            patch("app.routers.brokers.generate_snapshots_background") as mock_bg,
+        ):
+            # Mock successful import with date_range
+            mock_import.return_value = {
+                "status": "completed",
+                "date_range": {
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-06-30",
+                },
+                "transactions": {"imported": 10},
+            }
+
+            response = client.post("/api/brokers/kraken/import/1", headers=auth_headers)
+
+            assert response.status_code == 200
+
+            # Verify snapshot status was set to "generating"
+            mock_status.assert_called()
+            call_args = mock_status.call_args
+            assert call_args[0][2] == "generating"  # Third arg is status
+
+    def test_import_without_date_range_does_not_trigger_snapshot(
+        self, client_with_user, auth_headers
+    ):
+        """Should not trigger snapshot generation when import has no date_range."""
+        client, _ = client_with_user
+
+        with (
+            patch("app.routers.brokers._import_crypto_broker") as mock_import,
+            patch("app.routers.brokers.update_snapshot_status") as mock_status,
+        ):
+            # Mock import without date_range
+            mock_import.return_value = {
+                "status": "completed",
+                "transactions": {"imported": 0},
+            }
+
+            response = client.post("/api/brokers/kraken/import/1", headers=auth_headers)
+
+            assert response.status_code == 200
+
+            # Snapshot status should NOT be called
+            mock_status.assert_not_called()
+
+    def test_ibkr_import_triggers_snapshot_generation(self, client_with_user, auth_headers):
+        """IBKR import should also trigger snapshot generation with date_range."""
+        client, _ = client_with_user
+
+        with (
+            patch("app.routers.brokers.IBKRFlexImportService") as mock_flex,
+            patch("app.routers.brokers.update_snapshot_status") as mock_status,
+            patch("app.routers.brokers.generate_snapshots_background") as mock_bg,
+        ):
+            mock_flex.import_all.return_value = {
+                "status": "completed",
+                "date_range": {
+                    "start_date": "2024-02-01",
+                    "end_date": "2024-05-15",
+                },
+                "positions": {"imported": 5},
+            }
+
+            response = client.post(
+                "/api/brokers/ibkr/import/1?use_staging=false", headers=auth_headers
+            )
+
+            assert response.status_code == 200
+
+            # Verify snapshot status was set
+            mock_status.assert_called()
+            call_args = mock_status.call_args
+            assert call_args[0][2] == "generating"
