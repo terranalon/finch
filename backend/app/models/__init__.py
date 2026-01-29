@@ -15,6 +15,7 @@ from app.models.holding_lot import HoldingLot
 from app.models.mfa_temp_session import MfaTempSession
 from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
+from app.models.portfolio_account import portfolio_accounts
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.session import Session
 from app.models.tase_security import TASESecurity
@@ -39,6 +40,7 @@ __all__ = [
     "MfaTempSession",
     "PasswordResetToken",
     "Portfolio",
+    "portfolio_accounts",
     "SecurityAuditLog",
     "Session",
     "TASESecurity",
