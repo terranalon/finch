@@ -30,6 +30,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import Account, BrokerDataSource
 from app.models.daily_cash_balance import DailyCashBalance
+from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -698,6 +699,7 @@ async def get_data_coverage(
 @router.delete("/source/{source_id}")
 async def delete_data_source(
     source_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -793,6 +795,32 @@ async def delete_data_source(
         holdings_stats["updated"],
         holdings_stats["zeroed"],
     )
+
+    # Trigger snapshot regeneration
+    # Find earliest transaction date for this account
+    earliest_txn = (
+        db.query(func.min(Transaction.date))
+        .filter(
+            Transaction.holding_id.in_(
+                db.query(Holding.id).filter(Holding.account_id == account_id)
+            )
+        )
+        .scalar()
+    )
+
+    account = db.get(Account, account_id)
+    if earliest_txn and account:
+        # There are still transactions - regenerate snapshots
+        account.snapshot_status = "generating"
+        db.commit()
+        background_tasks.add_task(_generate_snapshots_background, account_id, earliest_txn)
+    elif account:
+        # No transactions remain - delete all snapshots
+        db.query(HistoricalSnapshot).filter(HistoricalSnapshot.account_id == account_id).delete(
+            synchronize_session=False
+        )
+        account.snapshot_status = None
+        db.commit()
 
     return {
         "status": "deleted",
