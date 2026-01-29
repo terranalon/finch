@@ -513,11 +513,12 @@ async def upload_broker_file(
         # Trigger background snapshot generation
         if background_tasks:
             # Prefer import service date_range, fall back to parser's date
-            snapshot_start = start_date  # from parser
+            snapshot_start = start_date  # from parser (already a date object)
             if isinstance(source.import_stats, dict):
                 date_range_stats = source.import_stats.get("date_range", {})
                 if date_range_stats.get("start_date"):
-                    snapshot_start = date_range_stats["start_date"]
+                    # Parse ISO string to date object
+                    snapshot_start = date.fromisoformat(date_range_stats["start_date"])
 
             update_snapshot_status(db, account_id, "generating")
             background_tasks.add_task(generate_snapshots_background, account_id, snapshot_start)

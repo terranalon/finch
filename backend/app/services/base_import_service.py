@@ -22,7 +22,7 @@ def extract_date_range(dates: list[date_type]) -> dict[str, date_type] | None:
         dates: List of date objects (None values are filtered out)
 
     Returns:
-        Dict with 'start_date' and 'end_date' keys, or None if no valid dates
+        Dict with 'start_date' and 'end_date' as date objects, or None if no valid dates
     """
     valid_dates = [d for d in dates if d is not None]
     if not valid_dates:
@@ -30,6 +30,24 @@ def extract_date_range(dates: list[date_type]) -> dict[str, date_type] | None:
     return {
         "start_date": min(valid_dates),
         "end_date": max(valid_dates),
+    }
+
+
+def extract_date_range_serializable(dates: list[date_type]) -> dict[str, str] | None:
+    """Extract min/max date range as ISO strings (for JSON serialization).
+
+    Args:
+        dates: List of date objects (None values are filtered out)
+
+    Returns:
+        Dict with 'start_date' and 'end_date' as ISO strings, or None if no valid dates
+    """
+    date_range = extract_date_range(dates)
+    if not date_range:
+        return None
+    return {
+        "start_date": date_range["start_date"].isoformat(),
+        "end_date": date_range["end_date"].isoformat(),
     }
 
 

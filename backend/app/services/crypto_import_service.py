@@ -14,7 +14,10 @@ from app.services.base_broker_parser import (
     ParsedPosition,
     ParsedTransaction,
 )
-from app.services.base_import_service import BaseBrokerImportService, extract_date_range
+from app.services.base_import_service import (
+    BaseBrokerImportService,
+    extract_date_range_serializable,
+)
 from app.services.coingecko_client import CoinGeckoClient
 from app.services.transaction_hash_service import create_or_transfer_transaction
 
@@ -102,7 +105,7 @@ class CryptoImportService(BaseBrokerImportService):
                 + [cash_txn.date for cash_txn in data.cash_transactions]
                 + [div.trade_date for div in data.dividends]
             )
-            date_range = extract_date_range(all_dates)
+            date_range = extract_date_range_serializable(all_dates)
             if date_range:
                 stats["date_range"] = date_range
 

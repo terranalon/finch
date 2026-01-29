@@ -6,7 +6,7 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from app.models import Account
-from app.services.base_import_service import extract_date_range
+from app.services.base_import_service import extract_date_range_serializable
 from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_import_service import IBKRImportService
 from app.services.ibkr_parser import IBKRParser
@@ -164,7 +164,7 @@ class IBKRFlexImportService:
                 + [transfer.get("date") for transfer in transfers_data]
                 + [fx.get("date") for fx in forex_data]
             )
-            date_range = extract_date_range(all_dates)
+            date_range = extract_date_range_serializable(all_dates)
             if date_range:
                 stats["date_range"] = date_range
 

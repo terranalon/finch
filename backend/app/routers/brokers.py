@@ -7,7 +7,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
@@ -371,8 +371,10 @@ async def import_broker_data(
         # Trigger background snapshot generation if date_range available
         if background_tasks and stats.get("date_range"):
             date_range = stats["date_range"]
-            start_date = date_range.get("start_date")
-            if start_date:
+            start_date_str = date_range.get("start_date")
+            if start_date_str:
+                # Parse ISO string to date object
+                start_date = date.fromisoformat(start_date_str)
                 update_snapshot_status(db, account_id, "generating")
                 background_tasks.add_task(generate_snapshots_background, account_id, start_date)
 
