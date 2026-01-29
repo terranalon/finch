@@ -11,7 +11,16 @@ import logging
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -19,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
-from app.models import BrokerDataSource
+from app.models import Account, BrokerDataSource
 from app.models.daily_cash_balance import DailyCashBalance
 from app.models.holding import Holding
 from app.models.transaction import Transaction
@@ -33,6 +42,55 @@ from app.services.portfolio_reconstruction_service import PortfolioReconstructio
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/broker-data", tags=["broker-data"])
+
+
+def _generate_snapshots_background(account_id: int, start_date: date) -> None:
+    """Background task to generate historical snapshots after import.
+
+    This function runs in a separate thread/task after the HTTP response
+    has been sent. It generates historical snapshots for the account
+    from the start_date to today.
+
+    Args:
+        account_id: Account to generate snapshots for
+        start_date: Earliest date from the imported data
+    """
+    from app.database import SessionLocal
+    from app.services.snapshot_service import SnapshotService
+
+    db = SessionLocal()
+    try:
+        # Update status to generating
+        account = db.get(Account, account_id)
+        if account:
+            account.snapshot_status = "generating"
+            db.commit()
+
+        # Generate snapshots
+        end_date = date.today()
+        SnapshotService.generate_account_snapshots(
+            db, account_id, start_date, end_date, invalidate_existing=True
+        )
+
+        # Update status to ready
+        account = db.get(Account, account_id)
+        if account:
+            account.snapshot_status = "ready"
+            db.commit()
+
+        logger.info(f"Background snapshot generation complete for account {account_id}")
+
+    except Exception as e:
+        logger.exception(f"Background snapshot generation failed for account {account_id}: {e}")
+        try:
+            account = db.get(Account, account_id)
+            if account:
+                account.snapshot_status = "failed"
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 
 def _validate_account_access(account_id: int, current_user: User, db: Session) -> None:
@@ -256,6 +314,7 @@ async def upload_broker_file(
     broker_type: str = Form(...),
     file: UploadFile = File(...),
     confirm_overlap: bool = Form(False),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UploadResponse:
@@ -497,6 +556,14 @@ async def upload_broker_file(
 
         source.status = "completed"
         db.commit()
+
+        # Trigger background snapshot generation
+        if background_tasks:
+            account = db.get(Account, account_id)
+            if account:
+                account.snapshot_status = "generating"
+                db.commit()
+            background_tasks.add_task(_generate_snapshots_background, account_id, start_date)
 
         logger.info(
             "Uploaded %s file for account %d: %d records from %s to %s",
