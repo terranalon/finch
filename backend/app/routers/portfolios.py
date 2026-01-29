@@ -9,13 +9,16 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import (
     get_user_account,
+    get_user_account_ids,
     validate_user_portfolio,
 )
+from app.models.account import Account
 from app.models.asset import Asset
 from app.models.holding import Holding
 from app.models.portfolio import Portfolio
 from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
+from app.schemas.account import Account as AccountSchema
 from app.schemas.portfolio import (
     Portfolio as PortfolioSchema,
 )
@@ -326,3 +329,24 @@ async def unlink_account_from_portfolio(
     db.commit()
 
     return {"message": "Account unlinked successfully"}
+
+
+@router.get("/{portfolio_id}/linkable-accounts", response_model=list[AccountSchema])
+async def get_linkable_accounts(
+    portfolio_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get accounts that can be linked to this portfolio (not already linked)."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    all_account_ids = get_user_account_ids(current_user, db)
+    current_account_ids = {a.id for a in portfolio.accounts}
+    linkable_ids = set(all_account_ids) - current_account_ids
+
+    if not linkable_ids:
+        return []
+
+    return db.query(Account).filter(Account.id.in_(linkable_ids)).all()

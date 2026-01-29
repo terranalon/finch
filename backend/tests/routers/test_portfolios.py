@@ -206,3 +206,35 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
 
     assert response.status_code == 400
     assert "only portfolio" in response.json()["detail"].lower()
+
+
+def test_get_linkable_accounts(client, auth_headers, test_user, db_session):
+    """GET /portfolios/{id}/linkable-accounts returns accounts not in this portfolio."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="Stocks", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account1 = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account1.portfolios = [portfolio1]
+
+    account2 = Account(
+        name="IBKR", institution="Interactive Brokers", account_type="Brokerage", currency="USD"
+    )
+    account2.portfolios = [portfolio2]
+
+    db_session.add_all([account1, account2])
+    db_session.commit()
+
+    response = client.get(
+        f"/api/portfolios/{portfolio1.id}/linkable-accounts", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    account_ids = [a["id"] for a in response.json()]
+
+    # Kraken is already in Crypto, so only IBKR should be linkable
+    assert account2.id in account_ids
+    assert account1.id not in account_ids
