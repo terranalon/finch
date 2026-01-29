@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { cn, formatCurrency, api, deleteDataSource, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
+import { usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
 import { TransactionCard } from '../components/transactions';
@@ -727,7 +728,9 @@ function UploadModal({ isOpen, onClose, onUpload, isUploading, supportedFormats,
 // SETTINGS SECTION
 // ============================================
 
-function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentialsRef }) {
+function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentialsRef, onAccountDeleted }) {
+  const navigate = useNavigate();
+  const { portfolios } = usePortfolio();
   const isIbkr = account.broker_type === 'ibkr';
   const [formData, setFormData] = useState({
     name: account.name,
@@ -739,6 +742,72 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
 
   const [credentialsStatus, setCredentialsStatus] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(null); // portfolio ID being unlinked
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Get portfolio details for the account's linked portfolios
+  const linkedPortfolios = (account.portfolio_ids || [])
+    .map((pid) => portfolios.find((p) => p.id === pid))
+    .filter(Boolean);
+
+  const canUnlink = linkedPortfolios.length > 1;
+
+  const handleUnlinkFromPortfolio = async (portfolioId) => {
+    if (!canUnlink) {
+      alert('Cannot unlink from the only portfolio. Delete the account instead.');
+      return;
+    }
+
+    if (!confirm('Unlink this account from the selected portfolio?')) return;
+
+    setIsUnlinking(portfolioId);
+    try {
+      const res = await api(`/portfolios/${portfolioId}/accounts/${account.id}/unlink`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to unlink account');
+      }
+
+      // Refresh the page to show updated data
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsUnlinking(null);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm(
+      `Are you sure you want to permanently delete "${account.name}"?\n\n` +
+      'This will remove all holdings, transactions, and historical data associated with this account. ' +
+      'This action cannot be undone.'
+    )) return;
+
+    setIsDeletingAccount(true);
+    try {
+      const res = await api(`/accounts/${account.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to delete account');
+      }
+
+      // Navigate back to accounts page
+      navigate('/accounts');
+      onAccountDeleted?.();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const [isSavingCredentials, setIsSavingCredentials] = useState(false);
   const [isEditingCredentials, setIsEditingCredentials] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -1241,6 +1310,76 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
           )}
         </div>
       )}
+
+      {/* Linked Portfolios Section */}
+      <div className="pt-6 border-t border-[var(--border-primary)]">
+        <h4 className="text-sm font-medium text-[var(--text-primary)] mb-4">Linked Portfolios</h4>
+        <p className="text-xs text-[var(--text-tertiary)] mb-3">
+          This account is linked to the following portfolios. Holdings and transactions will appear in all linked portfolios.
+        </p>
+        <div className="space-y-2">
+          {linkedPortfolios.length === 0 ? (
+            <p className="text-sm text-[var(--text-secondary)] italic">No portfolios linked</p>
+          ) : (
+            linkedPortfolios.map((portfolio) => (
+              <div
+                key={portfolio.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">{portfolio.name}</span>
+                  {portfolio.is_default && (
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleUnlinkFromPortfolio(portfolio.id)}
+                  disabled={!canUnlink || isUnlinking === portfolio.id}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer',
+                    canUnlink
+                      ? 'border border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                      : 'border border-[var(--border-primary)] text-[var(--text-tertiary)] cursor-not-allowed',
+                    'disabled:opacity-50'
+                  )}
+                  title={canUnlink ? 'Unlink from this portfolio' : 'Cannot unlink from the only portfolio'}
+                >
+                  {isUnlinking === portfolio.id ? 'Unlinking...' : 'Unlink'}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        {!canUnlink && linkedPortfolios.length === 1 && (
+          <p className="text-xs text-[var(--text-tertiary)] mt-2">
+            This account cannot be unlinked as it belongs to only one portfolio. Delete the account instead.
+          </p>
+        )}
+      </div>
+
+      {/* Danger Zone */}
+      <div className="pt-6 border-t border-[var(--border-primary)]">
+        <h4 className="text-sm font-medium text-red-600 dark:text-red-400 mb-4">Danger Zone</h4>
+        <div className="p-4 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Delete this account</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                Permanently remove this account and all its data from all portfolios.
+              </p>
+            </div>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

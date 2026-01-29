@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '../../lib';
 import { useTheme, useCurrency, useAuth, usePortfolio } from '../../contexts';
 import { FinchIcon, ThemeToggle } from '../ui';
@@ -218,6 +218,8 @@ function SettingsDropdown() {
 function PortfolioSelector() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const { portfolios, selectedPortfolioId, selectedPortfolio, selectPortfolio, showCombinedView, loading } = usePortfolio();
 
   // Close dropdown when clicking outside
@@ -232,8 +234,18 @@ function PortfolioSelector() {
   }, []);
 
   const handleSelect = (portfolioId) => {
-    selectPortfolio(portfolioId);
+    if (portfolioId === selectedPortfolioId) {
+      setIsOpen(false);
+      return;
+    }
+
     setIsOpen(false);
+    selectPortfolio(portfolioId);
+
+    // Navigate to overview when switching portfolios (if not already there)
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
   };
 
   // Don't render if loading or no portfolios
