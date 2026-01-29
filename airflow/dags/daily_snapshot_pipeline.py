@@ -1,12 +1,13 @@
 """
 Daily Snapshot Pipeline DAG
 
-Creates end-of-day portfolio snapshots after market close:
+Creates end-of-day portfolio snapshots at midnight UTC:
 1. Fetch exchange rates for all currency pairs
-2. Fetch today's closing prices for all assets
-3. Create portfolio snapshots with accurate valuations
+2. Fetch yesterday's closing prices for stocks (via Yahoo Finance)
+3. Fetch crypto closing prices at midnight UTC (via CoinGecko)
+4. Create portfolio snapshots with accurate valuations
 
-Schedule: Daily at 9:30 PM UTC (after US market close)
+Schedule: Daily at midnight UTC (00:00)
 """
 
 import logging
@@ -22,7 +23,8 @@ from queries import (
     CHECK_ASSET_PRICE_EXISTS,
     CHECK_EXCHANGE_RATE_EXISTS,
     GET_ACTIVE_ACCOUNTS,
-    GET_ACTIVE_HOLDINGS_ASSETS,
+    GET_CRYPTO_ASSETS,
+    GET_NON_CRYPTO_ASSETS,
     INSERT_ASSET_PRICE,
     INSERT_EXCHANGE_RATE,
 )
@@ -65,7 +67,7 @@ default_args = {
     dag_id="daily_snapshot_pipeline",
     default_args=default_args,
     description="Daily end-of-day snapshots with exchange rates and asset prices",
-    schedule="30 21 * * *",  # 9:30 PM UTC daily (after US market close)
+    schedule="0 0 * * *",  # Midnight UTC daily
     start_date=datetime(2026, 1, 1),
     catchup=False,  # Don't run historical DAGs
     tags=["portfolio", "daily", "snapshots"],
@@ -79,19 +81,22 @@ def daily_snapshot_pipeline():
         session = SessionLocal()
 
         try:
-            today = date.today()
+            # Running at midnight UTC, capture yesterday's rates
+            snapshot_date = date.today() - timedelta(days=1)
             stats = {"total": len(CURRENCY_PAIRS), "updated": 0, "failed": 0, "pairs": []}
 
             for from_curr, to_curr in CURRENCY_PAIRS:
                 try:
-                    # Check if rate already exists for today
+                    # Check if rate already exists for snapshot_date
                     existing = session.execute(
                         text(CHECK_EXCHANGE_RATE_EXISTS),
-                        {"from_curr": from_curr, "to_curr": to_curr, "date": today},
+                        {"from_curr": from_curr, "to_curr": to_curr, "date": snapshot_date},
                     ).first()
 
                     if existing:
-                        logger.info(f"Rate {from_curr}/{to_curr} already exists for {today}")
+                        logger.info(
+                            f"Rate {from_curr}/{to_curr} already exists for {snapshot_date}"
+                        )
                         stats["updated"] += 1
                         continue
 
@@ -110,7 +115,7 @@ def daily_snapshot_pipeline():
                                 "from_curr": from_curr,
                                 "to_curr": to_curr,
                                 "rate": rate,
-                                "date": today,
+                                "date": snapshot_date,
                             },
                         )
                         session.commit()
@@ -142,43 +147,46 @@ def daily_snapshot_pipeline():
     @task(task_id="fetch_asset_prices", pool="db_write_pool")
     def fetch_asset_prices() -> dict[str, int | list[str] | str]:
         """
-        Fetch and store TODAY'S closing prices for all active assets.
+        Fetch and store YESTERDAY'S closing prices for non-crypto assets.
 
-        NOTE: This DAG runs after US market close (9:30 PM UTC), so we fetch
-        today's closing prices for accurate end-of-day snapshots.
+        NOTE: This DAG runs at midnight UTC, so we fetch yesterday's
+        closing prices for accurate end-of-day snapshots.
         """
         session = SessionLocal()
 
         try:
-            # Get all assets that have holdings
-            assets = session.execute(text(GET_ACTIVE_HOLDINGS_ASSETS)).fetchall()
+            # Only fetch non-crypto assets (crypto handled by fetch_crypto_prices)
+            assets = session.execute(text(GET_NON_CRYPTO_ASSETS)).fetchall()
 
-            # Store closing prices for TODAY (running after market close)
-            today = date.today()
+            # Running at midnight UTC, capture yesterday's close
+            snapshot_date = date.today() - timedelta(days=1)
 
             stats: dict[str, int | list[str] | str] = {
                 "total": len(assets),
                 "updated": 0,
                 "failed": 0,
                 "errors": [],
-                "target_date": str(today),
+                "target_date": str(snapshot_date),
             }
 
             for asset_id, symbol, currency in assets:
                 try:
-                    # Check if we already have a closing price for today
+                    # Check if we already have a closing price for snapshot_date
                     existing = session.execute(
-                        text(CHECK_ASSET_PRICE_EXISTS), {"asset_id": asset_id, "date": today}
+                        text(CHECK_ASSET_PRICE_EXISTS),
+                        {"asset_id": asset_id, "date": snapshot_date},
                     ).first()
 
                     if existing:
-                        logger.info(f"Already have closing price for {symbol} on {today}")
+                        logger.info(f"Already have closing price for {symbol} on {snapshot_date}")
                         stats["updated"] += 1
                         continue
 
-                    # Fetch today's closing price (running after market close)
+                    # Fetch yesterday's closing price (running at midnight UTC)
                     ticker = yf.Ticker(symbol)
-                    hist = ticker.history(start=today, end=today + timedelta(days=1))
+                    hist = ticker.history(
+                        start=snapshot_date, end=snapshot_date + timedelta(days=1)
+                    )
 
                     if not hist.empty and "Close" in hist.columns:
                         closing_price = float(hist["Close"].iloc[0])
@@ -188,12 +196,12 @@ def daily_snapshot_pipeline():
                         if symbol.endswith(".TA"):
                             closing_price = closing_price / 100
 
-                        # Store today's closing price
+                        # Store yesterday's closing price
                         session.execute(
                             text(INSERT_ASSET_PRICE),
                             {
                                 "asset_id": asset_id,
-                                "date": today,
+                                "date": snapshot_date,
                                 "closing_price": closing_price,
                                 "currency": currency,
                                 "source": "Yahoo Finance",
@@ -206,7 +214,7 @@ def daily_snapshot_pipeline():
                         )
                         stats["updated"] += 1
                     else:
-                        error_msg = f"{symbol}: No closing price data for {today}"
+                        error_msg = f"{symbol}: No closing price data for {snapshot_date}"
                         stats["errors"].append(error_msg)
                         stats["failed"] += 1
                         logger.warning(error_msg)
@@ -230,14 +238,134 @@ def daily_snapshot_pipeline():
         finally:
             session.close()
 
+    @task(task_id="fetch_crypto_prices", pool="db_write_pool")
+    def fetch_crypto_prices() -> dict[str, int | list[str] | str]:
+        """
+        Fetch and store crypto prices using CoinGecko.
+
+        Crypto markets are 24/7, so there's no true "closing price". We fetch the
+        current spot price at midnight UTC and use it as the day's reference price.
+        This is acceptable for day-change calculations since DAG runs immediately
+        at midnight with minimal scheduler delay.
+
+        Note: If the DAG retries significantly later (e.g., 00:15+), prices may
+        differ slightly from midnight. The idempotency check prevents overwrites.
+        """
+        import sys
+
+        # Add backend to path for CoinGecko client import
+        # (backend package not on Airflow worker's PYTHONPATH)
+        if "/opt/airflow/backend" not in sys.path:
+            sys.path.insert(0, "/opt/airflow/backend")
+        from app.services.coingecko_client import CoinGeckoClient
+
+        session = SessionLocal()
+
+        try:
+            assets = session.execute(text(GET_CRYPTO_ASSETS)).fetchall()
+
+            # Running at midnight UTC, store as yesterday's price
+            snapshot_date = date.today() - timedelta(days=1)
+
+            stats: dict[str, int | list[str] | str] = {
+                "total": len(assets),
+                "inserted": 0,
+                "skipped": 0,
+                "failed": 0,
+                "errors": [],
+                "target_date": str(snapshot_date),
+            }
+
+            if not assets:
+                logger.info("No crypto assets found")
+                return stats
+
+            # Filter out assets that already have prices for this date
+            assets_needing_prices = []
+            for asset_id, symbol, _currency in assets:
+                existing = session.execute(
+                    text(CHECK_ASSET_PRICE_EXISTS),
+                    {"asset_id": asset_id, "date": snapshot_date},
+                ).first()
+
+                if existing:
+                    logger.info(f"Already have closing price for {symbol} on {snapshot_date}")
+                    stats["skipped"] += 1
+                else:
+                    assets_needing_prices.append((asset_id, symbol))
+
+            if not assets_needing_prices:
+                logger.info("All crypto prices already up to date")
+                return stats
+
+            # Batch fetch only the prices we need in one API call
+            symbols = [symbol for _, symbol in assets_needing_prices]
+            client = CoinGeckoClient()
+            prices = client.get_current_prices(symbols, "usd")
+
+            # Check for total API failure (empty response when we expected prices)
+            if not prices and assets_needing_prices:
+                error_msg = "CoinGecko API returned no prices - possible API outage"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            for asset_id, symbol in assets_needing_prices:
+                try:
+                    price = prices.get(symbol)
+                    if price is not None:
+                        session.execute(
+                            text(INSERT_ASSET_PRICE),
+                            {
+                                "asset_id": asset_id,
+                                "date": snapshot_date,
+                                "closing_price": float(price),
+                                "currency": "USD",
+                                "source": "CoinGecko",
+                            },
+                        )
+                        session.commit()
+
+                        logger.info(f"Stored closing price for {symbol}: {price} USD")
+                        stats["inserted"] += 1
+                    else:
+                        error_msg = f"{symbol}: No price from CoinGecko"
+                        stats["errors"].append(error_msg)
+                        stats["failed"] += 1
+                        logger.warning(error_msg)
+
+                except Exception as e:
+                    error_msg = f"{symbol}: {str(e)}"
+                    stats["errors"].append(error_msg)
+                    stats["failed"] += 1
+                    logger.error(f"Failed to store closing price for {symbol}: {str(e)}")
+                    session.rollback()
+                    continue
+
+            logger.info(
+                f"Crypto price update complete: {stats['inserted']} inserted, "
+                f"{stats['skipped']} skipped, {stats['failed']} failed"
+            )
+            return stats
+
+        except Exception as e:
+            logger.error(f"Crypto price update failed: {str(e)}")
+            raise
+        finally:
+            session.close()
+
     @task(task_id="create_snapshots")
     def create_snapshots(
         exchange_rate_stats: dict[str, int | list[str]],
         asset_price_stats: dict[str, int | list[str] | str],
+        crypto_price_stats: dict[str, int | list[str] | str],
     ) -> dict[str, int | str | float]:
-        """Create portfolio snapshots for today (running after market close)."""
+        """Create portfolio snapshots for yesterday (running at midnight UTC)."""
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
+        logger.info(
+            f"Crypto prices: {crypto_price_stats.get('inserted', 0)} inserted, "
+            f"{crypto_price_stats.get('skipped', 0)} skipped"
+        )
 
         import requests
 
@@ -247,8 +375,8 @@ def daily_snapshot_pipeline():
             # Get all active accounts
             accounts = session.execute(text(GET_ACTIVE_ACCOUNTS)).fetchall()
 
-            # Snapshot date is TODAY (running after market close at 9:30 PM UTC)
-            snapshot_date = date.today()
+            # Running at midnight UTC, snapshot is for yesterday
+            snapshot_date = date.today() - timedelta(days=1)
 
             stats = {
                 "date": str(snapshot_date),
@@ -316,13 +444,11 @@ def daily_snapshot_pipeline():
         finally:
             session.close()
 
-    # Define task dependencies
+    # Define task dependencies (TaskFlow API creates implicit deps via argument passing)
     exchange_rate_stats = fetch_exchange_rates()
     asset_price_stats = fetch_asset_prices()
-    snapshot_stats = create_snapshots(exchange_rate_stats, asset_price_stats)
-
-    # Both rates and prices must complete before snapshots
-    [exchange_rate_stats, asset_price_stats] >> snapshot_stats
+    crypto_price_stats = fetch_crypto_prices()
+    create_snapshots(exchange_rate_stats, asset_price_stats, crypto_price_stats)
 
 
 # Instantiate the DAG

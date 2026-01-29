@@ -36,14 +36,16 @@ GET_CRYPTO_ASSETS = """
     SELECT DISTINCT a.id, a.symbol, a.currency
     FROM assets a
     INNER JOIN holdings h ON h.asset_id = a.id
-    WHERE a.asset_class = 'Crypto'
+    WHERE h.is_active = true
+      AND a.asset_class = 'Crypto'
 """
 
 GET_NON_CRYPTO_ASSETS = """
     SELECT DISTINCT a.id, a.symbol, a.currency
     FROM assets a
     INNER JOIN holdings h ON h.asset_id = a.id
-    WHERE a.asset_class NOT IN ('Cash', 'Crypto')
+    WHERE h.is_active = true
+      AND a.asset_class NOT IN ('Cash', 'Crypto')
 """
 
 CHECK_ASSET_PRICE_EXISTS = """
