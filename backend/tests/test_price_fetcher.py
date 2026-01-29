@@ -1,7 +1,7 @@
 """Tests for PriceFetcher historical price fetching."""
 
 import os
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -239,3 +239,161 @@ class TestFetchAndStoreHistoricalPrices:
             db_session, 999999, date(2024, 1, 2), date(2024, 1, 4)
         )
         assert count == 0
+
+
+class TestFetchAndStoreHistoricalCryptoPrices:
+    """Tests for crypto historical price fetching."""
+
+    @patch("app.services.price_fetcher.CryptoCompareClient")
+    def test_uses_cryptocompare_for_old_dates(self, mock_cc_class, db_session):
+        """Should use CryptoCompare for dates older than 365 days."""
+        asset = Asset(
+            symbol="TEST_BTC",
+            name="Bitcoin Test",
+            asset_class="Crypto",
+            currency="USD",
+        )
+        db_session.add(asset)
+        db_session.commit()
+
+        # Dates more than 365 days ago
+        old_start = date.today() - timedelta(days=400)
+        old_end = date.today() - timedelta(days=390)
+
+        # Mock CryptoCompare response
+        mock_client = MagicMock()
+        mock_client.get_price_history.return_value = [
+            (old_start, Decimal("40000")),
+            (old_start + timedelta(days=1), Decimal("40100")),
+        ]
+        mock_cc_class.return_value = mock_client
+
+        count = PriceFetcher.fetch_and_store_historical_prices(
+            db_session, asset.id, old_start, old_end
+        )
+
+        assert count >= 2
+        mock_client.get_price_history.assert_called()
+
+        # Verify prices stored in DB
+        prices = (
+            db_session.query(AssetPrice)
+            .filter(AssetPrice.asset_id == asset.id)
+            .order_by(AssetPrice.date)
+            .all()
+        )
+        assert len(prices) >= 2
+        assert prices[0].date == old_start
+
+    @patch("app.services.price_fetcher.CoinGeckoClient")
+    def test_uses_coingecko_for_recent_dates(self, mock_cg_class, db_session):
+        """Should use CoinGecko for dates within 365 days."""
+        asset = Asset(
+            symbol="TEST_ETH",
+            name="Ethereum Test",
+            asset_class="Crypto",
+            currency="USD",
+        )
+        db_session.add(asset)
+        db_session.commit()
+
+        # Recent dates (within 365 days)
+        recent_start = date.today() - timedelta(days=30)
+        recent_end = date.today() - timedelta(days=25)
+
+        mock_client = MagicMock()
+        mock_client.get_price_history.return_value = [
+            (recent_start, Decimal("3000")),
+            (recent_start + timedelta(days=1), Decimal("3050")),
+        ]
+        mock_cg_class.return_value = mock_client
+
+        count = PriceFetcher.fetch_and_store_historical_prices(
+            db_session, asset.id, recent_start, recent_end
+        )
+
+        assert count >= 2
+        mock_client.get_price_history.assert_called()
+
+    @patch("app.services.price_fetcher.CryptoCompareClient")
+    @patch("app.services.price_fetcher.CoinGeckoClient")
+    def test_uses_both_for_spanning_dates(self, mock_cg_class, mock_cc_class, db_session):
+        """Should use both CryptoCompare and CoinGecko for date ranges spanning the 365-day boundary."""
+        asset = Asset(
+            symbol="TEST_SOL",
+            name="Solana Test",
+            asset_class="Crypto",
+            currency="USD",
+        )
+        db_session.add(asset)
+        db_session.commit()
+
+        # Date range that spans the 365-day boundary
+        old_date = date.today() - timedelta(days=400)
+        recent_date = date.today() - timedelta(days=30)
+
+        mock_cc_client = MagicMock()
+        mock_cc_client.get_price_history.return_value = [
+            (old_date, Decimal("100")),
+        ]
+        mock_cc_class.return_value = mock_cc_client
+
+        mock_cg_client = MagicMock()
+        mock_cg_client.get_price_history.return_value = [
+            (recent_date, Decimal("150")),
+        ]
+        mock_cg_class.return_value = mock_cg_client
+
+        count = PriceFetcher.fetch_and_store_historical_prices(
+            db_session, asset.id, old_date, recent_date
+        )
+
+        # Both clients should be called
+        mock_cc_client.get_price_history.assert_called()
+        mock_cg_client.get_price_history.assert_called()
+        assert count >= 2
+
+    @patch("app.services.price_fetcher.CoinGeckoClient")
+    def test_skips_existing_crypto_prices(self, mock_cg_class, db_session):
+        """Should skip dates that already have prices for crypto."""
+        asset = Asset(
+            symbol="TEST_DOGE",
+            name="Dogecoin Test",
+            asset_class="Crypto",
+            currency="USD",
+        )
+        db_session.add(asset)
+        db_session.flush()
+
+        recent_start = date.today() - timedelta(days=30)
+        recent_end = date.today() - timedelta(days=28)
+
+        # Pre-existing price
+        existing = AssetPrice(
+            asset_id=asset.id,
+            date=recent_start + timedelta(days=1),
+            closing_price=Decimal("0.999"),
+            currency="USD",
+            source="existing",
+        )
+        db_session.add(existing)
+        db_session.commit()
+
+        mock_client = MagicMock()
+        mock_client.get_price_history.return_value = [
+            (recent_start, Decimal("0.10")),
+            (recent_start + timedelta(days=1), Decimal("0.11")),  # Already exists
+            (recent_start + timedelta(days=2), Decimal("0.12")),
+        ]
+        mock_cg_class.return_value = mock_client
+
+        count = PriceFetcher.fetch_and_store_historical_prices(
+            db_session, asset.id, recent_start, recent_end
+        )
+
+        # Only 2 new prices inserted (skipped the existing one)
+        assert count == 2
+
+        # Existing price unchanged
+        db_session.refresh(existing)
+        assert float(existing.closing_price) == 0.999

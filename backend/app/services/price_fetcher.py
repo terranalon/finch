@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import Asset
 from app.models.asset_price import AssetPrice
 from app.services.coingecko_client import CoinGeckoClient
+from app.services.cryptocompare_client import CryptoCompareClient
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +295,50 @@ class PriceFetcher:
             return None
 
     @staticmethod
+    def _fetch_crypto_historical_prices(
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[tuple[date, Decimal]]:
+        """Fetch historical crypto prices using CoinGecko or CryptoCompare.
+
+        Uses CoinGecko for dates within 365 days (free tier limit).
+        Uses CryptoCompare for dates older than 365 days.
+
+        Args:
+            symbol: Crypto symbol (e.g., "BTC", "ETH")
+            start_date: Start of date range
+            end_date: End of date range
+
+        Returns:
+            List of (date, price) tuples
+        """
+        prices: list[tuple[date, Decimal]] = []
+        cutoff_date = date.today() - timedelta(days=365)
+
+        # Old dates (>365 days ago) -> CryptoCompare
+        if start_date < cutoff_date:
+            cc_end = min(end_date, cutoff_date - timedelta(days=1))
+            try:
+                cc_client = CryptoCompareClient()
+                cc_prices = cc_client.get_price_history(symbol, start_date, cc_end, "USD")
+                prices.extend(cc_prices)
+            except Exception as e:
+                logger.error(f"CryptoCompare failed for {symbol}: {e}")
+
+        # Recent dates (<=365 days ago) -> CoinGecko
+        if end_date >= cutoff_date:
+            cg_start = max(start_date, cutoff_date)
+            try:
+                cg_client = CoinGeckoClient()
+                cg_prices = cg_client.get_price_history(symbol, cg_start, end_date, "usd")
+                prices.extend(cg_prices)
+            except Exception as e:
+                logger.error(f"CoinGecko failed for {symbol}: {e}")
+
+        return prices
+
+    @staticmethod
     def fetch_and_store_historical_prices(
         db: Session,
         asset_id: int,
@@ -303,6 +348,7 @@ class PriceFetcher:
         """Fetch historical prices and store in asset_prices table.
 
         For stocks: uses yfinance for the full date range in one API call.
+        For crypto: uses CoinGecko (<365 days) or CryptoCompare (>365 days).
         Skips dates that already have prices in the database.
 
         Args:
@@ -335,47 +381,54 @@ class PriceFetcher:
             .all()
         )
 
-        # Fetch from yfinance (end_date + 1 day because yfinance end is exclusive)
-        try:
-            ticker = yf.Ticker(asset.symbol)
-            history = ticker.history(
-                start=start_date.isoformat(),
-                end=(end_date + timedelta(days=1)).isoformat(),
+        prices_to_insert: list[tuple[date, Decimal]] = []
+
+        if asset.asset_class == "Crypto":
+            prices_to_insert = PriceFetcher._fetch_crypto_historical_prices(
+                asset.symbol, start_date, end_date
             )
-        except Exception as e:
-            logger.error(f"Failed to fetch history for {asset.symbol}: {e}")
-            return 0
 
-        if history.empty:
-            logger.warning(f"No historical data for {asset.symbol}")
-            return 0
+        else:
+            # Stocks: use yfinance
+            try:
+                ticker = yf.Ticker(asset.symbol)
+                history = ticker.history(
+                    start=start_date.isoformat(),
+                    end=(end_date + timedelta(days=1)).isoformat(),
+                )
 
-        # Convert .TA stocks from Agorot to ILS
-        is_israeli = asset.symbol.endswith(".TA")
+                is_israeli = asset.symbol.endswith(".TA")
 
+                for idx, row in history.iterrows():
+                    price_date = idx.date()
+                    close_price = row.get("Close")
+                    if close_price is not None and close_price > 0:
+                        if is_israeli:
+                            close_price = close_price / 100
+                        prices_to_insert.append((price_date, Decimal(str(close_price))))
+
+            except Exception as e:
+                logger.error(f"yfinance failed for {asset.symbol}: {e}")
+
+        # Insert prices that don't exist
         count = 0
-        for idx, row in history.iterrows():
-            price_date = idx.date()
-
+        for price_date, price_value in prices_to_insert:
             if price_date in existing_dates:
                 continue
-
-            close_price = row.get("Close")
-            if close_price is None or close_price <= 0:
+            if price_date < start_date or price_date > end_date:
                 continue
-
-            # Agorot conversion
-            if is_israeli:
-                close_price = close_price / 100
 
             price_record = AssetPrice(
                 asset_id=asset_id,
                 date=price_date,
-                closing_price=Decimal(str(close_price)),
+                closing_price=price_value,
                 currency=asset.currency,
-                source="Yahoo Finance",
+                source="CoinGecko/CryptoCompare"
+                if asset.asset_class == "Crypto"
+                else "Yahoo Finance",
             )
             db.add(price_record)
+            existing_dates.add(price_date)  # Prevent duplicates within batch
             count += 1
 
         if count > 0:
