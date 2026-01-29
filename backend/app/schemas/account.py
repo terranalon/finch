@@ -52,5 +52,6 @@ class Account(AccountBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    snapshot_status: str | None = None
     created_at: datetime
     updated_at: datetime
