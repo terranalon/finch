@@ -110,3 +110,99 @@ def test_list_portfolios_shows_account_count(client, auth_headers, test_user, db
     portfolios = response.json()
     crypto_portfolio = next(p for p in portfolios if p["name"] == "Crypto")
     assert crypto_portfolio["account_count"] == 1
+
+
+def test_link_account_to_portfolio(client, auth_headers, test_user, db_session):
+    """POST /portfolios/{id}/accounts/{account_id}/link links existing account."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="All", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account.portfolios = [portfolio1]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.post(
+        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}/link", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    # Verify account is now in both portfolios
+    db_session.refresh(account)
+    portfolio_ids = [p.id for p in account.portfolios]
+    assert portfolio1.id in portfolio_ids
+    assert portfolio2.id in portfolio_ids
+
+
+def test_link_account_already_linked(client, auth_headers, test_user, db_session):
+    """POST /portfolios/{id}/accounts/{account_id}/link returns 400 if already linked."""
+    portfolio = Portfolio(name="Crypto", user_id=test_user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.post(
+        f"/api/portfolios/{portfolio.id}/accounts/{account.id}/link", headers=auth_headers
+    )
+
+    assert response.status_code == 400
+    assert "already linked" in response.json()["detail"].lower()
+
+
+def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_session):
+    """DELETE /portfolios/{id}/accounts/{account_id}/unlink removes link."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="All", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account.portfolios = [portfolio1, portfolio2]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.delete(
+        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}/unlink", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    # Verify account is now only in portfolio1
+    db_session.refresh(account)
+    portfolio_ids = [p.id for p in account.portfolios]
+    assert portfolio1.id in portfolio_ids
+    assert portfolio2.id not in portfolio_ids
+
+
+def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_user, db_session):
+    """DELETE /portfolios/{id}/accounts/{account_id}/unlink blocked if only portfolio."""
+    portfolio = Portfolio(name="Crypto", user_id=test_user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = Account(
+        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+    )
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.delete(
+        f"/api/portfolios/{portfolio.id}/accounts/{account.id}/unlink", headers=auth_headers
+    )
+
+    assert response.status_code == 400
+    assert "only portfolio" in response.json()["detail"].lower()

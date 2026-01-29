@@ -7,9 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.user_scope import (
+    get_user_account,
+    validate_user_portfolio,
+)
 from app.models.asset import Asset
 from app.models.holding import Holding
 from app.models.portfolio import Portfolio
+from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
 from app.schemas.portfolio import (
     Portfolio as PortfolioSchema,
@@ -252,3 +257,72 @@ async def set_default_portfolio(
     db.commit()
     db.refresh(db_portfolio)
     return db_portfolio
+
+
+@router.post("/{portfolio_id}/accounts/{account_id}/link")
+async def link_account_to_portfolio(
+    portfolio_id: str,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Link an existing account to a portfolio."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    account = get_user_account(current_user, db, account_id)
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    # Check if already linked
+    existing = db.execute(
+        portfolio_accounts.select().where(
+            portfolio_accounts.c.portfolio_id == portfolio_id,
+            portfolio_accounts.c.account_id == account_id,
+        )
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account already linked to this portfolio",
+        )
+
+    db.execute(portfolio_accounts.insert().values(portfolio_id=portfolio_id, account_id=account_id))
+    db.commit()
+
+    return {"message": "Account linked successfully"}
+
+
+@router.delete("/{portfolio_id}/accounts/{account_id}/unlink")
+async def unlink_account_from_portfolio(
+    portfolio_id: str,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Unlink an account from a portfolio. Blocked if it's the only portfolio."""
+    portfolio = validate_user_portfolio(current_user, db, portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    account = get_user_account(current_user, db, account_id)
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    if len(account.portfolios) == 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot unlink account from its only portfolio. Delete the account instead.",
+        )
+
+    db.execute(
+        portfolio_accounts.delete().where(
+            portfolio_accounts.c.portfolio_id == portfolio_id,
+            portfolio_accounts.c.account_id == account_id,
+        )
+    )
+    db.commit()
+
+    return {"message": "Account unlinked successfully"}
