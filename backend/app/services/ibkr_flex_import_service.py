@@ -6,7 +6,10 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from app.models import Account
-from app.services.base_import_service import extract_date_range_serializable
+from app.services.base_import_service import (
+    extract_date_range_serializable,
+    extract_unique_symbols,
+)
 from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_import_service import IBKRImportService
 from app.services.ibkr_parser import IBKRParser
@@ -146,13 +149,7 @@ class IBKRFlexImportService:
 
             # Step 10: Update asset prices
             logger.info("Updating asset prices...")
-            all_symbols = set()
-            for pos in positions_data:
-                all_symbols.add(pos["symbol"])
-            for txn in transactions_data:
-                all_symbols.add(txn["symbol"])
-            for div in dividends_data:
-                all_symbols.add(div["symbol"])
+            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
 
             price_stats = IBKRImportService._update_asset_prices(db, list(all_symbols))
             stats["price_updates"] = price_stats
@@ -346,16 +343,14 @@ class IBKRFlexImportService:
 
             # Step 11: Update asset prices
             logger.info("Updating asset prices...")
-            all_symbols = set()
-            for pos in positions_data:
-                all_symbols.add(pos["symbol"])
-            for txn in transactions_data:
-                all_symbols.add(txn["symbol"])
-            for div in dividends_data:
-                all_symbols.add(div["symbol"])
+            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
 
             price_stats = IBKRImportService._update_asset_prices(db, list(all_symbols))
             stats["price_updates"] = price_stats
+
+            # Track unique assets for UI display (consistent with import_all)
+            stats["unique_assets_in_file"] = len(all_symbols)
+            stats["symbols_in_file"] = list(all_symbols)
 
             # Commit all changes
             db.commit()

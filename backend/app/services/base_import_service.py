@@ -51,6 +51,27 @@ def extract_date_range_serializable(dates: list[date_type]) -> dict[str, str] | 
     }
 
 
+def extract_unique_symbols(
+    *data_lists: list[dict],
+    key: str = "symbol",
+) -> set[str]:
+    """Extract unique symbols from multiple data lists.
+
+    Args:
+        *data_lists: Variable number of lists containing dicts with symbol key
+        key: The key to extract from each dict (default: 'symbol')
+
+    Returns:
+        Set of unique symbol strings
+    """
+    symbols = set()
+    for data_list in data_lists:
+        for item in data_list:
+            if symbol := item.get(key):
+                symbols.add(symbol)
+    return symbols
+
+
 class BaseBrokerImportService(ABC):
     """Abstract base class for all broker import services.
 
