@@ -1,13 +1,6 @@
-import { BrokerLogo } from '../BrokerLogo';
-import { getBrokersByCategory } from '../constants/brokerConfig';
-
-function ArrowLeftIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-    </svg>
-  );
-}
+import { BrokerLogo } from '../BrokerLogo.jsx';
+import { getBrokersByCategory } from '../constants/brokerConfig.js';
+import { ArrowLeftIcon } from '../icons.jsx';
 
 export function BrokerSelectionStep({ category, onSelect, onBack }) {
   const brokers = getBrokersByCategory(category.id);

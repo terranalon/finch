@@ -1,4 +1,4 @@
-import { cn } from '../../lib';
+import { cn } from '../../lib/index.js';
 
 const BROKER_LOGOS = {
   ibkr: 'https://cdn.brandfetch.io/idcABCQwX-/w/400/h/400/theme/dark/icon.jpeg',

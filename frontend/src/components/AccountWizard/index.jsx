@@ -1,13 +1,7 @@
 import { useState } from 'react';
-import { WizardStepIndicator } from './WizardStepIndicator';
 
-function XIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-    </svg>
-  );
-}
+import { XIcon } from './icons.jsx';
+import { WizardStepIndicator } from './WizardStepIndicator.jsx';
 
 export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts = [] }) {
   const [currentStep, setCurrentStep] = useState(1);

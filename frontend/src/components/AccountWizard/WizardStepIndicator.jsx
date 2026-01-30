@@ -1,4 +1,6 @@
-import { cn } from '../../lib';
+import { cn } from '../../lib/index.js';
+
+import { CheckIcon } from './icons.jsx';
 
 const STEPS = [
   { num: 1, label: 'Type' },
@@ -7,14 +9,6 @@ const STEPS = [
   { num: 4, label: 'Connect' },
   { num: 5, label: 'Done' },
 ];
-
-function CheckIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
 
 export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps = [], onStepClick }) {
   const canClickStep = (stepNum) => {
