@@ -3,6 +3,7 @@ import {
   ChartBarIcon,
   DocumentIcon,
   CalendarIcon,
+  FolderIcon,
   PlusIcon,
   ArrowRightIcon,
 } from '../icons.jsx';
@@ -72,19 +73,20 @@ export function FileUploadResultStep({
       <div className="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
         {/* Card header */}
         <div className="px-5 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-4 gap-4 text-center">
             <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              <FolderIcon className="size-4 text-gray-500 dark:text-gray-400 mx-auto mb-1" />
               File
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               <DocumentIcon className="size-4 text-purple-600 dark:text-purple-400 mx-auto mb-1" />
               Transactions
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               <ChartBarIcon className="size-4 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
               Assets
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               <CalendarIcon className="size-4 text-amber-600 dark:text-amber-400 mx-auto mb-1" />
               Date Range
             </div>
@@ -94,17 +96,17 @@ export function FileUploadResultStep({
         {/* File rows */}
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {allUploads.map((upload, idx) => (
-            <div key={idx} className="px-5 py-4 grid grid-cols-4 gap-4 items-center">
+            <div key={idx} className="px-5 py-4 grid grid-cols-4 gap-4 items-center text-center">
               <div className="text-sm text-gray-900 dark:text-white truncate" title={upload.fileName}>
                 {upload.fileName}
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums text-center">
+              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
                 {upload.summary?.totalTransactions || 0}
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums text-center">
+              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
                 {upload.summary?.totalAssets || 0}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 <span className="block">{upload.summary?.dateRange?.start || 'N/A'}</span>
                 <span className="block">to {upload.summary?.dateRange?.end || 'N/A'}</span>
               </div>
@@ -114,17 +116,17 @@ export function FileUploadResultStep({
 
         {/* Totals row - only for multiple files */}
         {hasMultipleFiles && (
-          <div className="px-5 py-4 grid grid-cols-4 gap-4 items-center bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-300 dark:border-emerald-700">
+          <div className="px-5 py-4 grid grid-cols-4 gap-4 items-center text-center bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-300 dark:border-emerald-700">
             <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
               Total ({allUploads.length} files)
             </div>
-            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums text-center">
+            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
               {combinedStats.totalTransactions}
             </div>
-            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums text-center">
+            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
               {combinedStats.totalAssets}
             </div>
-            <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 text-center">
+            <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
               <span className="block">{combinedDateRange.start}</span>
               <span className="block">to {combinedDateRange.end}</span>
             </div>
