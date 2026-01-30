@@ -245,16 +245,19 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
   if (!isOpen) return null;
 
+  // Compute derived values once
+  const isManualFlow = category?.id === 'manual';
+  const brokerConfig = broker ? getBrokerConfig(broker.type) : null;
+
   // Determine what to render
   let stepContent;
-  const isManualFlow = category?.id === 'manual';
 
   if (isImporting) {
     stepContent = <ImportingStep message="Importing your data..." />;
   } else if (showImportResults) {
     stepContent = (
       <ImportResultsStep
-        broker={broker}
+        broker={brokerConfig}
         importResults={importResults}
         onContinue={handleImportResultsContinue}
       />
@@ -285,8 +288,6 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       />
     );
   } else if (currentStep === 3) {
-    // Get full broker config for the selected broker
-    const brokerConfig = broker ? getBrokerConfig(broker.type) : null;
     stepContent = (
       <AccountDetailsStep
         broker={brokerConfig}
@@ -296,8 +297,6 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       />
     );
   } else if (currentStep === 4) {
-    // Get full broker config for data connection
-    const brokerConfig = broker ? getBrokerConfig(broker.type) : null;
     if (isManualFlow) {
       stepContent = (
         <ManualDataStep
@@ -318,8 +317,6 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       );
     }
   } else if (currentStep === 5) {
-    // Get full broker config for success step
-    const brokerConfig = broker ? getBrokerConfig(broker.type) : null;
     stepContent = (
       <SuccessStep
         broker={brokerConfig}
@@ -374,9 +371,9 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       </main>
 
       {/* Setup Guide Panel */}
-      {showGuide && broker && (
+      {showGuide && brokerConfig && (
         <SetupGuidePanel
-          broker={getBrokerConfig(broker.type)}
+          broker={brokerConfig}
           guideType={showGuide}
           onClose={() => setShowGuide(null)}
         />
