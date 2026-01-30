@@ -183,15 +183,48 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         }
 
         const results = await uploadResponse.json();
-        const transformedResults = transformImportResults(results, data.file.name);
+
+        // For file uploads, date_range is at top level, not in stats
+        const dateRange = results.date_range || {};
+        const stats = results.stats || {};
+
+        // Format dates for display
+        const formatDate = (dateStr) => {
+          if (!dateStr) return null;
+          try {
+            return new Date(dateStr).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            });
+          } catch {
+            return dateStr;
+          }
+        };
+
+        // Calculate transactions from Meitav stats structure
+        const transactionsImported = (stats.transactions?.imported || 0)
+          + (stats.cash_transactions?.imported || 0)
+          + (stats.dividends?.imported || 0);
+
+        // Get holdings count
+        const holdingsCount = stats.holdings_reconstruction?.updated || 0;
 
         // Add to file uploads array for progressive loop
         const newUpload = {
           fileName: data.file.name,
-          ...transformedResults,
+          summary: {
+            totalTransactions: transactionsImported,
+            totalAssets: holdingsCount,
+            dateRange: {
+              start: formatDate(dateRange.start_date),
+              end: formatDate(dateRange.end_date),
+            },
+          },
+          // Keep raw dates for combined calculation
           dateRange: {
-            startDate: results.date_range?.start_date,
-            endDate: results.date_range?.end_date,
+            startDate: dateRange.start_date,
+            endDate: dateRange.end_date,
           },
         };
 

@@ -157,7 +157,7 @@ export function FileUploadResultStep({
       {/* Question prompt */}
       <div className="text-center mb-6">
         <p className="text-gray-600 dark:text-gray-400">
-          Do you have more files to import for earlier years?
+          Do you have more files to import?
         </p>
       </div>
 
