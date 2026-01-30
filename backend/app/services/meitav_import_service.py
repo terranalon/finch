@@ -77,6 +77,20 @@ class MeitavImportService(BaseBrokerImportService):
             "errors": [],
         }
 
+        # Count unique assets in file (excluding cash)
+        unique_symbols = set()
+        for txn in data.transactions or []:
+            if txn.symbol:
+                unique_symbols.add(txn.symbol)
+        for div in data.dividends or []:
+            if div.symbol:
+                unique_symbols.add(div.symbol)
+        for pos in data.positions or []:
+            if pos.symbol:
+                unique_symbols.add(pos.symbol)
+        stats["unique_assets_in_file"] = len(unique_symbols)
+        stats["symbols_in_file"] = list(unique_symbols)
+
         try:
             # Import positions
             if data.positions:

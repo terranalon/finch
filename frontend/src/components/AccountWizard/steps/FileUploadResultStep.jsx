@@ -20,13 +20,17 @@ export function FileUploadResultStep({
   onContinue,
 }) {
   // Calculate combined stats from all uploads
-  const combinedStats = allUploads.reduce(
-    (acc, upload) => ({
-      totalTransactions: acc.totalTransactions + (upload.summary?.totalTransactions || 0),
-      totalAssets: Math.max(acc.totalAssets, upload.summary?.totalAssets || 0),
-    }),
-    { totalTransactions: 0, totalAssets: 0 }
+  const totalTransactions = allUploads.reduce(
+    (sum, upload) => sum + (upload.summary?.totalTransactions || 0),
+    0
   );
+
+  // Calculate true unique asset count across all files
+  const allSymbols = new Set(allUploads.flatMap((upload) => upload.symbols || []));
+  const combinedStats = {
+    totalTransactions,
+    totalAssets: allSymbols.size,
+  };
 
   // Calculate combined date range
   const allDates = allUploads

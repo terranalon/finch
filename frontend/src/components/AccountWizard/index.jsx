@@ -207,15 +207,16 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           + (stats.cash_transactions?.imported || 0)
           + (stats.dividends?.imported || 0);
 
-        // Get holdings count from reconstruction stats
-        const holdingsCount = stats.holdings_reconstruction?.holdings_updated || 0;
+        // Get unique assets count from file (tracked by backend)
+        const uniqueAssetsInFile = stats.unique_assets_in_file || 0;
+        const symbolsInFile = stats.symbols_in_file || [];
 
         // Add to file uploads array for progressive loop
         const newUpload = {
           fileName: data.file.name,
           summary: {
             totalTransactions: transactionsImported,
-            totalAssets: holdingsCount,
+            totalAssets: uniqueAssetsInFile,
             dateRange: {
               start: formatDate(dateRange.start_date),
               end: formatDate(dateRange.end_date),
@@ -226,6 +227,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             startDate: dateRange.start_date,
             endDate: dateRange.end_date,
           },
+          // Keep symbols for combined unique count
+          symbols: symbolsInFile,
         };
 
         setFileUploads((prev) => [...prev, newUpload]);
