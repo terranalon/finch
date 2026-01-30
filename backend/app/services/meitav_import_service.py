@@ -77,16 +77,24 @@ class MeitavImportService(BaseBrokerImportService):
             "errors": [],
         }
 
-        # Count unique assets in file (excluding cash)
+        # Count unique assets in file (excluding cash and tax items)
+        # Tax items have purely numeric symbols like "9992975"
+        def is_real_security(symbol: str) -> bool:
+            if not symbol:
+                return False
+            # Exclude purely numeric symbols (tax codes, internal IDs)
+            clean = symbol.replace("TASE:", "")
+            return not clean.isdigit()
+
         unique_symbols = set()
         for txn in data.transactions or []:
-            if txn.symbol:
+            if is_real_security(txn.symbol):
                 unique_symbols.add(txn.symbol)
         for div in data.dividends or []:
-            if div.symbol:
+            if is_real_security(div.symbol):
                 unique_symbols.add(div.symbol)
         for pos in data.positions or []:
-            if pos.symbol:
+            if is_real_security(pos.symbol):
                 unique_symbols.add(pos.symbol)
         stats["unique_assets_in_file"] = len(unique_symbols)
         stats["symbols_in_file"] = list(unique_symbols)
