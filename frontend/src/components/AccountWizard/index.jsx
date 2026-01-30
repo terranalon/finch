@@ -207,8 +207,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           + (stats.cash_transactions?.imported || 0)
           + (stats.dividends?.imported || 0);
 
-        // Get holdings count
-        const holdingsCount = stats.holdings_reconstruction?.updated || 0;
+        // Get holdings count from reconstruction stats
+        const holdingsCount = stats.holdings_reconstruction?.holdings_updated || 0;
 
         // Add to file uploads array for progressive loop
         const newUpload = {
@@ -255,7 +255,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       + (stats.positions?.assets_created || 0);
 
     // Get holdings count from reconstruction stats
-    const holdingsCount = stats.holdings_reconstruction?.updated || 0;
+    const holdingsCount = stats.holdings_reconstruction?.holdings_updated || 0;
 
     // Format date range
     const dateRange = stats.date_range || {};
