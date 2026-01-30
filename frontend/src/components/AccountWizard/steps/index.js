@@ -6,3 +6,4 @@ export { ManualDataStep } from './ManualDataStep';
 export { ImportingStep } from './ImportingStep';
 export { ImportResultsStep } from './ImportResultsStep';
 export { SuccessStep } from './SuccessStep';
+export { LinkExistingStep } from './LinkExistingStep';
