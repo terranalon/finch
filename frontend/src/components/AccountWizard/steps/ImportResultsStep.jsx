@@ -24,7 +24,7 @@ export function ImportResultsStep({ broker, importResults, onContinue }) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-center">
           <ChartBarIcon className="size-6 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.totalAssets || 0}</p>
@@ -34,13 +34,6 @@ export function ImportResultsStep({ broker, importResults, onContinue }) {
           <DocumentIcon className="size-6 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{summary.totalTransactions || 0}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">Transactions</p>
-        </div>
-        <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-center">
-          <BanknotesIcon className="size-6 text-emerald-600 dark:text-emerald-400 mx-auto mb-2" />
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            ${(summary.totalValue || 0).toLocaleString()}
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Total Value</p>
         </div>
         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-center">
           <CalendarIcon className="size-6 text-amber-600 dark:text-amber-400 mx-auto mb-2" />

@@ -276,8 +276,6 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           start: formatDateForDisplay(dateRange.start_date),
           end: formatDateForDisplay(dateRange.end_date),
         },
-        totalValue: 0, // Would need separate API call to get current value
-        cashBalance: 0,
       },
       message: backendResults.message,
     };
