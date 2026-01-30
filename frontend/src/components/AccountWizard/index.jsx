@@ -188,12 +188,43 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   // Transform backend import response to UI format
   const transformImportResults = (backendResults) => {
     const stats = backendResults.stats || {};
+
+    // Calculate total transactions from all categories
+    const transactionsImported = (stats.transactions?.imported || 0)
+      + (stats.cash_transactions?.imported || 0)
+      + (stats.dividends?.imported || 0);
+
+    // Calculate total assets created
+    const assetsCreated = (stats.transactions?.assets_created || 0)
+      + (stats.positions?.assets_created || 0);
+
+    // Get holdings count from reconstruction stats
+    const holdingsCount = stats.holdings_reconstruction?.updated || 0;
+
+    // Format date range
+    const dateRange = stats.date_range || {};
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      try {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      } catch {
+        return dateStr;
+      }
+    };
+
     return {
       assets: [], // Backend doesn't return asset list in import response
       summary: {
-        totalAssets: stats.holdings_created || 0,
-        totalTransactions: stats.transactions_created || 0,
-        dateRange: stats.date_range || { start: 'N/A', end: 'N/A' },
+        totalAssets: holdingsCount || assetsCreated,
+        totalTransactions: transactionsImported,
+        dateRange: {
+          start: formatDate(dateRange.start_date),
+          end: formatDate(dateRange.end_date),
+        },
         totalValue: 0, // Would need separate API call to get current value
         cashBalance: 0,
       },
