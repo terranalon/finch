@@ -18,23 +18,6 @@ import {
 } from './steps/index.js';
 import { getBrokerConfig } from './constants/brokerConfig.js';
 
-// Mock import results for demo - will be replaced with real API response
-const MOCK_IMPORT_RESULTS = {
-  assets: [
-    { symbol: 'AAPL', name: 'Apple Inc.', quantity: 50, value: 9425.0 },
-    { symbol: 'MSFT', name: 'Microsoft Corp.', quantity: 30, value: 12150.0 },
-    { symbol: 'GOOGL', name: 'Alphabet Inc.', quantity: 15, value: 2625.0 },
-    { symbol: 'VTI', name: 'Vanguard Total Stock', quantity: 100, value: 25400.0 },
-  ],
-  summary: {
-    totalAssets: 12,
-    totalTransactions: 156,
-    dateRange: { start: 'Jan 15, 2023', end: 'Jan 28, 2025' },
-    totalValue: 87432.5,
-    cashBalance: 3250.0,
-  },
-};
-
 export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts = [] }) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -148,24 +131,30 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
     try {
       if (data.credentials) {
-        // API connection - save credentials and trigger import
-        await api(`/brokers/${broker.type}/credentials/${createdAccountId}`, {
-          method: 'POST',
+        // API connection - save credentials using PUT (correct method)
+        const credResponse = await api(`/brokers/${broker.type}/credentials/${createdAccountId}`, {
+          method: 'PUT',
           body: JSON.stringify(data.credentials),
         });
 
-        // Trigger data import
-        const importResponse = await api(`/broker-data/import/${createdAccountId}`, {
+        if (!credResponse.ok) {
+          const error = await credResponse.json();
+          throw new Error(error.detail || 'Failed to save credentials');
+        }
+
+        // Trigger data import using correct endpoint
+        const importResponse = await api(`/brokers/${broker.type}/import/${createdAccountId}`, {
           method: 'POST',
         });
 
-        if (importResponse.ok) {
-          const results = await importResponse.json();
-          setImportResults(results);
-        } else {
-          // Use mock results for demo
-          setImportResults(MOCK_IMPORT_RESULTS);
+        if (!importResponse.ok) {
+          const error = await importResponse.json();
+          throw new Error(error.detail || 'Failed to import data');
         }
+
+        const results = await importResponse.json();
+        // Transform backend response to match UI expectations
+        setImportResults(transformImportResults(results));
       } else if (data.file) {
         // File upload
         const formData = new FormData();
@@ -177,13 +166,13 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           body: formData,
         });
 
-        if (uploadResponse.ok) {
-          const results = await uploadResponse.json();
-          setImportResults(results);
-        } else {
-          // Use mock results for demo
-          setImportResults(MOCK_IMPORT_RESULTS);
+        if (!uploadResponse.ok) {
+          const error = await uploadResponse.json();
+          throw new Error(error.detail || 'Failed to upload file');
         }
+
+        const results = await uploadResponse.json();
+        setImportResults(transformImportResults(results));
       }
 
       setSkippedData(false);
@@ -192,10 +181,50 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     } catch (error) {
       console.error('Import failed:', error);
       setIsImporting(false);
-      // Show results anyway for demo purposes
-      setImportResults(MOCK_IMPORT_RESULTS);
-      setShowImportResults(true);
+      alert(`Import failed: ${error.message}`);
     }
+  };
+
+  // Transform backend import response to UI format
+  const transformImportResults = (backendResults) => {
+    const stats = backendResults.stats || {};
+    return {
+      assets: [], // Backend doesn't return asset list in import response
+      summary: {
+        totalAssets: stats.holdings_created || 0,
+        totalTransactions: stats.transactions_created || 0,
+        dateRange: stats.date_range || { start: 'N/A', end: 'N/A' },
+        totalValue: 0, // Would need separate API call to get current value
+        cashBalance: 0,
+      },
+      message: backendResults.message,
+    };
+  };
+
+  // Step 4: Test credentials before import
+  const handleTestCredentials = async (credentials) => {
+    // First save credentials
+    const credResponse = await api(`/brokers/${broker.type}/credentials/${createdAccountId}`, {
+      method: 'PUT',
+      body: JSON.stringify(credentials),
+    });
+
+    if (!credResponse.ok) {
+      const error = await credResponse.json();
+      throw new Error(error.detail || 'Failed to save credentials');
+    }
+
+    // Then test them
+    const testResponse = await api(`/brokers/${broker.type}/test-credentials/${createdAccountId}`, {
+      method: 'POST',
+    });
+
+    const result = await testResponse.json();
+    if (result.status !== 'success') {
+      throw new Error(result.message || 'Credential test failed');
+    }
+
+    return result;
   };
 
   // Step 4: Skip data import
@@ -313,6 +342,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           onSkip={handleDataSkip}
           onBack={() => goToStep(3)}
           onShowGuide={(type) => setShowGuide(type)}
+          onTestCredentials={handleTestCredentials}
         />
       );
     }

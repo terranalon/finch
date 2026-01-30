@@ -9,6 +9,7 @@ import {
   PlayIcon,
   SparklesIcon,
   UploadIcon,
+  XIcon,
 } from '../icons.jsx';
 
 function getTestButtonLabel(status) {
@@ -17,27 +18,41 @@ function getTestButtonLabel(status) {
       return 'Testing Connection...';
     case 'success':
       return 'Test Again';
+    case 'failed':
+      return 'Try Again';
     default:
       return 'Test Connection';
   }
 }
 
-export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide }) {
+export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials }) {
   const [connectionMethod, setConnectionMethod] = useState(broker.hasApi ? 'api' : 'file');
   const [testStatus, setTestStatus] = useState('idle');
+  const [testError, setTestError] = useState(null);
   const [credentials, setCredentials] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleCredentialChange = (key, value) => {
     setCredentials((prev) => ({ ...prev, [key]: value }));
+    // Reset test status when credentials change
+    if (testStatus !== 'idle') {
+      setTestStatus('idle');
+      setTestError(null);
+    }
   };
 
-  const handleTest = () => {
+  const handleTest = async () => {
     setTestStatus('testing');
-    setTimeout(() => {
+    setTestError(null);
+
+    try {
+      await onTestCredentials(credentials);
       setTestStatus('success');
-    }, 1500);
+    } catch (error) {
+      setTestStatus('failed');
+      setTestError(error.message);
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -170,7 +185,7 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
             </p>
           </div>
 
-          {/* Test result */}
+          {/* Test result - success */}
           {testStatus === 'success' && (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-200 dark:border-emerald-800">
               <div className="p-2 rounded-full bg-emerald-500 text-white">
@@ -179,6 +194,19 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
               <div>
                 <p className="font-semibold text-emerald-700 dark:text-emerald-400">Connection successful!</p>
                 <p className="text-sm text-emerald-600 dark:text-emerald-500">Ready to import your data.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Test result - error */}
+          {testStatus === 'failed' && testError && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-800">
+              <div className="p-2 rounded-full bg-red-500 text-white flex-shrink-0">
+                <XIcon className="size-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-red-700 dark:text-red-400">Connection failed</p>
+                <p className="text-sm text-red-600 dark:text-red-500">{testError}</p>
               </div>
             </div>
           )}
