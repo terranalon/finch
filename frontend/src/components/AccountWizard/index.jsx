@@ -13,6 +13,7 @@ import {
   ManualDataStep,
   ImportingStep,
   ImportResultsStep,
+  FileUploadResultStep,
   SuccessStep,
   LinkExistingStep,
 } from './steps/index.js';
@@ -32,6 +33,10 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [showImportResults, setShowImportResults] = useState(false);
   const [importResults, setImportResults] = useState(null);
   const [showGuide, setShowGuide] = useState(null);
+  // File upload loop state
+  const [fileUploads, setFileUploads] = useState([]);
+  const [showFileUploadResult, setShowFileUploadResult] = useState(false);
+  const [lastFileUpload, setLastFileUpload] = useState(null);
 
   const reset = () => {
     setCurrentStep(1);
@@ -46,6 +51,9 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setShowImportResults(false);
     setImportResults(null);
     setShowGuide(null);
+    setFileUploads([]);
+    setShowFileUploadResult(false);
+    setLastFileUpload(null);
   };
 
   const handleClose = () => {
@@ -155,8 +163,11 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         const results = await importResponse.json();
         // Transform backend response to match UI expectations
         setImportResults(transformImportResults(results));
+        setSkippedData(false);
+        setIsImporting(false);
+        setShowImportResults(true);
       } else if (data.file) {
-        // File upload
+        // File upload - supports progressive upload loop
         const formData = new FormData();
         formData.append('file', data.file);
         formData.append('broker_type', broker?.type || 'manual');
@@ -172,12 +183,24 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         }
 
         const results = await uploadResponse.json();
-        setImportResults(transformImportResults(results));
-      }
+        const transformedResults = transformImportResults(results, data.file.name);
 
-      setSkippedData(false);
-      setIsImporting(false);
-      setShowImportResults(true);
+        // Add to file uploads array for progressive loop
+        const newUpload = {
+          fileName: data.file.name,
+          ...transformedResults,
+          dateRange: {
+            startDate: results.date_range?.start_date,
+            endDate: results.date_range?.end_date,
+          },
+        };
+
+        setFileUploads((prev) => [...prev, newUpload]);
+        setLastFileUpload(newUpload);
+        setSkippedData(false);
+        setIsImporting(false);
+        setShowFileUploadResult(true);
+      }
     } catch (error) {
       console.error('Import failed:', error);
       setIsImporting(false);
@@ -265,6 +288,20 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setMaxReachedStep(5);
   };
 
+  // File upload loop: Upload another file
+  const handleUploadAnother = () => {
+    setShowFileUploadResult(false);
+    setLastFileUpload(null);
+    // Stay on step 4 to show file upload UI again
+  };
+
+  // File upload loop: Done with all uploads
+  const handleFileUploadsDone = () => {
+    setShowFileUploadResult(false);
+    setCurrentStep(5);
+    setMaxReachedStep(5);
+  };
+
   // Step 4b: Continue from import results to success
   const handleImportResultsContinue = () => {
     setShowImportResults(false);
@@ -314,7 +351,19 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
   if (isImporting) {
     stepContent = <ImportingStep message="Importing your data..." />;
+  } else if (showFileUploadResult && lastFileUpload) {
+    // Progressive file upload loop
+    stepContent = (
+      <FileUploadResultStep
+        currentUpload={lastFileUpload}
+        allUploads={fileUploads}
+        brokerName={brokerConfig?.name || broker?.name || 'your broker'}
+        onUploadAnother={handleUploadAnother}
+        onContinue={handleFileUploadsDone}
+      />
+    );
   } else if (showImportResults) {
+    // API import results (single import)
     stepContent = (
       <ImportResultsStep
         broker={brokerConfig}
@@ -390,7 +439,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     );
   }
 
-  const effectiveStep = showImportResults ? 4 : currentStep;
+  const effectiveStep = (showImportResults || showFileUploadResult) ? 4 : currentStep;
   const showStepIndicator = effectiveStep > 1 && category?.id !== 'link' && !isImporting;
 
   return (
