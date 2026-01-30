@@ -157,6 +157,10 @@ class IBKRFlexImportService:
             price_stats = IBKRImportService._update_asset_prices(db, list(all_symbols))
             stats["price_updates"] = price_stats
 
+            # Track unique assets for UI display
+            stats["unique_assets_in_file"] = len(all_symbols)
+            stats["symbols_in_file"] = list(all_symbols)
+
             # Calculate date range from imported data for snapshot generation
             all_dates = (
                 [txn.get("date") for txn in transactions_data]

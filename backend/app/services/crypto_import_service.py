@@ -71,6 +71,14 @@ class CryptoImportService(BaseBrokerImportService):
             "errors": [],
         }
 
+        # Collect unique crypto assets from all data sources (excluding fiat currencies)
+        all_items = (data.transactions or []) + (data.dividends or []) + (data.positions or [])
+        unique_symbols = {
+            item.symbol for item in all_items if item.symbol and item.symbol not in FIAT_CURRENCIES
+        }
+        stats["unique_assets_in_file"] = len(unique_symbols)
+        stats["symbols_in_file"] = list(unique_symbols)
+
         try:
             # Import positions only if explicitly requested (not recommended)
             # Balances should be calculated from transactions instead
