@@ -15,6 +15,7 @@ import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
+import { AccountWizard } from '../components/AccountWizard';
 
 // ============================================
 // ICONS
@@ -1040,9 +1041,20 @@ export default function Accounts() {
   const [brokerConfig, setBrokerConfig] = useState({}); // Maps broker_type to config
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [linkableAccounts, setLinkableAccounts] = useState([]);
   const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, account: null });
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Fetch linkable accounts when wizard opens
+  useEffect(() => {
+    if (showWizard && selectedPortfolioId) {
+      api(`/portfolios/${selectedPortfolioId}/linkable-accounts`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setLinkableAccounts(data))
+        .catch(() => setLinkableAccounts([]));
+    }
+  }, [showWizard, selectedPortfolioId]);
 
   // Fetch accounts and values
   useEffect(() => {
@@ -1274,7 +1286,7 @@ export default function Accounts() {
           </p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowWizard(true)}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
         >
           <PlusIcon className="w-4 h-4" />
@@ -1284,7 +1296,7 @@ export default function Accounts() {
 
       {/* Account List */}
       {accounts.length === 0 ? (
-        <EmptyState onAddAccount={() => setShowAddModal(true)} />
+        <EmptyState onAddAccount={() => setShowWizard(true)} />
       ) : (
         <div className="space-y-4">
           {accounts.map((account) => (
@@ -1301,17 +1313,15 @@ export default function Accounts() {
         </div>
       )}
 
-      {/* Add Account Modal */}
-      <AddAccountModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAccountCreated={() => setRefreshKey((k) => k + 1)}
-        brokers={Object.entries(brokerConfig).map(([type, config]) => ({
-          type,
-          name: config.name,
-          supports_api: config.has_api,
-        }))}
+      {/* Account Creation Wizard */}
+      <AccountWizard
+        isOpen={showWizard}
+        onClose={() => {
+          setShowWizard(false);
+          setRefreshKey((k) => k + 1);
+        }}
         portfolioId={selectedPortfolioId}
+        linkableAccounts={linkableAccounts}
       />
 
       {/* Delete/Unlink Confirmation Dialog */}
