@@ -78,16 +78,14 @@ class MeitavImportService(BaseBrokerImportService):
         }
 
         # Count unique assets in file (excluding cash and tax items)
-        # Tax items have purely numeric symbols like "9992975" (no TASE: prefix)
-        # Real TASE securities come as "TASE:123456" format
+        # Tax codes start with "999" (e.g., "9992975", "9992983")
         def is_real_security(symbol: str) -> bool:
             if not symbol:
                 return False
-            # TASE: prefixed symbols are real securities
-            if symbol.startswith("TASE:"):
-                return True
-            # Exclude purely numeric symbols without TASE: prefix (tax codes)
-            return not symbol.isdigit()
+            # Exclude tax codes (start with 999)
+            if symbol.startswith("999"):
+                return False
+            return True
 
         unique_symbols = set()
         for txn in data.transactions or []:
