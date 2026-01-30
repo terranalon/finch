@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { cn } from '../../../lib/index.js';
+import { useFileUpload } from '../hooks/useFileUpload.js';
 import {
   ApiIcon,
   ArrowLeftIcon,
@@ -25,13 +26,28 @@ function getTestButtonLabel(status) {
   }
 }
 
-export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials }) {
+export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials, onError }) {
   const [connectionMethod, setConnectionMethod] = useState(broker.hasApi ? 'api' : 'file');
   const [testStatus, setTestStatus] = useState('idle');
   const [testError, setTestError] = useState(null);
   const [credentials, setCredentials] = useState({});
-  const [selectedFile, setSelectedFile] = useState(null);
-  const fileInputRef = useRef(null);
+  const [fileError, setFileError] = useState(null);
+
+  const {
+    selectedFile,
+    fileInputRef,
+    handleFileSelect,
+    handleFileDrop,
+    handleDragOver,
+    handleKeyDown,
+    openFilePicker,
+  } = useFileUpload({
+    acceptedFormats: broker.supportedFormats,
+    onValidationError: (message) => {
+      setFileError(message);
+      onError?.(message);
+    },
+  });
 
   const handleCredentialChange = (key, value) => {
     setCredentials((prev) => ({ ...prev, [key]: value }));
@@ -55,19 +71,14 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
     }
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+  const handleFileInputChange = (e) => {
+    setFileError(null);
+    handleFileSelect(e);
   };
 
-  const handleFileDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+  const handleFileDropWithClear = (e) => {
+    setFileError(null);
+    handleFileDrop(e);
   };
 
   const formatDisplay = broker.supportedFormats
@@ -227,14 +238,21 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
       {connectionMethod === 'file' && (
         <div className="space-y-5">
           <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleFileDrop}
+            role="button"
+            tabIndex={0}
+            aria-label={`Upload file - click or drag and drop. Supported formats: ${formatDisplay}`}
+            onClick={openFilePicker}
+            onDragOver={handleDragOver}
+            onDrop={handleFileDropWithClear}
+            onKeyDown={handleKeyDown}
             className={cn(
               'border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all',
+              'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
               selectedFile
                 ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+                : fileError
+                  ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
             )}
           >
             {selectedFile ? (
@@ -249,15 +267,21 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
               </>
             ) : (
               <>
-                <UploadIcon className="size-12 text-gray-400 mx-auto mb-4" />
+                <UploadIcon className={cn(
+                  'size-12 mx-auto mb-4',
+                  fileError ? 'text-red-400' : 'text-gray-400'
+                )} />
                 <p className="text-lg font-semibold text-gray-900 dark:text-white">
                   Drop your file here
                 </p>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
                   or click to browse
                 </p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-4">
-                  Supported format: {formatDisplay}
+                <p className={cn(
+                  'text-sm mt-4',
+                  fileError ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'
+                )}>
+                  {fileError || `Supported format: ${formatDisplay}`}
                 </p>
               </>
             )}
@@ -266,8 +290,9 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
             ref={fileInputRef}
             type="file"
             accept={broker.supportedFormats.join(',')}
-            onChange={handleFileSelect}
+            onChange={handleFileInputChange}
             className="hidden"
+            aria-hidden="true"
           />
 
           <button

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { cn } from '../../../lib/index.js';
+import { useFileUpload } from '../hooks/useFileUpload.js';
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -12,24 +13,35 @@ import {
 
 const REQUIRED_COLUMNS = ['date', 'type', 'symbol', 'quantity', 'price', 'currency'];
 const OPTIONAL_COLUMNS = ['fees', 'notes', 'broker', 'account_id'];
+const ACCEPTED_FORMATS = ['.csv', '.xlsx'];
 
-export function ManualDataStep({ onComplete, onSkip, onBack }) {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const fileInputRef = useRef(null);
+export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
+  const [fileError, setFileError] = useState(null);
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+  const {
+    selectedFile,
+    fileInputRef,
+    handleFileSelect,
+    handleFileDrop,
+    handleDragOver,
+    handleKeyDown,
+    openFilePicker,
+  } = useFileUpload({
+    acceptedFormats: ACCEPTED_FORMATS,
+    onValidationError: (message) => {
+      setFileError(message);
+      onError?.(message);
+    },
+  });
+
+  const handleFileInputChange = (e) => {
+    setFileError(null);
+    handleFileSelect(e);
   };
 
-  const handleFileDrop = (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+  const handleFileDropWithClear = (e) => {
+    setFileError(null);
+    handleFileDrop(e);
   };
 
   return (
@@ -82,7 +94,7 @@ export function ManualDataStep({ onComplete, onSkip, onBack }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           {REQUIRED_COLUMNS.map((col) => (
             <div key={col} className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-red-500" />
+              <div className="size-2 rounded-full bg-red-500" aria-hidden="true" />
               <span className="text-gray-700 dark:text-gray-300">{col}</span>
             </div>
           ))}
@@ -101,14 +113,21 @@ export function ManualDataStep({ onComplete, onSkip, onBack }) {
 
       {/* Upload zone */}
       <div
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleFileDrop}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload file - click or drag and drop. Supported formats: CSV, XLSX"
+        onClick={openFilePicker}
+        onDragOver={handleDragOver}
+        onDrop={handleFileDropWithClear}
+        onKeyDown={handleKeyDown}
         className={cn(
           'border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-6',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
           selectedFile
             ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20'
-            : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+            : fileError
+              ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20'
+              : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
         )}
       >
         {selectedFile ? (
@@ -123,15 +142,21 @@ export function ManualDataStep({ onComplete, onSkip, onBack }) {
           </>
         ) : (
           <>
-            <UploadIcon className="size-12 text-gray-400 mx-auto mb-4" />
+            <UploadIcon className={cn(
+              'size-12 mx-auto mb-4',
+              fileError ? 'text-red-400' : 'text-gray-400'
+            )} />
             <p className="text-lg font-semibold text-gray-900 dark:text-white">
               Drop your file here
             </p>
             <p className="text-gray-500 dark:text-gray-400 mt-2">
               or click to browse
             </p>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-4">
-              Supported formats: CSV, XLSX
+            <p className={cn(
+              'text-sm mt-4',
+              fileError ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'
+            )}>
+              {fileError || 'Supported formats: CSV, XLSX'}
             </p>
           </>
         )}
@@ -140,8 +165,9 @@ export function ManualDataStep({ onComplete, onSkip, onBack }) {
         ref={fileInputRef}
         type="file"
         accept=".csv,.xlsx"
-        onChange={handleFileSelect}
+        onChange={handleFileInputChange}
         className="hidden"
+        aria-hidden="true"
       />
 
       {/* Note about responsibility */}

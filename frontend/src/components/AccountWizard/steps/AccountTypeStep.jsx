@@ -1,4 +1,5 @@
 import { cn } from '../../../lib/index.js';
+import { CATEGORY_IDS } from '../constants/index.js';
 
 import {
   BitcoinIcon,
@@ -17,21 +18,21 @@ const CATEGORY_ICONS = {
 
 const ACCOUNT_CATEGORIES = [
   {
-    id: 'brokerage',
+    id: CATEGORY_IDS.BROKERAGE,
     label: 'Brokerage',
     description: 'Traditional brokerage for stocks and ETFs',
     icon: 'building',
     defaultAccountType: 'Investment',
   },
   {
-    id: 'crypto',
+    id: CATEGORY_IDS.CRYPTO,
     label: 'Crypto Exchange',
     description: 'Connect your crypto exchange account',
     icon: 'bitcoin',
     defaultAccountType: 'Crypto',
   },
   {
-    id: 'manual',
+    id: CATEGORY_IDS.MANUAL,
     label: 'Manual',
     description: 'Import transactions from any source using our template',
     icon: 'document',
@@ -42,7 +43,7 @@ const ACCOUNT_CATEGORIES = [
 export function AccountTypeStep({ onSelect, linkableAccounts = [] }) {
   const categories = linkableAccounts.length > 0
     ? [...ACCOUNT_CATEGORIES, {
-        id: 'link',
+        id: CATEGORY_IDS.LINK,
         label: 'Link Existing',
         description: "Add an account you've already created",
         icon: 'link',

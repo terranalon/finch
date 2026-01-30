@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../../lib/index.js';
 import { XIcon } from './icons.jsx';
 import { WizardStepIndicator } from './WizardStepIndicator.jsx';
+import { WizardNotification } from './WizardNotification.jsx';
 import { SetupGuidePanel } from './SetupGuidePanel.jsx';
 import {
   AccountTypeStep,
@@ -17,7 +18,7 @@ import {
   SuccessStep,
   LinkExistingStep,
 } from './steps/index.js';
-import { getBrokerConfig } from './constants/brokerConfig.js';
+import { getBrokerConfig, CATEGORY_IDS } from './constants/index.js';
 
 /**
  * Format a date string for display.
@@ -57,6 +58,17 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [showFileUploadResult, setShowFileUploadResult] = useState(false);
   const [lastFileUpload, setLastFileUpload] = useState(null);
 
+  // Notification state (replaces alert())
+  const [notification, setNotification] = useState({ message: null, type: 'error' });
+
+  const showNotification = useCallback((message, type = 'error') => {
+    setNotification({ message, type });
+  }, []);
+
+  const dismissNotification = useCallback(() => {
+    setNotification({ message: null, type: 'error' });
+  }, []);
+
   const reset = () => {
     setCurrentStep(1);
     setMaxReachedStep(1);
@@ -73,6 +85,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setFileUploads([]);
     setShowFileUploadResult(false);
     setLastFileUpload(null);
+    setNotification({ message: null, type: 'error' });
   };
 
   const handleClose = () => {
@@ -98,13 +111,13 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   // Step 1: Category selection
   const handleCategorySelect = (cat) => {
     setCategory(cat);
-    if (cat.id === 'manual') {
+    if (cat.id === CATEGORY_IDS.MANUAL) {
       // Manual flow skips broker selection (step 2)
       setBroker(null);
       setSkippedSteps([2]);
       setCurrentStep(3);
       setMaxReachedStep(Math.max(maxReachedStep, 3));
-    } else if (cat.id !== 'link') {
+    } else if (cat.id !== CATEGORY_IDS.LINK) {
       setSkippedSteps([]);
       setCurrentStep(2);
       setMaxReachedStep(Math.max(maxReachedStep, 2));
@@ -147,8 +160,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       setCurrentStep(4);
       setMaxReachedStep(Math.max(maxReachedStep, 4));
     } catch (error) {
-      console.error('Failed to create account:', error);
-      alert(`Failed to create account: ${error.message}`);
+      showNotification(`Failed to create account: ${error.message}`);
     }
   };
 
@@ -243,9 +255,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         setShowFileUploadResult(true);
       }
     } catch (error) {
-      console.error('Import failed:', error);
       setIsImporting(false);
-      alert(`Import failed: ${error.message}`);
+      showNotification(`Import failed: ${error.message}`);
     }
   };
 
@@ -349,8 +360,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
       handleClose();
     } catch (error) {
-      console.error('Failed to link account:', error);
-      alert(`Failed to link account: ${error.message}`);
+      showNotification(`Failed to link account: ${error.message}`);
     }
   };
 
@@ -369,7 +379,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   if (!isOpen) return null;
 
   // Compute derived values once
-  const isManualFlow = category?.id === 'manual';
+  const isManualFlow = category?.id === CATEGORY_IDS.MANUAL;
   const brokerConfig = broker ? getBrokerConfig(broker.type) : null;
 
   // Determine what to render
@@ -398,7 +408,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       />
     );
   } else if (currentStep === 1) {
-    if (category?.id === 'link') {
+    if (category?.id === CATEGORY_IDS.LINK) {
       stepContent = (
         <LinkExistingStep
           linkableAccounts={linkableAccounts}
@@ -466,7 +476,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   }
 
   const effectiveStep = (showImportResults || showFileUploadResult) ? 4 : currentStep;
-  const showStepIndicator = effectiveStep > 1 && category?.id !== 'link' && !isImporting;
+  const showStepIndicator = effectiveStep > 1 && category?.id !== CATEGORY_IDS.LINK && !isImporting;
 
   return (
     <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
@@ -514,6 +524,13 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           onClose={() => setShowGuide(null)}
         />
       )}
+
+      {/* Notification toast */}
+      <WizardNotification
+        message={notification.message}
+        type={notification.type}
+        onDismiss={dismissNotification}
+      />
     </div>
   );
 }
