@@ -461,6 +461,15 @@ async def upload_broker_file(
                 for warning in validation_result["warnings"]:
                     logger.warning("IBKR validation: %s", warning)
 
+            # Collect unique assets for UI display
+            all_symbols = set()
+            for pos in positions_data:
+                all_symbols.add(pos["symbol"])
+            for txn in transactions_data:
+                all_symbols.add(txn["symbol"])
+            for div in dividends_data:
+                all_symbols.add(div["symbol"])
+
             source.import_stats = {
                 "positions": pos_stats,
                 "stale_cleanup": stale_stats,
@@ -474,6 +483,8 @@ async def upload_broker_file(
                 "other_cash": other_cash_stats,
                 "dividend_cash": div_cash_stats,
                 "validation": validation_result,
+                "unique_assets_in_file": len(all_symbols),
+                "symbols_in_file": list(all_symbols),
                 "total_records": (
                     len(positions_data)
                     + len(transactions_data)
