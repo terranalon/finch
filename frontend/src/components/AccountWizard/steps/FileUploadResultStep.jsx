@@ -1,144 +1,8 @@
 import {
   CheckIcon,
-  ChartBarIcon,
-  DocumentIcon,
-  CalendarIcon,
   PlusIcon,
   ArrowRightIcon,
 } from '../icons.jsx';
-
-/**
- * Reusable stats card component for displaying import statistics.
- */
-function StatsCard({ title, transactions, assets, dateStart, dateEnd, variant = 'default' }) {
-  const isAccent = variant === 'accent';
-
-  return (
-    <div
-      className={
-        isAccent
-          ? 'rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 overflow-hidden'
-          : 'rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden'
-      }
-    >
-      <div
-        className={
-          isAccent
-            ? 'px-5 py-3 bg-emerald-100 dark:bg-emerald-900/40 border-b border-emerald-200 dark:border-emerald-800'
-            : 'px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700'
-        }
-      >
-        <h3
-          className={
-            isAccent
-              ? 'font-semibold text-emerald-800 dark:text-emerald-300'
-              : 'font-semibold text-gray-900 dark:text-white'
-          }
-        >
-          {title}
-        </h3>
-      </div>
-      <div
-        className={
-          isAccent
-            ? 'grid grid-cols-3 divide-x divide-emerald-200 dark:divide-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20'
-            : 'grid grid-cols-3 divide-x divide-gray-200 dark:divide-gray-700'
-        }
-      >
-        <div className="p-4 text-center">
-          <DocumentIcon
-            className={
-              isAccent
-                ? 'size-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1.5'
-                : 'size-5 text-purple-600 dark:text-purple-400 mx-auto mb-1.5'
-            }
-          />
-          <p
-            className={
-              isAccent
-                ? 'text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums'
-                : 'text-xl font-bold text-gray-900 dark:text-white tabular-nums'
-            }
-          >
-            {transactions}
-          </p>
-          <p
-            className={
-              isAccent
-                ? 'text-xs text-emerald-600 dark:text-emerald-500'
-                : 'text-xs text-gray-500 dark:text-gray-400'
-            }
-          >
-            Transactions
-          </p>
-        </div>
-        <div className="p-4 text-center">
-          <ChartBarIcon
-            className={
-              isAccent
-                ? 'size-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1.5'
-                : 'size-5 text-blue-600 dark:text-blue-400 mx-auto mb-1.5'
-            }
-          />
-          <p
-            className={
-              isAccent
-                ? 'text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums'
-                : 'text-xl font-bold text-gray-900 dark:text-white tabular-nums'
-            }
-          >
-            {assets}
-          </p>
-          <p
-            className={
-              isAccent
-                ? 'text-xs text-emerald-600 dark:text-emerald-500'
-                : 'text-xs text-gray-500 dark:text-gray-400'
-            }
-          >
-            Assets
-          </p>
-        </div>
-        <div className="p-4 text-center">
-          <CalendarIcon
-            className={
-              isAccent
-                ? 'size-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1.5'
-                : 'size-5 text-amber-600 dark:text-amber-400 mx-auto mb-1.5'
-            }
-          />
-          <p
-            className={
-              isAccent
-                ? 'text-sm font-semibold text-emerald-700 dark:text-emerald-400'
-                : 'text-sm font-semibold text-gray-900 dark:text-white'
-            }
-          >
-            {dateStart}
-          </p>
-          <p
-            className={
-              isAccent
-                ? 'text-sm font-semibold text-emerald-700 dark:text-emerald-400'
-                : 'text-sm font-semibold text-gray-900 dark:text-white'
-            }
-          >
-            to {dateEnd}
-          </p>
-          <p
-            className={
-              isAccent
-                ? 'text-xs text-emerald-600 dark:text-emerald-500 mt-0.5'
-                : 'text-xs text-gray-500 dark:text-gray-400 mt-0.5'
-            }
-          >
-            Date Range
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Shows result after each file upload with option to upload more files.
@@ -201,42 +65,63 @@ export function FileUploadResultStep({
         </p>
       </div>
 
-      {/* File stats cards */}
-      <div className="space-y-4 mb-6">
-        {hasMultipleFiles ? (
-          <>
-            {/* Individual file cards */}
+      {/* Import summary table */}
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
+                File
+              </th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Transactions
+              </th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Assets
+              </th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Date Range
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {allUploads.map((upload, idx) => (
-              <StatsCard
-                key={idx}
-                title={upload.fileName}
-                transactions={upload.summary?.totalTransactions || 0}
-                assets={upload.summary?.totalAssets || 0}
-                dateStart={upload.summary?.dateRange?.start || 'N/A'}
-                dateEnd={upload.summary?.dateRange?.end || 'N/A'}
-              />
+              <tr key={idx}>
+                <td className="px-4 py-3 text-sm text-gray-900 dark:text-white truncate max-w-[200px]" title={upload.fileName}>
+                  {upload.fileName}
+                </td>
+                <td className="px-4 py-3 text-sm text-right tabular-nums text-gray-900 dark:text-white">
+                  {upload.summary?.totalTransactions || 0}
+                </td>
+                <td className="px-4 py-3 text-sm text-right tabular-nums text-gray-900 dark:text-white">
+                  {upload.summary?.totalAssets || 0}
+                </td>
+                <td className="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-400">
+                  {upload.summary?.dateRange?.start || 'N/A'} - {upload.summary?.dateRange?.end || 'N/A'}
+                </td>
+              </tr>
             ))}
-
-            {/* Combined total card */}
-            <StatsCard
-              title={`Combined Total (${allUploads.length} files)`}
-              transactions={combinedStats.totalTransactions}
-              assets={combinedStats.totalAssets}
-              dateStart={combinedDateRange.start}
-              dateEnd={combinedDateRange.end}
-              variant="accent"
-            />
-          </>
-        ) : (
-          /* Single file card */
-          <StatsCard
-            title="Import Summary"
-            transactions={currentUpload.summary?.totalTransactions || 0}
-            assets={currentUpload.summary?.totalAssets || 0}
-            dateStart={currentUpload.summary?.dateRange?.start || 'N/A'}
-            dateEnd={currentUpload.summary?.dateRange?.end || 'N/A'}
-          />
-        )}
+          </tbody>
+          {/* Totals footer - only show for multiple files */}
+          {hasMultipleFiles && (
+            <tfoot>
+              <tr className="bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-300 dark:border-emerald-700">
+                <td className="px-4 py-3 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                  Total ({allUploads.length} files)
+                </td>
+                <td className="px-4 py-3 text-sm text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                  {combinedStats.totalTransactions}
+                </td>
+                <td className="px-4 py-3 text-sm text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                  {combinedStats.totalAssets}
+                </td>
+                <td className="px-4 py-3 text-sm text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                  {combinedDateRange.start} - {combinedDateRange.end}
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
 
       {/* Question prompt */}
