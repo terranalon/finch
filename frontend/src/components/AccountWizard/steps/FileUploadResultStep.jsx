@@ -8,6 +8,47 @@ import {
   ArrowRightIcon,
 } from '../icons.jsx';
 
+const DATE_FORMAT_OPTIONS = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+function formatDate(date) {
+  return date.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS);
+}
+
+/**
+ * Calculate combined statistics from all file uploads.
+ */
+function calculateCombinedStats(allUploads) {
+  const totalTransactions = allUploads.reduce(
+    (sum, upload) => sum + (upload.summary?.totalTransactions || 0),
+    0
+  );
+
+  const allSymbols = new Set(allUploads.flatMap((upload) => upload.symbols || []));
+
+  const allDates = allUploads
+    .flatMap((u) => [u.dateRange?.startDate, u.dateRange?.endDate])
+    .filter(Boolean)
+    .map((d) => new Date(d))
+    .filter((d) => !isNaN(d.getTime()));
+
+  const dateRange = allDates.length > 0
+    ? {
+        start: formatDate(new Date(Math.min(...allDates))),
+        end: formatDate(new Date(Math.max(...allDates))),
+      }
+    : { start: 'N/A', end: 'N/A' };
+
+  return {
+    totalTransactions,
+    totalAssets: allSymbols.size,
+    dateRange,
+  };
+}
+
 /**
  * Shows result after each file upload with option to upload more files.
  * Used for brokers like Meitav that require multiple yearly files.
@@ -15,44 +56,10 @@ import {
 export function FileUploadResultStep({
   currentUpload,
   allUploads,
-  brokerName,
   onUploadAnother,
   onContinue,
 }) {
-  // Calculate combined stats from all uploads
-  const totalTransactions = allUploads.reduce(
-    (sum, upload) => sum + (upload.summary?.totalTransactions || 0),
-    0
-  );
-
-  // Calculate true unique asset count across all files
-  const allSymbols = new Set(allUploads.flatMap((upload) => upload.symbols || []));
-  const combinedStats = {
-    totalTransactions,
-    totalAssets: allSymbols.size,
-  };
-
-  // Calculate combined date range
-  const allDates = allUploads
-    .flatMap((u) => [u.dateRange?.startDate, u.dateRange?.endDate])
-    .filter(Boolean)
-    .map((d) => new Date(d))
-    .filter((d) => !isNaN(d.getTime()));
-
-  const combinedDateRange = allDates.length > 0
-    ? {
-        start: new Date(Math.min(...allDates)).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-        end: new Date(Math.max(...allDates)).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-      }
-    : { start: 'N/A', end: 'N/A' };
+  const combinedStats = calculateCombinedStats(allUploads);
 
   const hasMultipleFiles = allUploads.length > 1;
 
@@ -68,7 +75,7 @@ export function FileUploadResultStep({
         </h2>
         <p className="text-gray-500 dark:text-gray-400 text-lg">
           {hasMultipleFiles
-            ? `You've imported ${allUploads.length} files covering ${combinedDateRange.start} to ${combinedDateRange.end}.`
+            ? `You've imported ${allUploads.length} files covering ${combinedStats.dateRange.start} to ${combinedStats.dateRange.end}.`
             : `We found data from ${currentUpload.summary?.dateRange?.start || 'N/A'} to ${currentUpload.summary?.dateRange?.end || 'N/A'}.`}
         </p>
       </div>
@@ -131,8 +138,8 @@ export function FileUploadResultStep({
               {combinedStats.totalAssets}
             </div>
             <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-              <span className="block">{combinedDateRange.start}</span>
-              <span className="block">to {combinedDateRange.end}</span>
+              <span className="block">{combinedStats.dateRange.start}</span>
+              <span className="block">to {combinedStats.dateRange.end}</span>
             </div>
           </div>
         )}

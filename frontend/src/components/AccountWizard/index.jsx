@@ -19,6 +19,25 @@ import {
 } from './steps/index.js';
 import { getBrokerConfig } from './constants/brokerConfig.js';
 
+/**
+ * Format a date string for display.
+ * @param {string|null} dateStr - ISO date string or null
+ * @param {string} fallback - Fallback value if date is invalid
+ * @returns {string} Formatted date string
+ */
+function formatDateForDisplay(dateStr, fallback = 'N/A') {
+  if (!dateStr) return fallback;
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts = [] }) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -188,20 +207,6 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         const dateRange = results.date_range || {};
         const stats = results.stats || {};
 
-        // Format dates for display
-        const formatDate = (dateStr) => {
-          if (!dateStr) return null;
-          try {
-            return new Date(dateStr).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            });
-          } catch {
-            return dateStr;
-          }
-        };
-
         // Calculate transactions from Meitav stats structure
         const transactionsImported = (stats.transactions?.imported || 0)
           + (stats.cash_transactions?.imported || 0)
@@ -218,8 +223,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             totalTransactions: transactionsImported,
             totalAssets: uniqueAssetsInFile,
             dateRange: {
-              start: formatDate(dateRange.start_date),
-              end: formatDate(dateRange.end_date),
+              start: formatDateForDisplay(dateRange.start_date, null),
+              end: formatDateForDisplay(dateRange.end_date, null),
             },
           },
           // Keep raw dates for combined calculation
@@ -245,7 +250,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   };
 
   // Transform backend import response to UI format
-  const transformImportResults = (backendResults) => {
+  function transformImportResults(backendResults) {
     const stats = backendResults.stats || {};
 
     // Calculate total transactions from all categories
@@ -260,20 +265,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     // Get holdings count from reconstruction stats
     const holdingsCount = stats.holdings_reconstruction?.holdings_updated || 0;
 
-    // Format date range
     const dateRange = stats.date_range || {};
-    const formatDate = (dateStr) => {
-      if (!dateStr) return 'N/A';
-      try {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        });
-      } catch {
-        return dateStr;
-      }
-    };
 
     return {
       assets: [], // Backend doesn't return asset list in import response
@@ -281,15 +273,15 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         totalAssets: holdingsCount || assetsCreated,
         totalTransactions: transactionsImported,
         dateRange: {
-          start: formatDate(dateRange.start_date),
-          end: formatDate(dateRange.end_date),
+          start: formatDateForDisplay(dateRange.start_date),
+          end: formatDateForDisplay(dateRange.end_date),
         },
         totalValue: 0, // Would need separate API call to get current value
         cashBalance: 0,
       },
       message: backendResults.message,
     };
-  };
+  }
 
   // Step 4: Test credentials before import
   const handleTestCredentials = async (credentials) => {
