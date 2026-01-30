@@ -347,7 +347,9 @@ class MeitavParser(BaseBrokerParser):
             amount = abs(Decimal(str(amount)))
 
         currency = self._normalize_currency(row.get("מטבע", ""))
-        symbol = f"TASE:{security_number}"
+        # Use TAX: prefix for tax codes (999...), TASE: for real securities
+        is_tax_record = str(security_number).startswith("999")
+        symbol = f"TAX:{security_number}" if is_tax_record else f"TASE:{security_number}"
 
         return (
             "trade",
@@ -377,7 +379,9 @@ class MeitavParser(BaseBrokerParser):
             return None
 
         currency = self._normalize_currency(row.get("מטבע", ""))
-        symbol = f"TASE:{security_number}"
+        # Use TAX: prefix for tax codes (999...), TASE: for real securities
+        is_tax_record = str(security_number).startswith("999")
+        symbol = f"TAX:{security_number}" if is_tax_record else f"TASE:{security_number}"
 
         return (
             "dividend",
