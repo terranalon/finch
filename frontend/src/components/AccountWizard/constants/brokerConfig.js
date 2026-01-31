@@ -93,6 +93,33 @@ export const BROKERS = {
     fields: {},
   },
 
+  bank_hapoalim: {
+    type: 'bank_hapoalim',
+    name: 'Bank Hapoalim',
+    shortName: 'Hapoalim',
+    category: 'brokerage',
+    defaultCurrency: 'ILS',
+    defaultAccountType: 'Investment',
+    hasApi: false,
+    supportedFormats: ['.xlsx'],
+    instructions: {
+      file: {
+        title: 'Export from Bank Hapoalim',
+        steps: [
+          'Log into Bank Hapoalim online banking (personal.bankhapoalim.co.il)',
+          'Navigate to Investments > Investment Portfolio',
+          'Click on "Reports" or "Historical Transactions"',
+          'IMPORTANT: Click "Customize Columns" and enable "Security Number" and "ISIN"',
+          'Choose your date range',
+          'Export as Excel file (Hebrew or English)',
+        ],
+        formats: 'Excel (.xlsx) files',
+        note: 'You must enable Security Number column in export settings for proper symbol matching.',
+      },
+    },
+    fields: {},
+  },
+
   kraken: {
     type: 'kraken',
     name: 'Kraken',

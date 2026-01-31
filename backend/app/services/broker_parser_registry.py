@@ -46,6 +46,7 @@ class BrokerParserRegistry:
             return
 
         # Import parsers here to avoid circular imports
+        from app.services.bank_hapoalim_parser import BankHapoalimParser
         from app.services.binance_parser import BinanceParser
         from app.services.bit2c_parser import Bit2CParser
         from app.services.ibkr_parser_adapter import IBKRParserAdapter
@@ -55,11 +56,10 @@ class BrokerParserRegistry:
         cls._parsers = {
             "ibkr": IBKRParserAdapter,
             "meitav": MeitavParser,
+            "bank_hapoalim": BankHapoalimParser,
             "kraken": KrakenParser,
             "bit2c": Bit2CParser,
             "binance": BinanceParser,
-            # Future parsers:
-            # 'ibi': IBIParser,
         }
         cls._initialized = True
         logger.info("Parser registry initialized with %d parsers", len(cls._parsers))

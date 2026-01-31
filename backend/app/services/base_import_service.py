@@ -75,11 +75,11 @@ def extract_unique_symbols(
 class BaseBrokerImportService(ABC):
     """Abstract base class for all broker import services.
 
-    Each broker import service (Meitav, Crypto, etc.) should inherit from
+    Each broker import service (Israeli Securities, Crypto, etc.) should inherit from
     this class to provide consistent import capabilities.
 
     Example usage:
-        service = MeitavImportService(db, "meitav")
+        service = IsraeliSecuritiesImportService(db, "meitav")
         stats = service.import_data(account_id, parsed_data, source_id=123)
     """
 

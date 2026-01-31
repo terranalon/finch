@@ -85,13 +85,15 @@ class CryptoImportService(BaseBrokerImportService):
             if import_positions and data.positions:
                 stats["positions"] = self._import_positions(account_id, data.positions)
 
-            if data.transactions:
-                stats["transactions"] = self._import_transactions(
-                    account_id, data.transactions, source_id
-                )
+            # Import cash transactions FIRST to ensure cash holdings exist
+            # (consistent with other import services)
             if data.cash_transactions:
                 stats["cash_transactions"] = self._import_cash_transactions(
                     account_id, data.cash_transactions, source_id
+                )
+            if data.transactions:
+                stats["transactions"] = self._import_transactions(
+                    account_id, data.transactions, source_id
                 )
             if data.dividends:
                 stats["dividends"] = self._import_dividends(account_id, data.dividends, source_id)
