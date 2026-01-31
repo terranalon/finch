@@ -111,4 +111,173 @@ class BankHapoalimParser(BaseBrokerParser):
 
     def parse(self, file_content: bytes) -> BrokerImportData:
         """Parse Bank Hapoalim .xlsx file into normalized import data."""
-        raise NotImplementedError()
+        from datetime import datetime
+
+        try:
+            df = pl.read_excel(BytesIO(file_content), has_header=False)
+        except Exception as e:
+            raise ValueError(f"Failed to read Excel file: {e}") from e
+
+        # Detect language (currently unused, but kept for future localization)
+        is_english = self._detect_language(file_content)
+        logger.info(f"Detected language: {'English' if is_english else 'Hebrew'}")
+
+        # Data starts at row 6 (0-indexed), header is row 5
+        if len(df) < 7:
+            raise ValueError("File has no data rows")
+
+        transactions: list[ParsedTransaction] = []
+        dividends: list[ParsedTransaction] = []
+        cash_transactions: list[ParsedCashTransaction] = []
+
+        cols = COLUMN_INDICES
+
+        # Process each data row (starting from row 6)
+        for row_idx in range(6, len(df)):
+            row = df.row(row_idx)
+
+            try:
+                result = self._parse_row(row, cols)
+                if result:
+                    txn_type, txn = result
+                    if txn_type == "dividend":
+                        dividends.append(txn)
+                    else:
+                        transactions.append(txn)
+            except Exception as e:
+                logger.warning(f"Error parsing row {row_idx}: {e}")
+                continue
+
+        # Extract date range
+        start_date, end_date = self.extract_date_range(file_content)
+
+        logger.info(
+            f"Parsed Bank Hapoalim file: {len(transactions)} transactions, "
+            f"{len(dividends)} dividends"
+        )
+
+        return BrokerImportData(
+            start_date=start_date,
+            end_date=end_date,
+            transactions=transactions,
+            positions=[],
+            cash_transactions=cash_transactions,
+            dividends=dividends,
+        )
+
+    def _parse_row(
+        self, row: tuple, cols: dict
+    ) -> tuple[str, ParsedTransaction] | None:
+        """Parse a single data row into a transaction."""
+        from datetime import datetime
+
+        # Get action type
+        action_type_raw = str(row[cols["action_type"]] or "").strip()
+        if not action_type_raw:
+            return None
+
+        action_type = ACTION_TYPE_MAP.get(action_type_raw, action_type_raw)
+
+        # Parse date (DD/MM/YYYY)
+        date_str = str(row[cols["value_date"]] or "")
+        try:
+            trade_date = datetime.strptime(date_str, "%d/%m/%Y").date()
+        except ValueError:
+            logger.warning(f"Could not parse date: {date_str}")
+            return None
+
+        # Get security info
+        security_number = str(row[cols["security_number"]] or "").strip()
+        isin = str(row[cols["isin"]] or "").strip()
+        security_name = str(row[cols["short_security_name"]] or "").strip()
+
+        # Get amounts
+        quantity = self._parse_decimal(row[cols["quantity"]])
+        price = self._parse_decimal(row[cols["price"]])
+        gross_value = self._parse_decimal(row[cols["gross_value"]])
+
+        # Get currency
+        currency_raw = str(row[cols["trade_currency"]] or "").strip()
+        currency = CURRENCY_MAP.get(currency_raw, currency_raw)
+
+        # Get taxes and commission
+        israel_tax = self._parse_decimal(row[cols["israel_tax"]])
+        foreign_tax = self._parse_decimal(row[cols["foreign_tax"]])
+        commission = self._parse_decimal(row[cols["commission_ils"]])
+
+        # Build symbol from security number
+        symbol = f"TASE:{security_number}" if security_number else security_name
+
+        # Determine amount based on transaction type
+        amount = abs(gross_value) if gross_value else None
+
+        if action_type == "Dividend":
+            total_tax = (israel_tax or Decimal("0")) + (foreign_tax or Decimal("0"))
+            return (
+                "dividend",
+                ParsedTransaction(
+                    trade_date=trade_date,
+                    symbol=symbol,
+                    transaction_type="Dividend",
+                    amount=gross_value,
+                    currency=currency,
+                    fees=total_tax,
+                    notes=f"Dividend from {security_name}",
+                    raw_data={
+                        "security_number": security_number,
+                        "isin": isin,
+                        "security_name": security_name,
+                    },
+                ),
+            )
+
+        if action_type == "Deposit":
+            # Transfer in - treat as deposit with cost basis
+            return (
+                "deposit",
+                ParsedTransaction(
+                    trade_date=trade_date,
+                    symbol=symbol,
+                    transaction_type="Deposit",
+                    quantity=quantity,
+                    price_per_unit=price,
+                    amount=gross_value,
+                    currency=currency,
+                    notes=f"Transfer in: {security_name}",
+                    raw_data={
+                        "security_number": security_number,
+                        "isin": isin,
+                        "security_name": security_name,
+                    },
+                ),
+            )
+
+        # Buy or Sell
+        return (
+            "trade",
+            ParsedTransaction(
+                trade_date=trade_date,
+                symbol=symbol,
+                transaction_type=action_type,
+                quantity=quantity,
+                price_per_unit=price,
+                amount=amount,
+                fees=commission or Decimal("0"),
+                currency=currency,
+                notes=security_name,
+                raw_data={
+                    "security_number": security_number,
+                    "isin": isin,
+                    "security_name": security_name,
+                },
+            ),
+        )
+
+    def _parse_decimal(self, value) -> Decimal:
+        """Parse a value to Decimal, returning 0 for None/empty."""
+        if value is None or value == "" or str(value).strip() == "":
+            return Decimal("0")
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return Decimal("0")
