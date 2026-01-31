@@ -10,7 +10,7 @@ import hmac
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import httpx
@@ -104,13 +104,15 @@ class Bit2CClient:
     def _get_nonce(self) -> int:
         """Generate always-increasing nonce value.
 
-        Uses Unix timestamp (seconds) plus an offset to ensure nonce is always
+        Uses Unix timestamp in MILLISECONDS to ensure nonce is always
         higher than any previously used values. Bit2C tracks the highest nonce
         per API key and rejects requests with lower nonces.
+
+        Using milliseconds gives us ~1000x headroom over previous second-based
+        nonces, ensuring we're always higher than historical values.
         """
-        # Use Unix timestamp + offset for reliability
-        # Adding 10000 provides buffer for any clock drift or previous testing
-        nonce = int(time.time()) + 10000 + self._nonce_offset
+        # Use milliseconds for much higher values than old second-based nonces
+        nonce = int(time.time() * 1000) + self._nonce_offset
         self._nonce_offset += 1
         return nonce
 
@@ -253,6 +255,7 @@ class Bit2CClient:
         from_date: datetime | None = None,
         to_date: datetime | None = None,
         pair: str | None = None,
+        take: int | None = None,
     ) -> list[dict]:
         """Get order history (trades) for a specific pair.
 
@@ -263,6 +266,8 @@ class Bit2CClient:
             from_date: Start date filter
             to_date: End date filter
             pair: Trading pair (e.g., "BtcNis"). Required by API.
+            take: Maximum number of records to return. If not specified,
+                  API may limit results. Use a high value (e.g., 10000) to get all.
 
         Returns:
             List of trade records
@@ -275,6 +280,8 @@ class Bit2CClient:
             data["toTime"] = to_date.strftime("%d/%m/%Y %H:%M:%S.999")
         if pair:
             data["pair"] = pair
+        if take:
+            data["take"] = take
 
         result = self._private_request("/Order/OrderHistory", data)
 
@@ -295,7 +302,7 @@ class Bit2CClient:
         """Get complete order history across all pairs with automatic chunking.
 
         Bit2C API has a 100-day limit on date ranges, so this method automatically
-        chunks requests into 90-day periods and queries all supported trading pairs.
+        chunks requests into 99-day periods and queries all supported trading pairs.
 
         Args:
             from_date: Start date (defaults to 2018-01-01 if not specified)
@@ -304,8 +311,6 @@ class Bit2CClient:
         Returns:
             List of all trade records across all pairs
         """
-        from datetime import timedelta
-
         # Default date range
         if not from_date:
             from_date = datetime(2018, 1, 1)
@@ -313,7 +318,8 @@ class Bit2CClient:
             to_date = datetime.now()
 
         all_trades: list[dict] = []
-        chunk_days = 90  # Stay under 100-day limit
+        chunk_days = 99  # Stay under 100-day limit
+        request_delay = 0.5  # Delay between API requests to avoid 409 rate limit errors
 
         for pair in TRADING_PAIRS:
             current = from_date
@@ -322,15 +328,34 @@ class Bit2CClient:
             while current < to_date:
                 chunk_end = min(current + timedelta(days=chunk_days), to_date)
 
-                try:
-                    trades = self.get_order_history(current, chunk_end, pair)
-                    if trades:
-                        all_trades.extend(trades)
-                        pair_count += len(trades)
-                except Bit2CAPIError as e:
-                    logger.warning(
-                        f"Error fetching {pair} history for {current} - {chunk_end}: {e}"
-                    )
+                # Retry with exponential backoff for rate limit errors
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        # Add delay to avoid 409 rate limit errors from Bit2C API
+                        time.sleep(request_delay)
+                        trades = self.get_order_history(current, chunk_end, pair)
+                        if trades:
+                            all_trades.extend(trades)
+                            pair_count += len(trades)
+                            logger.debug(
+                                f"Fetched {len(trades)} trades for {pair} "
+                                f"({current.date()} to {chunk_end.date()})"
+                            )
+                        break  # Success, exit retry loop
+                    except Bit2CAPIError as e:
+                        if attempt < max_retries - 1:
+                            backoff = (attempt + 1) * 2  # 2s, 4s backoff
+                            logger.warning(
+                                f"Rate limit hit for {pair} ({current.date()}), "
+                                f"retrying in {backoff}s (attempt {attempt + 1}/{max_retries})"
+                            )
+                            time.sleep(backoff)
+                        else:
+                            logger.error(
+                                f"Failed to fetch {pair} history for {current} - {chunk_end} "
+                                f"after {max_retries} attempts: {e}"
+                            )
 
                 current = chunk_end + timedelta(days=1)
 
@@ -473,7 +498,8 @@ class Bit2CClient:
                 amount=None,  # No fiat value for crypto withdrawals
                 fees=fee_quantity,  # Fee in crypto units (note: may lose precision due to Numeric(15,2))
                 currency=symbol,  # Currency is the crypto itself
-                notes=f"Bit2C crypto withdrawal - {reference}" + (f" (fee: {fee_quantity} {symbol})" if fee_quantity else ""),
+                notes=f"Bit2C crypto withdrawal - {reference}"
+                + (f" (fee: {fee_quantity} {symbol})" if fee_quantity else ""),
                 raw_data=record,
             )
         elif transaction_type in ("Refund Withdrawal", "Refund Fee"):
@@ -518,20 +544,19 @@ class Bit2CClient:
     ) -> BrokerImportData:
         """Fetch all account data and return as BrokerImportData.
 
-        Uses OrderHistory endpoint with automatic 90-day chunking to work around
+        Uses OrderHistory endpoint with automatic 99-day chunking to work around
         Bit2C's 100-day limit on date ranges. Queries all supported trading pairs.
 
+        Optimization: Fetches FundsHistory first (single request, no date limit) to
+        determine the earliest activity date, avoiding unnecessary queries from 2018.
+
         Args:
-            start_date: Start date for historical data (defaults to 2018-01-01)
+            start_date: Start date for historical data (auto-detected from FundsHistory if not specified)
             end_date: End date for historical data (defaults to today)
 
         Returns:
             BrokerImportData containing all parsed records
         """
-        # Convert dates to datetimes for API
-        from_datetime = datetime.combine(start_date, datetime.min.time()) if start_date else None
-        to_datetime = datetime.combine(end_date, datetime.max.time()) if end_date else None
-
         # Fetch balances for positions
         positions: list[ParsedPosition] = []
         try:
@@ -550,13 +575,46 @@ class Bit2CClient:
         except Bit2CAPIError as e:
             logger.error(f"Failed to fetch Bit2C balances: {e}")
 
+        # Fetch funds history FIRST (single request, no date limit)
+        # This allows us to determine the earliest activity date for OrderHistory
+        funds_history: list[dict] = []
+        earliest_activity_date: datetime | None = None
+        try:
+            funds_history = self.get_funds_history()
+
+            # Find earliest date from funds history to optimize OrderHistory queries
+            for record in funds_history:
+                created_str = record.get("created")
+                if created_str:
+                    record_dt = self._parse_bit2c_datetime(created_str)
+                    if record_dt:
+                        if earliest_activity_date is None or record_dt < earliest_activity_date:
+                            earliest_activity_date = record_dt
+
+            if earliest_activity_date:
+                logger.info(f"Earliest Bit2C activity detected: {earliest_activity_date.date()}")
+        except Bit2CAPIError as e:
+            logger.error(f"Failed to fetch Bit2C funds history: {e}")
+
+        # Determine date range for OrderHistory
+        # Use earliest activity date if no start_date provided (avoids querying from 2018)
+        if start_date:
+            from_datetime = datetime.combine(start_date, datetime.min.time())
+        elif earliest_activity_date:
+            # Start a few days before earliest activity to catch any edge cases
+            from_datetime = earliest_activity_date - timedelta(days=7)
+        else:
+            from_datetime = None  # Will default to 2018-01-01 in get_all_order_history
+
+        to_datetime = datetime.combine(end_date, datetime.max.time()) if end_date else None
+
         # Fetch order history with automatic chunking
         transactions: list[ParsedTransaction] = []
         cash_transactions: list[ParsedCashTransaction] = []
         all_dates: list[date] = []
 
         try:
-            # Use the new chunking method that handles 100-day limit
+            # Use the chunking method that handles 100-day limit
             history = self.get_all_order_history(from_datetime, to_datetime)
 
             for trade in history:
@@ -572,9 +630,8 @@ class Bit2CClient:
         except Bit2CAPIError as e:
             logger.error(f"Failed to fetch Bit2C history: {e}")
 
-        # Fetch funds history (deposits/withdrawals) from FundsHistory endpoint
+        # Process funds history (already fetched above)
         try:
-            funds_history = self.get_funds_history()
             crypto_count = 0
             cash_count = 0
 
@@ -603,7 +660,9 @@ class Bit2CClient:
                 fee_quantity = Decimal("0")
                 if action == 3:  # Withdrawal
                     # Extract reference number from "RX162705" format
-                    ref_num = reference.replace("RX", "") if reference.startswith("RX") else reference
+                    ref_num = (
+                        reference.replace("RX", "") if reference.startswith("RX") else reference
+                    )
                     if ref_num in withdrawal_fees:
                         fee_record = withdrawal_fees[ref_num]
                         fee_quantity = abs(self._parse_decimal(fee_record.get("firstAmount", 0)))

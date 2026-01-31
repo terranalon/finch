@@ -98,16 +98,17 @@ class MeitavImportService(BaseBrokerImportService):
             if data.positions:
                 stats["positions"] = self._import_positions(account_id, data.positions)
 
-            # Import transactions
-            if data.transactions:
-                stats["transactions"] = self._import_transactions(
-                    account_id, data.transactions, source_id
-                )
-
-            # Import cash transactions
+            # Import cash transactions FIRST to ensure cash holdings exist
+            # (required for Trade Settlements in dual-entry accounting)
             if data.cash_transactions:
                 stats["cash_transactions"] = self._import_cash_transactions(
                     account_id, data.cash_transactions, source_id
+                )
+
+            # Import transactions AFTER cash holdings exist
+            if data.transactions:
+                stats["transactions"] = self._import_transactions(
+                    account_id, data.transactions, source_id
                 )
 
             # Import dividends

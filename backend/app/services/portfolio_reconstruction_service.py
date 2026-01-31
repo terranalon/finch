@@ -277,6 +277,41 @@ class PortfolioReconstructionService:
                         h["cost_basis"] += abs(interest_qty)
                     logger.debug(f"Interest for {asset.symbol} on {txn.date}: {interest_qty}")
 
+            elif txn.type == "Fee":
+                # Fees deducted from holdings (custody fees, withdrawal fees, etc.)
+                # Typically negative amounts that reduce balance
+                fee_qty = _resolve_quantity(txn)
+                if fee_qty is not None:
+                    # If amount is negative, add it (which subtracts). If positive, subtract it.
+                    if fee_qty < 0:
+                        h["quantity"] += fee_qty  # Adding negative = subtracting
+                    else:
+                        h["quantity"] -= fee_qty  # Fee is positive, so subtract
+                    logger.debug(f"Fee for {asset.symbol} on {txn.date}: {fee_qty}")
+
+            elif txn.type in ("Withdrawal Fee", "Custody Fee"):
+                # Platform fees - already stored with correct sign (negative for deductions)
+                fee_qty = _resolve_quantity(txn)
+                if fee_qty is not None:
+                    h["quantity"] += fee_qty
+                    logger.debug(f"{txn.type} for {asset.symbol} on {txn.date}: {fee_qty}")
+
+            elif txn.type in ("Refund Fee", "Refund Withdrawal"):
+                # Refunds that add back to holdings (usually stored as positive quantities)
+                refund_qty = _resolve_quantity(txn)
+                if refund_qty is not None:
+                    h["quantity"] += refund_qty
+                    logger.debug(f"{txn.type} for {asset.symbol} on {txn.date}: {refund_qty}")
+
+            elif txn.type == "Credit":
+                # Credits that add to holdings (refunds, adjustments, etc.)
+                credit_qty = _resolve_quantity(txn)
+                if credit_qty is not None:
+                    h["quantity"] += abs(credit_qty)
+                    if asset.asset_class == "Cash":
+                        h["cost_basis"] += abs(credit_qty)
+                    logger.debug(f"Credit for {asset.symbol} on {txn.date}: {credit_qty}")
+
         # CRITICAL: Replace transaction-calculated cash balances with authoritative StmtFunds data
         # This fixes the issue where transaction data may be incomplete or have missing forex conversions
         # Note: StmtFunds only has entries on dates with activity, so we forward-fill (use most recent balance)
@@ -865,3 +900,20 @@ class PortfolioReconstructionService:
                 h["quantity"] += interest_qty
                 if asset.asset_class == "Cash":
                     h["cost_basis"] += abs(interest_qty)
+
+        elif txn.type == "Fee":
+            # Fees deducted from holdings (custody fees, withdrawal fees, etc.)
+            fee_qty = _resolve_quantity(txn)
+            if fee_qty is not None:
+                if fee_qty < 0:
+                    h["quantity"] += fee_qty
+                else:
+                    h["quantity"] -= fee_qty
+
+        elif txn.type == "Credit":
+            # Credits that add to holdings
+            credit_qty = _resolve_quantity(txn)
+            if credit_qty is not None:
+                h["quantity"] += abs(credit_qty)
+                if asset.asset_class == "Cash":
+                    h["cost_basis"] += abs(credit_qty)
