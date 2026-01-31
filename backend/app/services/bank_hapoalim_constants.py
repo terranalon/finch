@@ -43,12 +43,6 @@ ACTION_TYPE_MAP = {
     "העברה לזכות הפקדון": "Deposit",
 }
 
-# Security group mapping
-SECURITY_GROUP_MAP = {
-    "מניות": "Stock",
-    "קרן נאמנות": "MutualFund",
-}
-
 # Currency mapping (Hebrew to ISO code)
 CURRENCY_MAP = {
     "שקל חדש": "ILS",
