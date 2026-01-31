@@ -52,3 +52,29 @@ class TestBankHapoalimParserDateRange:
         start_date, end_date = parser.extract_date_range(hebrew_file_content)
         assert start_date == date(2023, 1, 29)
         assert end_date == date(2026, 1, 29)
+
+
+class TestBankHapoalimParserLanguageDetection:
+    """Tests for language detection."""
+
+    @pytest.fixture
+    def parser(self):
+        return BankHapoalimParser()
+
+    @pytest.fixture
+    def english_file_content(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "bank_hapoalim_sample_en.xlsx"
+        return fixture_path.read_bytes()
+
+    @pytest.fixture
+    def hebrew_file_content(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "bank_hapoalim_sample_he.xlsx"
+        return fixture_path.read_bytes()
+
+    def test_detect_english_headers(self, parser, english_file_content):
+        is_english = parser._detect_language(english_file_content)
+        assert is_english is True
+
+    def test_detect_hebrew_headers(self, parser, hebrew_file_content):
+        is_english = parser._detect_language(hebrew_file_content)
+        assert is_english is False

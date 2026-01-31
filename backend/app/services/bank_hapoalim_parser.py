@@ -84,6 +84,31 @@ class BankHapoalimParser(BaseBrokerParser):
 
         return start_date, end_date
 
+    def _detect_language(self, file_content: bytes) -> bool:
+        """Detect if file has English or Hebrew headers.
+
+        Returns True for English, False for Hebrew.
+        Header row is at row 5 (0-indexed).
+        """
+        df = pl.read_excel(BytesIO(file_content), has_header=False)
+
+        if len(df) < 6:
+            raise ValueError("File too short - missing header row")
+
+        # Header row is row 5 (0-indexed)
+        header_row = df.row(5)
+        first_col = str(header_row[0])
+
+        # Check for English header
+        if first_col in ENGLISH_HEADER_NAMES or "Short security" in first_col:
+            return True
+
+        # Check for Hebrew header
+        if first_col in HEBREW_HEADER_NAMES or "שם נייר" in first_col:
+            return False
+
+        raise ValueError(f"Could not detect language from header: {first_col}")
+
     def parse(self, file_content: bytes) -> BrokerImportData:
         """Parse Bank Hapoalim .xlsx file into normalized import data."""
         raise NotImplementedError()
