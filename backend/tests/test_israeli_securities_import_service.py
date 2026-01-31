@@ -1,4 +1,4 @@
-"""Tests for Meitav Import Service."""
+"""Tests for Israeli Securities Import Service."""
 
 from datetime import date
 from decimal import Decimal
@@ -10,7 +10,7 @@ from app.services.base_broker_parser import (
     ParsedPosition,
     ParsedTransaction,
 )
-from app.services.meitav_import_service import MeitavImportService
+from app.services.israeli_securities_import_service import IsraeliSecuritiesImportService
 
 
 class TestSymbolResolution:
@@ -19,7 +19,7 @@ class TestSymbolResolution:
     def test_resolve_tase_symbol_found(self):
         """Test resolving TASE symbol when found in cache."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock TASE service lookup
         with patch.object(service.tase_service, "get_yahoo_symbol", return_value="TEVA.TA"):
@@ -31,7 +31,7 @@ class TestSymbolResolution:
     def test_resolve_tase_symbol_not_found(self):
         """Test resolving TASE symbol when not found in cache."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock TASE service lookup returning None
         with patch.object(service.tase_service, "get_yahoo_symbol", return_value=None):
@@ -43,7 +43,7 @@ class TestSymbolResolution:
     def test_resolve_non_tase_symbol(self):
         """Test resolving non-TASE symbol returns as-is."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         symbol, tase_number = service._resolve_symbol("AAPL")
 
@@ -57,7 +57,7 @@ class TestFindOrCreateAsset:
     def test_find_existing_asset_by_symbol(self):
         """Test finding existing asset by symbol."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock existing asset
         mock_asset = MagicMock()
@@ -80,7 +80,7 @@ class TestFindOrCreateAsset:
     def test_find_existing_asset_by_tase_number(self):
         """Test finding existing asset by TASE security number."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # First query (by symbol) returns None
         # Second query (by TASE number) returns asset
@@ -108,7 +108,7 @@ class TestFindOrCreateAsset:
     def test_create_new_asset(self):
         """Test creating new asset when not found."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Both queries return None (asset not found)
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -128,7 +128,7 @@ class TestFindOrCreateAsset:
     def test_create_cash_asset_with_price_1(self):
         """Test creating cash asset sets price to 1."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Asset not found
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -152,7 +152,7 @@ class TestImportPositions:
     def test_import_positions_creates_holdings(self):
         """Test importing positions creates holdings."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock asset lookup (not found, so creates new)
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -182,7 +182,7 @@ class TestImportTransactions:
     def test_import_transactions(self):
         """Test importing buy/sell transactions."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock queries
         mock_asset = MagicMock()
@@ -219,7 +219,7 @@ class TestImportTransactions:
     def test_import_transactions_skips_duplicates(self):
         """Test that duplicate transactions are skipped."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock queries
         mock_asset = MagicMock()
@@ -258,7 +258,7 @@ class TestImportCashTransactions:
     def test_import_deposit(self):
         """Test importing deposit transaction."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock: asset not found (create), holding not found (create), no duplicate
         mock_db.query.return_value.filter.return_value.first.side_effect = [
@@ -289,7 +289,7 @@ class TestImportDividends:
     def test_import_dividends(self):
         """Test importing dividend transactions."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         mock_asset = MagicMock()
         mock_holding = MagicMock()
@@ -323,7 +323,7 @@ class TestImportData:
     def test_import_data_success(self):
         """Test successful full data import."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         data = BrokerImportData(
             start_date=date(2024, 1, 1),
@@ -342,7 +342,7 @@ class TestImportData:
     def test_import_data_rollback_on_error(self):
         """Test rollback on import failure."""
         mock_db = MagicMock()
-        service = MeitavImportService(mock_db)
+        service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Make _import_positions raise an error
         with patch.object(service, "_import_positions", side_effect=Exception("Test error")):

@@ -1,7 +1,7 @@
-"""Meitav Trade import service for database operations.
+"""Israeli securities import service for database operations.
 
-Handles importing parsed Meitav data into the database,
-with Israeli security number resolution via TASE API cache.
+Handles importing parsed data from Israeli brokers (Meitav, Bank Hapoalim)
+into the database, with Israeli security number resolution via TASE API cache.
 """
 
 import logging
@@ -38,11 +38,13 @@ def _is_real_security(symbol: str) -> bool:
     return not symbol.startswith("TAX:")
 
 
-class MeitavImportService(BaseBrokerImportService):
-    """Service for importing Meitav Trade broker data into the database.
+class IsraeliSecuritiesImportService(BaseBrokerImportService):
+    """Service for importing Israeli broker data into the database.
+
+    Supports: Meitav Trade, Bank Hapoalim, and other Israeli brokers.
 
     Handles:
-    - Israeli security number → Yahoo Finance symbol resolution
+    - Israeli security number -> Yahoo Finance symbol resolution
     - Position import with cost basis
     - Transaction history import
     - Cash transaction import (deposits, withdrawals, interest)
@@ -52,17 +54,22 @@ class MeitavImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         """Return list of broker types this service handles."""
-        return ["meitav"]
+        return ["meitav", "bank_hapoalim"]
 
     def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.
 
         Args:
             db: SQLAlchemy database session
-            broker_type: Broker type identifier (e.g., 'meitav')
+            broker_type: Broker type identifier (e.g., 'meitav', 'bank_hapoalim')
         """
         super().__init__(db, broker_type)
         self.tase_service = TASEApiService()
+        # Get broker name from registry for dynamic notes
+        from app.services.broker_parser_registry import BrokerParserRegistry
+
+        parser = BrokerParserRegistry.get_parser(broker_type)
+        self._broker_name = parser.broker_name()
 
     def import_data(
         self, account_id: int, data: BrokerImportData, source_id: int | None = None
@@ -125,7 +132,7 @@ class MeitavImportService(BaseBrokerImportService):
             stats["status"] = "completed"
 
         except Exception as e:
-            logger.exception("Meitav import failed")
+            logger.exception(f"{self._broker_name} import failed")
             self.db.rollback()
             stats["status"] = "failed"
             stats["errors"].append(str(e))
@@ -299,7 +306,7 @@ class MeitavImportService(BaseBrokerImportService):
                     price_per_unit=txn.price_per_unit,
                     amount=txn.amount,
                     fees=txn.fees,
-                    notes=f"Meitav Import - {txn.notes or ''}",
+                    notes=f"{self._broker_name} Import - {txn.notes or ''}",
                     external_transaction_id=txn.external_transaction_id,
                     content_hash=content_hash,
                 )
@@ -447,7 +454,7 @@ class MeitavImportService(BaseBrokerImportService):
                     type=cash_txn.transaction_type,
                     amount=cash_txn.amount,
                     fees=Decimal("0"),
-                    notes=f"Meitav Import - {cash_txn.notes or cash_txn.transaction_type}",
+                    notes=f"{self._broker_name} Import - {cash_txn.notes or cash_txn.transaction_type}",
                     content_hash=content_hash,
                 )
                 self.db.add(transaction)
@@ -546,7 +553,7 @@ class MeitavImportService(BaseBrokerImportService):
                     type="Dividend",
                     amount=div.amount,
                     fees=Decimal("0"),
-                    notes=f"Meitav Import - Dividend {div.amount} {div.currency}",
+                    notes=f"{self._broker_name} Import - Dividend {div.amount} {div.currency}",
                     external_transaction_id=div.external_transaction_id,
                     content_hash=content_hash,
                 )
@@ -723,7 +730,7 @@ class MeitavImportService(BaseBrokerImportService):
             currency=currency,
             category=category,
             industry=industry,
-            data_source="Meitav",
+            data_source=self._broker_name,
             tase_security_number=tase_security_number,
             last_fetched_price=last_price,
             last_fetched_at=last_fetched,
