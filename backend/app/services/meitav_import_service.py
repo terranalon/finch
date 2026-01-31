@@ -28,6 +28,16 @@ from app.services.transaction_hash_service import (
 logger = logging.getLogger(__name__)
 
 
+def _is_real_security(symbol: str) -> bool:
+    """Check if symbol represents a real security (not a tax code or empty).
+
+    Tax codes are prefixed with "TAX:" by the parser.
+    """
+    if not symbol:
+        return False
+    return not symbol.startswith("TAX:")
+
+
 class MeitavImportService(BaseBrokerImportService):
     """Service for importing Meitav Trade broker data into the database.
 
@@ -76,6 +86,12 @@ class MeitavImportService(BaseBrokerImportService):
             "dividends": {},
             "errors": [],
         }
+
+        # Collect unique assets from all data sources (excluding tax codes)
+        all_items = (data.transactions or []) + (data.dividends or []) + (data.positions or [])
+        unique_symbols = {item.symbol for item in all_items if _is_real_security(item.symbol)}
+        stats["unique_assets_in_file"] = len(unique_symbols)
+        stats["symbols_in_file"] = list(unique_symbols)
 
         try:
             # Import positions

@@ -34,6 +34,7 @@ from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.services.base_import_service import extract_unique_symbols
 from app.services.broker_file_storage import get_file_storage
 from app.services.broker_overlap_detector import get_overlap_detector
 from app.services.broker_parser_registry import BrokerParserRegistry
@@ -461,6 +462,9 @@ async def upload_broker_file(
                 for warning in validation_result["warnings"]:
                     logger.warning("IBKR validation: %s", warning)
 
+            # Collect unique assets for UI display
+            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
+
             source.import_stats = {
                 "positions": pos_stats,
                 "stale_cleanup": stale_stats,
@@ -474,6 +478,8 @@ async def upload_broker_file(
                 "other_cash": other_cash_stats,
                 "dividend_cash": div_cash_stats,
                 "validation": validation_result,
+                "unique_assets_in_file": len(all_symbols),
+                "symbols_in_file": list(all_symbols),
                 "total_records": (
                     len(positions_data)
                     + len(transactions_data)

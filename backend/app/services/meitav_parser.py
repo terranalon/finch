@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 # Agorot to Shekel conversion factor
 AGOROT_TO_ILS = Decimal("100")
 
+
+def is_tax_code(security_number: str | int | None) -> bool:
+    """Check if security number is a tax code (starts with 999)."""
+    if not security_number:
+        return False
+    return str(security_number).startswith("999")
+
+
 # Hebrew column mappings for balance.xlsx (positions)
 BALANCE_COLUMNS = {
     "שם נייר": "security_name",
@@ -227,8 +235,7 @@ class MeitavParser(BaseBrokerParser):
         if not security_number or not quantity:
             return None
 
-        # Handle tax records (security numbers starting with 999)
-        is_tax_record = str(security_number).startswith("999")
+        is_tax_record = is_tax_code(security_number)
 
         # Get cost basis (already in ILS)
         cost_basis = row.get("עלות")
@@ -347,7 +354,9 @@ class MeitavParser(BaseBrokerParser):
             amount = abs(Decimal(str(amount)))
 
         currency = self._normalize_currency(row.get("מטבע", ""))
-        symbol = f"TASE:{security_number}"
+        symbol = (
+            f"TAX:{security_number}" if is_tax_code(security_number) else f"TASE:{security_number}"
+        )
 
         return (
             "trade",
@@ -377,7 +386,9 @@ class MeitavParser(BaseBrokerParser):
             return None
 
         currency = self._normalize_currency(row.get("מטבע", ""))
-        symbol = f"TASE:{security_number}"
+        symbol = (
+            f"TAX:{security_number}" if is_tax_code(security_number) else f"TASE:{security_number}"
+        )
 
         return (
             "dividend",
