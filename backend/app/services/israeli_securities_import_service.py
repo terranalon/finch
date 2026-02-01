@@ -1,11 +1,11 @@
-"""Meitav Trade import service for database operations.
+"""Israeli securities import service for database operations.
 
-Handles importing parsed Meitav data into the database,
-with Israeli security number resolution via TASE API cache.
+Handles importing parsed data from Israeli brokers (Meitav, Bank Hapoalim)
+into the database, with Israeli security number resolution via TASE API cache.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -38,11 +38,22 @@ def _is_real_security(symbol: str) -> bool:
     return not symbol.startswith("TAX:")
 
 
-class MeitavImportService(BaseBrokerImportService):
-    """Service for importing Meitav Trade broker data into the database.
+def _normalize_to_datetime(value: datetime | date | None) -> datetime | None:
+    """Convert a date or datetime to datetime. Returns None if input is None."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    return datetime.combine(value, datetime.min.time())
+
+
+class IsraeliSecuritiesImportService(BaseBrokerImportService):
+    """Service for importing Israeli broker data into the database.
+
+    Supports: Meitav Trade, Bank Hapoalim, and other Israeli brokers.
 
     Handles:
-    - Israeli security number → Yahoo Finance symbol resolution
+    - Israeli security number -> Yahoo Finance symbol resolution
     - Position import with cost basis
     - Transaction history import
     - Cash transaction import (deposits, withdrawals, interest)
@@ -52,17 +63,22 @@ class MeitavImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         """Return list of broker types this service handles."""
-        return ["meitav"]
+        return ["meitav", "bank_hapoalim"]
 
     def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.
 
         Args:
             db: SQLAlchemy database session
-            broker_type: Broker type identifier (e.g., 'meitav')
+            broker_type: Broker type identifier (e.g., 'meitav', 'bank_hapoalim')
         """
         super().__init__(db, broker_type)
         self.tase_service = TASEApiService()
+        # Get broker name from registry for dynamic notes
+        from app.services.broker_parser_registry import BrokerParserRegistry
+
+        parser = BrokerParserRegistry.get_parser(broker_type)
+        self._broker_name = parser.broker_name()
 
     def import_data(
         self, account_id: int, data: BrokerImportData, source_id: int | None = None
@@ -125,7 +141,7 @@ class MeitavImportService(BaseBrokerImportService):
             stats["status"] = "completed"
 
         except Exception as e:
-            logger.exception("Meitav import failed")
+            logger.exception(f"{self._broker_name} import failed")
             self.db.rollback()
             stats["status"] = "failed"
             stats["errors"].append(str(e))
@@ -165,12 +181,19 @@ class MeitavImportService(BaseBrokerImportService):
                     symbol = pos.symbol
 
                 # Find or create asset
+                # Calculate fallback price from cost basis if available
+                fallback_price = None
+                if pos.cost_basis and pos.quantity and pos.quantity > 0:
+                    fallback_price = pos.cost_basis / pos.quantity
+
                 asset, created = self._find_or_create_asset(
                     symbol=symbol,
                     name=pos.raw_data.get("security_name", symbol) if pos.raw_data else symbol,
                     asset_class=pos.asset_class or "Stock",
                     currency=pos.currency,
                     tase_security_number=tase_number,
+                    fallback_price=fallback_price,
+                    fallback_price_date=datetime.now(),  # Positions are current state
                 )
 
                 if created:
@@ -249,6 +272,8 @@ class MeitavImportService(BaseBrokerImportService):
                     asset_class="Stock",
                     currency=txn.currency,
                     tase_security_number=tase_number,
+                    fallback_price=txn.price_per_unit,
+                    fallback_price_date=txn.trade_date,
                 )
 
                 if created:
@@ -299,7 +324,7 @@ class MeitavImportService(BaseBrokerImportService):
                     price_per_unit=txn.price_per_unit,
                     amount=txn.amount,
                     fees=txn.fees,
-                    notes=f"Meitav Import - {txn.notes or ''}",
+                    notes=f"{self._broker_name} Import - {txn.notes or ''}",
                     external_transaction_id=txn.external_transaction_id,
                     content_hash=content_hash,
                 )
@@ -447,7 +472,7 @@ class MeitavImportService(BaseBrokerImportService):
                     type=cash_txn.transaction_type,
                     amount=cash_txn.amount,
                     fees=Decimal("0"),
-                    notes=f"Meitav Import - {cash_txn.notes or cash_txn.transaction_type}",
+                    notes=f"{self._broker_name} Import - {cash_txn.notes or cash_txn.transaction_type}",
                     content_hash=content_hash,
                 )
                 self.db.add(transaction)
@@ -546,7 +571,7 @@ class MeitavImportService(BaseBrokerImportService):
                     type="Dividend",
                     amount=div.amount,
                     fees=Decimal("0"),
-                    notes=f"Meitav Import - Dividend {div.amount} {div.currency}",
+                    notes=f"{self._broker_name} Import - Dividend {div.amount} {div.currency}",
                     external_transaction_id=div.external_transaction_id,
                     content_hash=content_hash,
                 )
@@ -641,6 +666,55 @@ class MeitavImportService(BaseBrokerImportService):
             logger.warning(f"Failed to fetch yfinance metadata for {symbol}: {e}")
             return None
 
+    def _maybe_update_fallback_price(
+        self,
+        asset: Asset,
+        fallback_price: Decimal | None,
+        fallback_price_date: datetime | None,
+    ) -> bool:
+        """Update asset's fallback price if the new price is more recent.
+
+        For unresolved TASE symbols (mutual funds), updates the price if:
+        - The asset has no price yet, OR
+        - The new price date is more recent than the existing price date
+
+        Args:
+            asset: The asset to potentially update
+            fallback_price: The new price from a transaction
+            fallback_price_date: The date of the transaction
+
+        Returns:
+            True if the price was updated, False otherwise
+        """
+        if not asset.symbol or not asset.symbol.startswith("TASE:"):
+            return False
+
+        if not fallback_price or fallback_price <= 0:
+            return False
+
+        price_datetime = _normalize_to_datetime(fallback_price_date)
+
+        has_no_price = not asset.last_fetched_price or asset.last_fetched_price == 0
+        has_no_existing_date = not asset.last_fetched_at
+        # Safe comparison - only compare if existing_date is a real datetime
+        is_more_recent = (
+            price_datetime is not None
+            and isinstance(asset.last_fetched_at, datetime)
+            and price_datetime > asset.last_fetched_at
+        )
+
+        if not has_no_price and not has_no_existing_date and not is_more_recent:
+            return False
+
+        asset.last_fetched_price = fallback_price
+        asset.last_fetched_at = price_datetime or datetime.now()
+        asset.is_manual_valuation = True
+        logger.info(
+            f"Updated {asset.symbol} with fallback price {fallback_price} "
+            f"from {fallback_price_date}"
+        )
+        return True
+
     def _find_or_create_asset(
         self,
         symbol: str,
@@ -648,15 +722,19 @@ class MeitavImportService(BaseBrokerImportService):
         asset_class: str,
         currency: str,
         tase_security_number: str | None = None,
+        fallback_price: Decimal | None = None,
+        fallback_price_date: datetime | None = None,
     ) -> tuple[Asset, bool]:
         """Find or create an asset.
 
         Args:
-            symbol: Yahoo Finance compatible symbol
+            symbol: Yahoo Finance compatible symbol or TASE:xxxxx for unresolved
             name: Asset name
             asset_class: Asset class (Stock, ETF, Cash, etc.)
             currency: Asset currency
             tase_security_number: Israeli security number (if applicable)
+            fallback_price: Price to use if symbol can't be resolved (e.g., mutual funds)
+            fallback_price_date: Date of the fallback price (for recency comparison)
 
         Returns:
             Tuple of (asset, created)
@@ -669,6 +747,10 @@ class MeitavImportService(BaseBrokerImportService):
             if tase_security_number and not asset.tase_security_number:
                 asset.tase_security_number = tase_security_number
                 logger.debug(f"Updated TASE security number for {symbol}")
+
+            # Update price for unresolved TASE symbols if we have a more recent price
+            self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
+
             return asset, False
 
         # Try to find by TASE security number
@@ -683,20 +765,41 @@ class MeitavImportService(BaseBrokerImportService):
                 if asset.symbol.startswith("TASE:"):
                     asset.symbol = symbol
                     logger.info(f"Updated symbol for TASE:{tase_security_number} → {symbol}")
+
+                # Update price for unresolved TASE symbols if we have a more recent price
+                self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
+
                 return asset, False
 
         # Create new asset
         logger.info(f"Creating new asset: {symbol} ({name})")
 
+        # Check if this is an unresolved TASE symbol (e.g., mutual funds not in TASE cache)
+        is_unresolved_tase = symbol.startswith("TASE:")
+
         # For Cash assets, set price to 1
         last_price = Decimal("1") if asset_class == "Cash" else None
         last_fetched = datetime.now() if asset_class == "Cash" else None
+        is_manual = False
 
-        # Fetch additional metadata from yfinance for tradeable assets (not Cash or Tax)
         english_name = name
         category = None
         industry = None
-        if asset_class not in ("Cash", "Tax") and symbol:
+
+        if is_unresolved_tase:
+            # Unresolved TASE symbol (typically mutual funds not on Yahoo Finance)
+            # Use fallback price from transaction and mark as manual valuation
+            if fallback_price and fallback_price > 0:
+                last_price = fallback_price
+                last_fetched = _normalize_to_datetime(fallback_price_date) or datetime.now()
+            is_manual = True
+            asset_class = "MutualFund"  # Most unresolved Israeli securities are mutual funds
+            logger.info(
+                f"Unresolved TASE symbol {symbol} - using fallback price {fallback_price} "
+                f"from {fallback_price_date}, marked as manual valuation"
+            )
+        elif asset_class not in ("Cash", "Tax") and symbol:
+            # Fetch additional metadata from yfinance for tradeable assets
             yf_metadata = self._fetch_yfinance_metadata(symbol)
             if yf_metadata:
                 # Prefer English name from yfinance
@@ -723,11 +826,11 @@ class MeitavImportService(BaseBrokerImportService):
             currency=currency,
             category=category,
             industry=industry,
-            data_source="Meitav",
+            data_source=self._broker_name,
             tase_security_number=tase_security_number,
             last_fetched_price=last_price,
             last_fetched_at=last_fetched,
-            is_manual_valuation=False,  # We have price from yfinance
+            is_manual_valuation=is_manual,
         )
 
         self.db.add(asset)
