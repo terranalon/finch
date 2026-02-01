@@ -184,6 +184,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                     currency=pos.currency,
                     tase_security_number=tase_number,
                     fallback_price=fallback_price,
+                    fallback_price_date=datetime.now(),  # Positions are current state
                 )
 
                 if created:
@@ -263,6 +264,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                     currency=txn.currency,
                     tase_security_number=tase_number,
                     fallback_price=txn.price_per_unit,
+                    fallback_price_date=txn.trade_date,
                 )
 
                 if created:
@@ -655,6 +657,64 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             logger.warning(f"Failed to fetch yfinance metadata for {symbol}: {e}")
             return None
 
+    def _maybe_update_fallback_price(
+        self,
+        asset: Asset,
+        fallback_price: Decimal | None,
+        fallback_price_date: datetime | None,
+    ) -> bool:
+        """Update asset's fallback price if the new price is more recent.
+
+        For unresolved TASE symbols (mutual funds), updates the price if:
+        - The asset has no price yet, OR
+        - The new price date is more recent than the existing price date
+
+        Args:
+            asset: The asset to potentially update
+            fallback_price: The new price from a transaction
+            fallback_price_date: The date of the transaction
+
+        Returns:
+            True if the price was updated, False otherwise
+        """
+        if not asset.symbol or not asset.symbol.startswith("TASE:"):
+            return False
+
+        if not fallback_price or fallback_price <= 0:
+            return False
+
+        # Convert date to datetime for comparison if needed
+        price_datetime = fallback_price_date
+        if fallback_price_date and not isinstance(fallback_price_date, datetime):
+            price_datetime = datetime.combine(fallback_price_date, datetime.min.time())
+
+        # Check if asset has no price
+        has_no_price = not asset.last_fetched_price or asset.last_fetched_price == 0
+
+        # Check if new date is more recent (with safe comparison)
+        is_more_recent = False
+        if price_datetime and not has_no_price:
+            existing_date = asset.last_fetched_at
+            # Safe comparison - only compare if existing_date is a real datetime
+            if existing_date and isinstance(existing_date, datetime):
+                is_more_recent = price_datetime > existing_date
+            elif not existing_date:
+                is_more_recent = True
+
+        should_update = has_no_price or is_more_recent
+
+        if should_update:
+            asset.last_fetched_price = fallback_price
+            asset.last_fetched_at = price_datetime or datetime.now()
+            asset.is_manual_valuation = True
+            logger.info(
+                f"Updated {asset.symbol} with fallback price {fallback_price} "
+                f"from {fallback_price_date}"
+            )
+            return True
+
+        return False
+
     def _find_or_create_asset(
         self,
         symbol: str,
@@ -663,6 +723,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         currency: str,
         tase_security_number: str | None = None,
         fallback_price: Decimal | None = None,
+        fallback_price_date: datetime | None = None,
     ) -> tuple[Asset, bool]:
         """Find or create an asset.
 
@@ -673,6 +734,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             currency: Asset currency
             tase_security_number: Israeli security number (if applicable)
             fallback_price: Price to use if symbol can't be resolved (e.g., mutual funds)
+            fallback_price_date: Date of the fallback price (for recency comparison)
 
         Returns:
             Tuple of (asset, created)
@@ -686,17 +748,8 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 asset.tase_security_number = tase_security_number
                 logger.debug(f"Updated TASE security number for {symbol}")
 
-            # Update price for unresolved TASE symbols that have no price
-            if (
-                symbol.startswith("TASE:")
-                and fallback_price
-                and fallback_price > 0
-                and (not asset.last_fetched_price or asset.last_fetched_price == 0)
-            ):
-                asset.last_fetched_price = fallback_price
-                asset.last_fetched_at = datetime.now()
-                asset.is_manual_valuation = True
-                logger.info(f"Updated {symbol} with fallback price {fallback_price}")
+            # Update price for unresolved TASE symbols if we have a more recent price
+            self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
 
             return asset, False
 
@@ -713,17 +766,8 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                     asset.symbol = symbol
                     logger.info(f"Updated symbol for TASE:{tase_security_number} → {symbol}")
 
-                # Update price for unresolved TASE symbols that have no price
-                if (
-                    asset.symbol.startswith("TASE:")
-                    and fallback_price
-                    and fallback_price > 0
-                    and (not asset.last_fetched_price or asset.last_fetched_price == 0)
-                ):
-                    asset.last_fetched_price = fallback_price
-                    asset.last_fetched_at = datetime.now()
-                    asset.is_manual_valuation = True
-                    logger.info(f"Updated {asset.symbol} with fallback price {fallback_price}")
+                # Update price for unresolved TASE symbols if we have a more recent price
+                self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
 
                 return asset, False
 
@@ -747,12 +791,19 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             # Use fallback price from transaction and mark as manual valuation
             if fallback_price and fallback_price > 0:
                 last_price = fallback_price
-                last_fetched = datetime.now()
+                # Use the transaction date if provided, otherwise now
+                if fallback_price_date:
+                    if isinstance(fallback_price_date, datetime):
+                        last_fetched = fallback_price_date
+                    else:
+                        last_fetched = datetime.combine(fallback_price_date, datetime.min.time())
+                else:
+                    last_fetched = datetime.now()
             is_manual = True
             asset_class = "MutualFund"  # Most unresolved Israeli securities are mutual funds
             logger.info(
-                f"Unresolved TASE symbol {symbol} - using fallback price {fallback_price}, "
-                "marked as manual valuation"
+                f"Unresolved TASE symbol {symbol} - using fallback price {fallback_price} "
+                f"from {fallback_price_date}, marked as manual valuation"
             )
         elif asset_class not in ("Cash", "Tax") and symbol:
             # Fetch additional metadata from yfinance for tradeable assets
