@@ -172,12 +172,18 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                     symbol = pos.symbol
 
                 # Find or create asset
+                # Calculate fallback price from cost basis if available
+                fallback_price = None
+                if pos.cost_basis and pos.quantity and pos.quantity > 0:
+                    fallback_price = pos.cost_basis / pos.quantity
+
                 asset, created = self._find_or_create_asset(
                     symbol=symbol,
                     name=pos.raw_data.get("security_name", symbol) if pos.raw_data else symbol,
                     asset_class=pos.asset_class or "Stock",
                     currency=pos.currency,
                     tase_security_number=tase_number,
+                    fallback_price=fallback_price,
                 )
 
                 if created:
@@ -256,6 +262,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                     asset_class="Stock",
                     currency=txn.currency,
                     tase_security_number=tase_number,
+                    fallback_price=txn.price_per_unit,
                 )
 
                 if created:
@@ -655,15 +662,17 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         asset_class: str,
         currency: str,
         tase_security_number: str | None = None,
+        fallback_price: Decimal | None = None,
     ) -> tuple[Asset, bool]:
         """Find or create an asset.
 
         Args:
-            symbol: Yahoo Finance compatible symbol
+            symbol: Yahoo Finance compatible symbol or TASE:xxxxx for unresolved
             name: Asset name
             asset_class: Asset class (Stock, ETF, Cash, etc.)
             currency: Asset currency
             tase_security_number: Israeli security number (if applicable)
+            fallback_price: Price to use if symbol can't be resolved (e.g., mutual funds)
 
         Returns:
             Tuple of (asset, created)
@@ -695,15 +704,32 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         # Create new asset
         logger.info(f"Creating new asset: {symbol} ({name})")
 
+        # Check if this is an unresolved TASE symbol (e.g., mutual funds not in TASE cache)
+        is_unresolved_tase = symbol.startswith("TASE:")
+
         # For Cash assets, set price to 1
         last_price = Decimal("1") if asset_class == "Cash" else None
         last_fetched = datetime.now() if asset_class == "Cash" else None
+        is_manual = False
 
-        # Fetch additional metadata from yfinance for tradeable assets (not Cash or Tax)
         english_name = name
         category = None
         industry = None
-        if asset_class not in ("Cash", "Tax") and symbol:
+
+        if is_unresolved_tase:
+            # Unresolved TASE symbol (typically mutual funds not on Yahoo Finance)
+            # Use fallback price from transaction and mark as manual valuation
+            if fallback_price and fallback_price > 0:
+                last_price = fallback_price
+                last_fetched = datetime.now()
+            is_manual = True
+            asset_class = "MutualFund"  # Most unresolved Israeli securities are mutual funds
+            logger.info(
+                f"Unresolved TASE symbol {symbol} - using fallback price {fallback_price}, "
+                "marked as manual valuation"
+            )
+        elif asset_class not in ("Cash", "Tax") and symbol:
+            # Fetch additional metadata from yfinance for tradeable assets
             yf_metadata = self._fetch_yfinance_metadata(symbol)
             if yf_metadata:
                 # Prefer English name from yfinance
@@ -734,7 +760,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             tase_security_number=tase_security_number,
             last_fetched_price=last_price,
             last_fetched_at=last_fetched,
-            is_manual_valuation=False,  # We have price from yfinance
+            is_manual_valuation=is_manual,
         )
 
         self.db.add(asset)
