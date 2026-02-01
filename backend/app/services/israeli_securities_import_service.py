@@ -685,6 +685,19 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             if tase_security_number and not asset.tase_security_number:
                 asset.tase_security_number = tase_security_number
                 logger.debug(f"Updated TASE security number for {symbol}")
+
+            # Update price for unresolved TASE symbols that have no price
+            if (
+                symbol.startswith("TASE:")
+                and fallback_price
+                and fallback_price > 0
+                and (not asset.last_fetched_price or asset.last_fetched_price == 0)
+            ):
+                asset.last_fetched_price = fallback_price
+                asset.last_fetched_at = datetime.now()
+                asset.is_manual_valuation = True
+                logger.info(f"Updated {symbol} with fallback price {fallback_price}")
+
             return asset, False
 
         # Try to find by TASE security number
@@ -699,6 +712,19 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 if asset.symbol.startswith("TASE:"):
                     asset.symbol = symbol
                     logger.info(f"Updated symbol for TASE:{tase_security_number} → {symbol}")
+
+                # Update price for unresolved TASE symbols that have no price
+                if (
+                    asset.symbol.startswith("TASE:")
+                    and fallback_price
+                    and fallback_price > 0
+                    and (not asset.last_fetched_price or asset.last_fetched_price == 0)
+                ):
+                    asset.last_fetched_price = fallback_price
+                    asset.last_fetched_at = datetime.now()
+                    asset.is_manual_valuation = True
+                    logger.info(f"Updated {asset.symbol} with fallback price {fallback_price}")
+
                 return asset, False
 
         # Create new asset
