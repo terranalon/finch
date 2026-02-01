@@ -114,7 +114,7 @@ class TestBankHapoalimParserParsing:
         first_buy = buy_txns[0]
         assert first_buy.trade_date == date(2026, 1, 6)
         assert first_buy.quantity == Decimal("1469")
-        assert first_buy.price_per_unit == Decimal("102.16")
+        assert first_buy.price_per_unit == Decimal("1.0216")  # Converted from Agorot to ILS
         assert first_buy.currency == "ILS"
         # Security number should be in raw_data
         assert first_buy.raw_data.get("security_number") == "5140785"

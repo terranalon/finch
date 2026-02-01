@@ -1,7 +1,7 @@
 """Bank Hapoalim broker parser for .xlsx file imports.
 
 Handles both Hebrew and English column headers from Bank Hapoalim exports.
-Prices are in full currency units (not Agorot like Meitav).
+Prices in the export are in Agorot (Israeli cents) and are converted to ILS.
 """
 
 import logging
@@ -174,7 +174,9 @@ class BankHapoalimParser(BaseBrokerParser):
         security_name = str(row[cols["short_security_name"]] or "").strip()
 
         quantity = self._parse_decimal(row[cols["quantity"]])
-        price = self._parse_decimal(row[cols["price"]])
+        price_agorot = self._parse_decimal(row[cols["price"]])
+        # Bank Hapoalim prices are in Agorot (cents), convert to ILS
+        price = price_agorot / 100 if price_agorot else Decimal("0")
         gross_value = self._parse_decimal(row[cols["gross_value"]])
 
         currency_raw = str(row[cols["trade_currency"]] or "").strip()
