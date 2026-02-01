@@ -5,7 +5,7 @@ into the database, with Israeli security number resolution via TASE API cache.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -36,6 +36,15 @@ def _is_real_security(symbol: str) -> bool:
     if not symbol:
         return False
     return not symbol.startswith("TAX:")
+
+
+def _normalize_to_datetime(value: datetime | date | None) -> datetime | None:
+    """Convert a date or datetime to datetime. Returns None if input is None."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    return datetime.combine(value, datetime.min.time())
 
 
 class IsraeliSecuritiesImportService(BaseBrokerImportService):
@@ -683,37 +692,28 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         if not fallback_price or fallback_price <= 0:
             return False
 
-        # Convert date to datetime for comparison if needed
-        price_datetime = fallback_price_date
-        if fallback_price_date and not isinstance(fallback_price_date, datetime):
-            price_datetime = datetime.combine(fallback_price_date, datetime.min.time())
+        price_datetime = _normalize_to_datetime(fallback_price_date)
 
-        # Check if asset has no price
         has_no_price = not asset.last_fetched_price or asset.last_fetched_price == 0
+        has_no_existing_date = not asset.last_fetched_at
+        # Safe comparison - only compare if existing_date is a real datetime
+        is_more_recent = (
+            price_datetime is not None
+            and isinstance(asset.last_fetched_at, datetime)
+            and price_datetime > asset.last_fetched_at
+        )
 
-        # Check if new date is more recent (with safe comparison)
-        is_more_recent = False
-        if price_datetime and not has_no_price:
-            existing_date = asset.last_fetched_at
-            # Safe comparison - only compare if existing_date is a real datetime
-            if existing_date and isinstance(existing_date, datetime):
-                is_more_recent = price_datetime > existing_date
-            elif not existing_date:
-                is_more_recent = True
+        if not has_no_price and not has_no_existing_date and not is_more_recent:
+            return False
 
-        should_update = has_no_price or is_more_recent
-
-        if should_update:
-            asset.last_fetched_price = fallback_price
-            asset.last_fetched_at = price_datetime or datetime.now()
-            asset.is_manual_valuation = True
-            logger.info(
-                f"Updated {asset.symbol} with fallback price {fallback_price} "
-                f"from {fallback_price_date}"
-            )
-            return True
-
-        return False
+        asset.last_fetched_price = fallback_price
+        asset.last_fetched_at = price_datetime or datetime.now()
+        asset.is_manual_valuation = True
+        logger.info(
+            f"Updated {asset.symbol} with fallback price {fallback_price} "
+            f"from {fallback_price_date}"
+        )
+        return True
 
     def _find_or_create_asset(
         self,
@@ -791,14 +791,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             # Use fallback price from transaction and mark as manual valuation
             if fallback_price and fallback_price > 0:
                 last_price = fallback_price
-                # Use the transaction date if provided, otherwise now
-                if fallback_price_date:
-                    if isinstance(fallback_price_date, datetime):
-                        last_fetched = fallback_price_date
-                    else:
-                        last_fetched = datetime.combine(fallback_price_date, datetime.min.time())
-                else:
-                    last_fetched = datetime.now()
+                last_fetched = _normalize_to_datetime(fallback_price_date) or datetime.now()
             is_manual = True
             asset_class = "MutualFund"  # Most unresolved Israeli securities are mutual funds
             logger.info(
