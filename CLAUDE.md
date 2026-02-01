@@ -23,3 +23,29 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 | `/code-review` | Review code quality |
 | `/commit` | Git commit |
 | `/verify` | Run checks |
+
+## Docker Operations
+
+The backend runs inside Docker containers. **Do not** run uvicorn directly on the host.
+
+```bash
+# Start all services (db + backend)
+docker compose up -d
+
+# Restart backend only (picks up code changes)
+docker compose restart backend
+
+# View backend logs
+docker compose logs backend --tail 50 -f
+
+# Rebuild backend after dependency changes
+docker compose up -d --build backend
+
+# Check container health
+curl -s http://localhost:8000/health
+```
+
+If Docker daemon is not running, start Docker Desktop first:
+```bash
+open -a Docker  # macOS
+```
