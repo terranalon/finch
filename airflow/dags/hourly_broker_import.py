@@ -15,39 +15,12 @@ from airflow.exceptions import AirflowException
 from airflow.sdk import dag, task
 from auth_helper import get_auth_helper
 from dotenv import load_dotenv
-from queries import GET_ACCOUNTS_WITH_BROKER_API
-from shared_db import SessionLocal
-from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
 load_dotenv("/opt/airflow/backend/.env")
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:8000")
-
-# Broker configuration: maps broker_type to (credential_keys, endpoint_path, stats_key)
-BROKER_CONFIG = {
-    "ibkr": {
-        "cred_keys": ("flex_token", "flex_query_id"),
-        "endpoint": "/api/brokers/ibkr/import",
-        "stats_key": "stats",
-    },
-    "binance": {
-        "cred_keys": ("api_key", "api_secret"),
-        "endpoint": "/api/brokers/binance/import",
-        "stats_key": "stats",
-    },
-    "kraken": {
-        "cred_keys": ("api_key", "api_secret"),
-        "endpoint": "/api/brokers/kraken/import",
-        "stats_key": "stats",
-    },
-    "bit2c": {
-        "cred_keys": ("api_key", "api_secret"),
-        "endpoint": "/api/brokers/bit2c/import",
-        "stats_key": "stats",
-    },
-}
 
 default_args = {
     "owner": "portfolio_tracker",
@@ -58,15 +31,6 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "retry_exponential_backoff": True,
 }
-
-
-def _has_broker_credentials(meta_data: dict, broker_type: str) -> bool:
-    """Check if account has valid credentials for a broker type."""
-    config = BROKER_CONFIG.get(broker_type)
-    if not config:
-        return False
-    broker_data = meta_data.get(broker_type, {})
-    return all(broker_data.get(key) for key in config["cred_keys"])
 
 
 def _extract_error_message(response: requests.Response) -> str:
@@ -91,66 +55,92 @@ def hourly_broker_import():
 
     @task(task_id="get_active_accounts")
     def get_active_accounts() -> list[dict]:
-        """Get all accounts with broker API credentials configured."""
-        db = SessionLocal()
+        """Get accounts with broker API connections from backend.
+
+        Calls the backend API to get all accounts that have broker API
+        credentials configured. The backend is the single source of truth
+        for which brokers support API imports and credential validation.
+
+        Returns:
+            List of dicts with account_id and broker_type keys.
+
+        Raises:
+            AirflowException: If API call fails after retries.
+        """
+        auth_helper = get_auth_helper()
+        url = f"{BACKEND_URL}/api/brokers/api-connections"
+
         try:
-            result = db.execute(text(GET_ACCOUNTS_WITH_BROKER_API))
-            accounts = []
+            response = requests.get(
+                url,
+                headers=auth_helper.get_auth_headers(),
+                timeout=30,
+            )
 
-            for row in result:
-                account_id, meta_data = row[0], row[1]
-                if not meta_data:
-                    continue
+            # Retry once on 401 (token might be stale)
+            if response.status_code == 401:
+                logger.warning("Got 401, refreshing token and retrying...")
+                auth_helper.force_refresh()
+                response = requests.get(
+                    url,
+                    headers=auth_helper.get_auth_headers(),
+                    timeout=30,
+                )
 
-                for broker_type in BROKER_CONFIG:
-                    if _has_broker_credentials(meta_data, broker_type):
-                        accounts.append({"account_id": account_id, "broker_type": broker_type})
-                        logger.info("Found %s credentials for account %d", broker_type, account_id)
-
-            logger.info("Found %d accounts with broker API credentials", len(accounts))
+            response.raise_for_status()
+            accounts = response.json()
+            logger.info("Found %d account-broker pairs for import", len(accounts))
             return accounts
 
-        finally:
-            db.close()
+        except requests.RequestException as e:
+            logger.exception("Failed to fetch API connections from backend")
+            raise AirflowException(f"Failed to fetch API connections: {e}") from e
 
     @task(task_id="import_broker_data", pool="db_write_pool")
     def import_broker_data(account_info: dict) -> dict:
         """Import data for a single account from its broker API.
 
+        Args:
+            account_info: Dict with account_id and broker_type keys.
+
+        Returns:
+            Import result with status and statistics.
+
         Raises:
-            AirflowException: On import failure (ensures task fails loudly)
+            AirflowException: On import failure (ensures task fails loudly).
         """
         account_id = account_info["account_id"]
         broker_type = account_info["broker_type"]
 
         logger.info("Importing %s data for account %d", broker_type, account_id)
 
-        config = BROKER_CONFIG.get(broker_type)
-        if not config:
-            logger.warning("Unknown broker type: %s", broker_type)
-            return {
-                "account_id": account_id,
-                "broker_type": broker_type,
-                "status": "skipped",
-                "reason": f"Unknown broker type: {broker_type}",
-            }
-
         auth_helper = get_auth_helper()
-        url = f"{BACKEND_URL}{config['endpoint']}/{account_id}"
+        url = f"{BACKEND_URL}/api/brokers/{broker_type}/import/{account_id}"
 
         try:
-            response = requests.post(url, headers=auth_helper.get_auth_headers(), timeout=300)
+            response = requests.post(
+                url,
+                headers=auth_helper.get_auth_headers(),
+                timeout=300,
+            )
 
             # Retry once on 401 (token might be stale)
             if response.status_code == 401:
                 logger.warning("Got 401, refreshing token and retrying...")
                 auth_helper.force_refresh()
-                response = requests.post(url, headers=auth_helper.get_auth_headers(), timeout=300)
+                response = requests.post(
+                    url,
+                    headers=auth_helper.get_auth_headers(),
+                    timeout=300,
+                )
 
             if response.status_code == 200:
-                stats = response.json().get(config["stats_key"], {})
+                stats = response.json().get("stats", {})
                 logger.info(
-                    "%s import completed for account %d: %s", broker_type, account_id, stats
+                    "%s import completed for account %d: %s",
+                    broker_type,
+                    account_id,
+                    stats,
                 )
                 return {
                     "account_id": account_id,
