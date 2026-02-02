@@ -257,7 +257,7 @@ def daily_snapshot_pipeline():
         # (backend package not on Airflow worker's PYTHONPATH)
         if "/opt/airflow/backend" not in sys.path:
             sys.path.insert(0, "/opt/airflow/backend")
-        from app.services.coingecko_client import CoinGeckoClient
+        from app.services.market_data.coingecko_client import CoinGeckoClient
 
         session = SessionLocal()
 

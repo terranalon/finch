@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Asset, AssetPrice, Holding, Transaction
-from app.services.cryptocompare_client import CryptoCompareClient
+from app.services.market_data.cryptocompare_client import CryptoCompareClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
