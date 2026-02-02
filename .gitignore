@@ -79,3 +79,5 @@ htmlcov/
 backend/data/broker_uploads/*/
 
 .claude/settings.local.json
+# Git Worktrees
+.worktrees/
