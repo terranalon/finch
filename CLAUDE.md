@@ -8,11 +8,6 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 - **Always launch Opus subagents** for complex reasoning tasks
 - Run `ruff check --fix . && ruff format .` before committing
 
-## Reference Docs
-
-- [Broker Integration Guidelines](docs/BROKER_INTEGRATION.md) - Dual-entry accounting, fee handling, decimal precision
-- [Airflow Development](docs/AIRFLOW_DEV.md) - Container architecture, common operations, gotchas
-
 ## Commands
 
 | Command | Purpose |
@@ -49,3 +44,20 @@ If Docker daemon is not running, start Docker Desktop first:
 ```bash
 open -a Docker  # macOS
 ```
+
+## Troubleshooting
+
+### Airflow DAGs failing with 500 errors to backend
+
+If Airflow tasks fail to authenticate with the backend (500 errors), check for port conflicts:
+
+```bash
+lsof -i :8000  # Should show ONLY Docker, not Python processes
+```
+
+If you see Python processes alongside Docker, kill them:
+```bash
+kill <PID>  # Kill any non-Docker processes on port 8000
+```
+
+This happens when uvicorn was run directly on the host and left zombie processes.
