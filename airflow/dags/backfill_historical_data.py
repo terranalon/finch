@@ -265,7 +265,7 @@ def backfill_historical_data():
         """
         # Import here to avoid loading at DAG parse time
         sys.path.insert(0, "/opt/airflow/backend")
-        from app.services.cryptocompare_client import CryptoCompareClient
+        from app.services.market_data.cryptocompare_client import CryptoCompareClient
 
         params = context["params"]
         start_str = params.get("start_date", "2017-01-01")  # Default to 2017 for crypto
