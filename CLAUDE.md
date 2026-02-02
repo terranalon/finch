@@ -45,6 +45,17 @@ If Docker daemon is not running, start Docker Desktop first:
 open -a Docker  # macOS
 ```
 
+## Git Worktrees
+
+Use `.worktrees/` directory for isolated feature work. Cleanup order matters:
+
+1. Merge the PR first (so the branch is "merged")
+2. Remove the worktree: `git worktree remove .worktrees/<name>`
+3. Delete the local branch: `git branch -d <branch-name>`
+4. Pull main to get merged changes: `git pull origin main`
+
+The `-d` flag (lowercase) only deletes if the branch is merged, preventing accidental data loss.
+
 ## Troubleshooting
 
 ### Airflow DAGs failing with 500 errors to backend
