@@ -11,14 +11,20 @@ The Repository pattern separates data access from business logic:
 Dependency direction: Services -> Repositories -> Models
 """
 
+from .account_repository import AccountRepository
 from .asset_repository import AssetRepository
 from .exceptions import DuplicateError, NotFoundError, RepositoryError
 from .holding_repository import HoldingRepository
+from .price_repository import PriceRepository
+from .user_repository import UserRepository
 
 __all__ = [
+    "AccountRepository",
     "AssetRepository",
     "DuplicateError",
     "HoldingRepository",
     "NotFoundError",
+    "PriceRepository",
     "RepositoryError",
+    "UserRepository",
 ]
