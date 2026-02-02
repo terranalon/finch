@@ -17,8 +17,13 @@ from app.services.auth.auth_service import AuthService
 
 @pytest.fixture(scope="session")
 def engine():
-    """Create test database engine."""
-    # Use test database URL from environment or default
+    """Create test database engine.
+
+    Note: We don't drop_all() at teardown because:
+    1. Each test uses transaction rollback for isolation (data is already clean)
+    2. Tables can persist between runs (create_all is idempotent)
+    3. drop_all fails with foreign key dependencies unless using CASCADE
+    """
     test_db_url = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql://portfolio_user:dev_password@localhost:5432/portfolio_tracker_test",
@@ -26,7 +31,6 @@ def engine():
     engine = create_engine(test_db_url)
     Base.metadata.create_all(bind=engine)
     yield engine
-    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
