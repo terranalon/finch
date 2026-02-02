@@ -29,7 +29,7 @@ from app.schemas.portfolio import (
 from app.schemas.portfolio import (
     Portfolio as PortfolioSchema,
 )
-from app.services.currency_service import CurrencyService
+from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
 

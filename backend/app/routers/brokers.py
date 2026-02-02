@@ -23,14 +23,17 @@ from app.models.account import Account
 from app.models.user import User
 
 # Import broker clients and services at module level for testability
-from app.services.binance_client import BinanceClient, BinanceCredentials
-from app.services.bit2c_client import Bit2CClient, Bit2CCredentials
-from app.services.ibkr_flex_client import IBKRFlexClient
-from app.services.ibkr_flex_import_service import IBKRFlexImportService
-from app.services.import_service_registry import BrokerImportServiceRegistry
-from app.services.kraken_client import KrakenClient, KrakenCredentials
-from app.services.snapshot_service import generate_snapshots_background, update_snapshot_status
-from app.services.staged_import_service import StagedImportService
+from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
+from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
+from app.services.brokers.ibkr.flex_client import IBKRFlexClient
+from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
+from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
+from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
+from app.services.portfolio.snapshot_service import (
+    generate_snapshots_background,
+    update_snapshot_status,
+)
+from app.services.shared.staged_import_service import StagedImportService
 
 logger = logging.getLogger(__name__)
 

@@ -4,13 +4,13 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from app.services.base_broker_parser import (
+from app.services.brokers.base_broker_parser import (
     BrokerImportData,
     ParsedCashTransaction,
     ParsedPosition,
     ParsedTransaction,
 )
-from app.services.israeli_securities_import_service import IsraeliSecuritiesImportService
+from app.services.brokers.shared.israeli_import_service import IsraeliSecuritiesImportService
 
 
 class TestSymbolResolution:

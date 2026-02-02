@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from app.services.meitav_parser import (
+from app.services.brokers.meitav.parser import (
     ACTION_TYPE_MAP,
     AGOROT_TO_ILS,
     BALANCE_COLUMNS,
@@ -342,13 +342,13 @@ class TestBrokerParserRegistry:
 
     def test_meitav_in_registry(self):
         """Test that meitav parser is registered."""
-        from app.services.broker_parser_registry import BrokerParserRegistry
+        from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 
         assert BrokerParserRegistry.is_supported("meitav")
 
     def test_get_meitav_parser(self):
         """Test getting meitav parser from registry."""
-        from app.services.broker_parser_registry import BrokerParserRegistry
+        from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 
         parser = BrokerParserRegistry.get_parser("meitav")
         assert parser is not None

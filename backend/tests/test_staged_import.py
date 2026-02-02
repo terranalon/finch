@@ -17,8 +17,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import Account, Asset, Holding, Transaction
-from app.services.staged_import_service import StagedImportService
-from app.services.staging_utils import (
+from app.services.shared.staged_import_service import StagedImportService
+from app.services.shared.staging_utils import (
     cleanup_staging,
     copy_production_to_staging,
     create_staging_schema,
@@ -240,8 +240,8 @@ class TestStagingTableUtilities:
 class TestStagedImportService:
     """Tests for the StagedImportService."""
 
-    @patch("app.services.staged_import_service.IBKRFlexClient")
-    @patch("app.services.staged_import_service.IBKRParser")
+    @patch("app.services.shared.staged_import_service.IBKRFlexClient")
+    @patch("app.services.shared.staged_import_service.IBKRParser")
     def test_staged_import_creates_assets(
         self,
         mock_parser,
@@ -283,8 +283,8 @@ class TestStagedImportService:
         assert "MSFT" in symbols
         assert "USD" in symbols
 
-    @patch("app.services.staged_import_service.IBKRFlexClient")
-    @patch("app.services.staged_import_service.IBKRParser")
+    @patch("app.services.shared.staged_import_service.IBKRFlexClient")
+    @patch("app.services.shared.staged_import_service.IBKRParser")
     def test_staged_import_creates_holdings(
         self,
         mock_parser,
@@ -322,8 +322,8 @@ class TestStagedImportService:
         if aapl_holding:
             assert aapl_holding.quantity == Decimal("100")
 
-    @patch("app.services.staged_import_service.IBKRFlexClient")
-    @patch("app.services.staged_import_service.IBKRParser")
+    @patch("app.services.shared.staged_import_service.IBKRFlexClient")
+    @patch("app.services.shared.staged_import_service.IBKRParser")
     def test_staged_import_creates_transactions(
         self,
         mock_parser,
@@ -353,8 +353,8 @@ class TestStagedImportService:
         assert stats["status"] == "completed"
         assert stats["transactions"]["imported"] >= 2
 
-    @patch("app.services.staged_import_service.IBKRFlexClient")
-    @patch("app.services.staged_import_service.IBKRParser")
+    @patch("app.services.shared.staged_import_service.IBKRFlexClient")
+    @patch("app.services.shared.staged_import_service.IBKRParser")
     def test_staged_import_handles_duplicates(
         self,
         mock_parser,
@@ -412,10 +412,10 @@ class TestStagedImportService:
 class TestDataIntegrity:
     """Tests to verify data integrity between atomic and staged imports."""
 
-    @patch("app.services.ibkr_flex_import_service.IBKRFlexClient")
-    @patch("app.services.ibkr_flex_import_service.IBKRParser")
-    @patch("app.services.staged_import_service.IBKRFlexClient")
-    @patch("app.services.staged_import_service.IBKRParser")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRFlexClient")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRParser")
+    @patch("app.services.shared.staged_import_service.IBKRFlexClient")
+    @patch("app.services.shared.staged_import_service.IBKRParser")
     def test_staged_matches_atomic_import(
         self,
         staged_parser,
@@ -433,7 +433,7 @@ class TestDataIntegrity:
 
         This is the critical test that ensures logic hasn't changed.
         """
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
+        from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 
         # Setup mocks for both services
         for parser, client in [

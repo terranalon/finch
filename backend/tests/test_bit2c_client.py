@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.bit2c_client import (
+from app.services.brokers.bit2c.client import (
     Bit2CClient,
     Bit2CCredentials,
 )

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.binance_client import (
+from app.services.brokers.binance.client import (
     BinanceAPIError,
     BinanceClient,
     BinanceCredentials,
@@ -182,7 +182,7 @@ class TestBinanceClientAPIRequests:
     def client(self):
         return BinanceClient(BinanceCredentials("test_key", "test_secret"))
 
-    @patch("app.services.binance_client.httpx.Client")
+    @patch("app.services.brokers.binance.client.httpx.Client")
     def test_get_account_balances(self, mock_client_class, client):
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -208,7 +208,7 @@ class TestBinanceClientAPIRequests:
         assert balances["ETH"] == Decimal("2.0")
         assert "USDT" not in balances  # Zero balance excluded
 
-    @patch("app.services.binance_client.httpx.Client")
+    @patch("app.services.brokers.binance.client.httpx.Client")
     def test_api_error_handling(self, mock_client_class, client):
         mock_response = MagicMock()
         mock_response.json.return_value = {

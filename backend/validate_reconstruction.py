@@ -8,9 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+
 from app.database import SessionLocal
 from app.models import Asset, Holding
-from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
 
 
 def main():

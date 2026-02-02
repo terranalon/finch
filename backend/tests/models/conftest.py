@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 @pytest.fixture

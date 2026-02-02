@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 def test_hash_password():

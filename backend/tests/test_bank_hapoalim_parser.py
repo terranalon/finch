@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.bank_hapoalim_parser import BankHapoalimParser
+from app.services.brokers.bank_hapoalim.parser import BankHapoalimParser
 
 
 class TestBankHapoalimParserMetadata:

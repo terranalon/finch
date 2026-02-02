@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Asset
 from app.models.asset_price import AssetPrice
-from app.services.price_fetcher import PriceFetcher
+from app.services.market_data.price_fetcher import PriceFetcher
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def db_session(test_db):
 class TestFetchAndStoreHistoricalPrices:
     """Tests for bulk historical price fetching."""
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_fetches_stock_prices_for_date_range(self, mock_yf, db_session):
         """Should fetch and store historical prices for a stock."""
         # Setup: create a stock asset
@@ -101,7 +101,7 @@ class TestFetchAndStoreHistoricalPrices:
         assert float(prices[0].closing_price) == 150.0
         assert prices[0].date == date(2024, 1, 2)
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_skips_dates_already_in_db(self, mock_yf, db_session):
         """Should skip dates that already have prices."""
         asset = Asset(
@@ -144,7 +144,7 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.refresh(existing)
         assert float(existing.closing_price) == 999.00
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_handles_israeli_stock_agorot_conversion(self, mock_yf, db_session):
         """Should convert .TA stocks from Agorot to ILS (divide by 100)."""
         asset = Asset(
@@ -172,7 +172,7 @@ class TestFetchAndStoreHistoricalPrices:
         price = db_session.query(AssetPrice).filter(AssetPrice.asset_id == asset.id).first()
         assert float(price.closing_price) == 12.34  # Converted from Agorot
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_skips_cash_assets(self, mock_yf, db_session):
         """Should skip cash assets entirely."""
         asset = Asset(
@@ -191,7 +191,7 @@ class TestFetchAndStoreHistoricalPrices:
         assert count == 0
         mock_yf.Ticker.assert_not_called()
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_handles_empty_history(self, mock_yf, db_session):
         """Should handle empty history gracefully."""
         asset = Asset(
@@ -213,7 +213,7 @@ class TestFetchAndStoreHistoricalPrices:
 
         assert count == 0
 
-    @patch("app.services.price_fetcher.yf")
+    @patch("app.services.market_data.price_fetcher.yf")
     def test_handles_yfinance_exception(self, mock_yf, db_session):
         """Should handle yfinance exceptions gracefully."""
         asset = Asset(
@@ -244,7 +244,7 @@ class TestFetchAndStoreHistoricalPrices:
 class TestFetchAndStoreHistoricalCryptoPrices:
     """Tests for crypto historical price fetching."""
 
-    @patch("app.services.price_fetcher.CryptoCompareClient")
+    @patch("app.services.market_data.price_fetcher.CryptoCompareClient")
     def test_uses_cryptocompare_for_old_dates(self, mock_cc_class, db_session):
         """Should use CryptoCompare for dates older than 365 days."""
         asset = Asset(
@@ -285,7 +285,7 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         assert len(prices) >= 2
         assert prices[0].date == old_start
 
-    @patch("app.services.price_fetcher.CoinGeckoClient")
+    @patch("app.services.market_data.price_fetcher.CoinGeckoClient")
     def test_uses_coingecko_for_recent_dates(self, mock_cg_class, db_session):
         """Should use CoinGecko for dates within 365 days."""
         asset = Asset(
@@ -315,8 +315,8 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         assert count >= 2
         mock_client.get_price_history.assert_called()
 
-    @patch("app.services.price_fetcher.CryptoCompareClient")
-    @patch("app.services.price_fetcher.CoinGeckoClient")
+    @patch("app.services.market_data.price_fetcher.CryptoCompareClient")
+    @patch("app.services.market_data.price_fetcher.CoinGeckoClient")
     def test_uses_both_for_spanning_dates(self, mock_cg_class, mock_cc_class, db_session):
         """Should use both CryptoCompare and CoinGecko for date ranges spanning the 365-day boundary."""
         asset = Asset(
@@ -353,7 +353,7 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         mock_cg_client.get_price_history.assert_called()
         assert count >= 2
 
-    @patch("app.services.price_fetcher.CoinGeckoClient")
+    @patch("app.services.market_data.price_fetcher.CoinGeckoClient")
     def test_skips_existing_crypto_prices(self, mock_cg_class, db_session):
         """Should skip dates that already have prices for crypto."""
         asset = Asset(

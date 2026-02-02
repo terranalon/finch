@@ -7,7 +7,7 @@ import secrets
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 logger = logging.getLogger(__name__)
 

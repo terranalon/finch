@@ -18,7 +18,7 @@ from app.models import (
     Transaction,
     User,
 )
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 def create_tables():

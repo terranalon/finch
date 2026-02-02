@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.coingecko_client import (
+from app.services.market_data.coingecko_client import (
     SYMBOL_TO_ID,
     CoinGeckoAPIError,
     CoinGeckoClient,

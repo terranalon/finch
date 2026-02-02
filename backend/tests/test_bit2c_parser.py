@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.bit2c_parser import Bit2CParser
+from app.services.brokers.bit2c.parser import Bit2CParser
 
 
 @pytest.fixture

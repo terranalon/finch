@@ -19,8 +19,8 @@ from app.models import Account, Asset, Holding, Transaction
 from app.models.broker_data_source import BrokerDataSource
 from app.models.portfolio import Portfolio
 from app.models.user import User
-from app.services.auth_service import AuthService
-from app.services.transaction_hash_service import (
+from app.services.auth import AuthService
+from app.services.shared.transaction_hash_service import (
     DedupResult,
     compute_transaction_hash,
     create_or_transfer_transaction,

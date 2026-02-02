@@ -18,8 +18,8 @@ from app.schemas.transaction_views import (
     ForexResponse,
     TradeResponse,
 )
-from app.services.currency_conversion_helper import CurrencyConversionHelper
-from app.services.price_fetcher import PriceFetcher
+from app.services.market_data.price_fetcher import PriceFetcher
+from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
 
 logger = logging.getLogger(__name__)
 

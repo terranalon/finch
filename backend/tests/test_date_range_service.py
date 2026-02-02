@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from app.services.date_range_service import merge_ranges, shrink_date_ranges
+from app.services.shared.date_range_service import merge_ranges, shrink_date_ranges
 
 
 class TestShrinkDateRanges:

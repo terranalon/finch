@@ -9,7 +9,7 @@ from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfa
 from app.rate_limiter import limiter
-from app.services.mfa_service import MfaService
+from app.services.auth import MfaService
 
 
 def _create_verified_user(

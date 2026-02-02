@@ -12,8 +12,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Account, HistoricalSnapshot, Portfolio
 from app.models.user import User
-from app.services.auth_service import AuthService
-from app.services.snapshot_service import SnapshotService
+from app.services.auth import AuthService
+from app.services.portfolio.snapshot_service import SnapshotService
 
 
 @pytest.fixture
@@ -84,10 +84,10 @@ def test_account(db_session):
 class TestGenerateAccountSnapshots:
     """Tests for unified snapshot generation."""
 
-    @patch("app.services.snapshot_service.HistoricalDataFetcher")
-    @patch("app.services.snapshot_service.PortfolioReconstructionService")
-    @patch("app.services.snapshot_service.PriceFetcher")
-    @patch("app.services.snapshot_service.CurrencyService")
+    @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
+    @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
+    @patch("app.services.portfolio.snapshot_service.PriceFetcher")
+    @patch("app.services.portfolio.snapshot_service.CurrencyService")
     def test_generates_snapshots_for_date_range(
         self, mock_currency, mock_price, mock_recon, mock_fetcher, db_session, test_account
     ):
@@ -158,8 +158,8 @@ class TestGenerateAccountSnapshots:
         assert snapshots[0].date == date(2024, 1, 1)
         assert snapshots[0].total_value_usd > 0
 
-    @patch("app.services.snapshot_service.HistoricalDataFetcher")
-    @patch("app.services.snapshot_service.PortfolioReconstructionService")
+    @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
+    @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
     def test_invalidate_existing_deletes_old_snapshots(
         self, mock_recon, mock_fetcher, db_session, test_account
     ):
@@ -193,8 +193,8 @@ class TestGenerateAccountSnapshots:
         # Old snapshot should be deleted
         assert db_session.get(HistoricalSnapshot, old_id) is None
 
-    @patch("app.services.snapshot_service.HistoricalDataFetcher")
-    @patch("app.services.snapshot_service.PortfolioReconstructionService")
+    @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
+    @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
     def test_skips_existing_snapshots_when_not_invalidating(
         self, mock_recon, mock_fetcher, db_session, test_account
     ):

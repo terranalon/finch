@@ -11,8 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Account, Asset, Holding, Portfolio, Transaction
 from app.models.user import User
-from app.services.auth_service import AuthService
-from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+from app.services.auth import AuthService
+from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
 
 
 @pytest.fixture

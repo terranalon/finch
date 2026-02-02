@@ -14,8 +14,8 @@ from app.models.user_recovery_code import UserRecoveryCode
 from app.rate_limiter import limiter
 from app.schemas.admin import AdminDisableMfaRequest
 from app.schemas.auth import MessageResponse
-from app.services.email_service import EmailService
-from app.services.security_audit_service import SecurityAuditService, SecurityEventType
+from app.services.auth.security_audit_service import SecurityAuditService, SecurityEventType
+from app.services.shared.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
