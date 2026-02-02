@@ -12,8 +12,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Account, Asset, Holding, Portfolio
 from app.models.user import User
-from app.services.auth_service import AuthService
-from app.services.historical_data_fetcher import HistoricalDataFetcher
+from app.services.auth import AuthService
+from app.services.market_data.historical_data_fetcher import HistoricalDataFetcher
 
 
 @pytest.fixture
@@ -141,8 +141,8 @@ def test_account_with_holdings(db_session, test_portfolio):
 class TestEnsureHistoricalData:
     """Tests for the historical data orchestrator."""
 
-    @patch("app.services.historical_data_fetcher.PriceFetcher")
-    @patch("app.services.historical_data_fetcher.CurrencyService")
+    @patch("app.services.market_data.historical_data_fetcher.PriceFetcher")
+    @patch("app.services.market_data.historical_data_fetcher.CurrencyService")
     def test_fetches_prices_for_all_account_assets(
         self, mock_currency, mock_price, db_session, test_account_with_holdings
     ):
@@ -165,8 +165,8 @@ class TestEnsureHistoricalData:
         assert "prices_fetched" in stats
         assert "rates_fetched" in stats
 
-    @patch("app.services.historical_data_fetcher.PriceFetcher")
-    @patch("app.services.historical_data_fetcher.CurrencyService")
+    @patch("app.services.market_data.historical_data_fetcher.PriceFetcher")
+    @patch("app.services.market_data.historical_data_fetcher.CurrencyService")
     def test_returns_stats_on_success(
         self, mock_currency, mock_price, db_session, test_account_with_holdings
     ):
@@ -184,8 +184,8 @@ class TestEnsureHistoricalData:
         assert stats["assets_processed"] == 2
         assert stats["errors"] == []
 
-    @patch("app.services.historical_data_fetcher.PriceFetcher")
-    @patch("app.services.historical_data_fetcher.CurrencyService")
+    @patch("app.services.market_data.historical_data_fetcher.PriceFetcher")
+    @patch("app.services.market_data.historical_data_fetcher.CurrencyService")
     def test_handles_price_fetch_errors_gracefully(
         self, mock_currency, mock_price, db_session, test_account_with_holdings
     ):

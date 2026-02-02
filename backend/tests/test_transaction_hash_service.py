@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.services.transaction_hash_service import compute_transaction_hash
+from app.services.shared.transaction_hash_service import compute_transaction_hash
 
 
 class TestComputeTransactionHash:

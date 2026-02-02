@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.tase_api_service import TASEApiService, TASESecurityInfo
+from app.services.brokers.shared.tase_api_service import TASEApiService, TASESecurityInfo
 
 
 class TestTASESecurityInfo:
@@ -34,7 +34,7 @@ class TestTASESecurityInfo:
 class TestTASEApiServiceInit:
     """Test TASEApiService initialization."""
 
-    @patch("app.services.tase_api_service.settings")
+    @patch("app.services.brokers.shared.tase_api_service.settings")
     def test_init_with_settings(self, mock_settings):
         """Test initialization with settings."""
         mock_settings.tase_api_key = "test_key"
@@ -133,7 +133,7 @@ class TestTASEApiServiceLookup:
 class TestTASEApiServiceSync:
     """Test TASE API service sync methods."""
 
-    @patch("app.services.tase_api_service.requests.get")
+    @patch("app.services.brokers.shared.tase_api_service.requests.get")
     def test_fetch_securities_list(self, mock_get):
         """Test fetching securities list from API."""
         service = TASEApiService(api_key="test_key", base_url="https://test.com")
@@ -182,7 +182,7 @@ class TestTASEApiServiceSync:
         with pytest.raises(ValueError, match="API key not configured"):
             service.sync_securities_list(mock_db)
 
-    @patch("app.services.tase_api_service.requests.get")
+    @patch("app.services.brokers.shared.tase_api_service.requests.get")
     def test_sync_securities_list(self, mock_get):
         """Test syncing securities list to database."""
         service = TASEApiService(api_key="test_key", base_url="https://test.com")

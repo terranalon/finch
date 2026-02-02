@@ -9,8 +9,8 @@ from decimal import Decimal
 
 from app.database import SessionLocal
 from app.models import Holding, Transaction
-from app.services.kraken_client import KrakenClient, KrakenCredentials
-from app.services.kraken_constants import normalize_kraken_asset
+from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
+from app.services.brokers.kraken.constants import normalize_kraken_asset
 
 KRAKEN_ACCOUNT_ID = 23
 

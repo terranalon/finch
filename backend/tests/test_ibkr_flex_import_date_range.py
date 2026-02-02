@@ -3,8 +3,6 @@
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestImportAllReturnsDateRange:
     """Tests for date_range in IBKRFlexImportService.import_all stats."""
@@ -16,10 +14,10 @@ class TestImportAllReturnsDateRange:
         self, mock_client, mock_parser, mock_import_service
     ):
         """import_all should return date_range calculated from transaction dates."""
+        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
 
         # Create mock session
         mock_db = MagicMock(spec=Session)
@@ -78,10 +76,10 @@ class TestImportAllReturnsDateRange:
         self, mock_client, mock_parser, mock_import_service
     ):
         """date_range should include dates from transactions, dividends, transfers, and forex."""
+        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
 
         mock_db = MagicMock(spec=Session)
         mock_account = MagicMock(spec=Account)
@@ -138,10 +136,10 @@ class TestImportAllReturnsDateRange:
         self, mock_client, mock_parser, mock_import_service
     ):
         """date_range should not be present when there are no dated transactions."""
+        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
 
         mock_db = MagicMock(spec=Session)
         mock_account = MagicMock(spec=Account)

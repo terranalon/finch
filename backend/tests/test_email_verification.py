@@ -224,7 +224,7 @@ class TestServiceAccountLogin:
     def test_service_account_can_login_without_email_verification(self, auth_client):
         """Service accounts should be able to login even if email_verified=False."""
         test_auth_client, db_session_maker = auth_client
-        from app.services.auth_service import AuthService
+        from app.services.auth import AuthService
 
         # Create a service account with email_verified=False
         db = db_session_maker()

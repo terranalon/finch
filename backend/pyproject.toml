@@ -36,6 +36,8 @@ dependencies = [
     "cryptography>=42.0.0",
     # Rate limiting
     "slowapi>=0.1.9",
+    # HTTP client retry logic
+    "tenacity>=8.2.0",
 ]
 
 [project.optional-dependencies]

@@ -2,13 +2,13 @@
 
 from unittest.mock import patch
 
-from app.services.asset_type_detector import AssetTypeDetector, AssetTypeResult
+from app.services.shared.asset_type_detector import AssetTypeDetector, AssetTypeResult
 
 
 class TestAssetTypeDetector:
     """Tests for asset type detection using Yahoo Finance."""
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_detect_etf(self, mock_ticker):
         """Test detection of ETF."""
         mock_ticker.return_value.info = {
@@ -22,7 +22,7 @@ class TestAssetTypeDetector:
         assert result.source == "yfinance"
         assert result.error is None
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_detect_mutual_fund(self, mock_ticker):
         """Test detection of Mutual Fund."""
         mock_ticker.return_value.info = {
@@ -36,7 +36,7 @@ class TestAssetTypeDetector:
         assert result.source == "yfinance"
         assert result.error is None
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_detect_stock(self, mock_ticker):
         """Test detection of Stock (EQUITY)."""
         mock_ticker.return_value.info = {
@@ -50,7 +50,7 @@ class TestAssetTypeDetector:
         assert result.source == "yfinance"
         assert result.error is None
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_detect_money_market(self, mock_ticker):
         """Test detection of Money Market fund."""
         mock_ticker.return_value.info = {
@@ -64,7 +64,7 @@ class TestAssetTypeDetector:
         assert result.source == "yfinance"
         assert result.error is None
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_symbol_not_found(self, mock_ticker):
         """Test handling of symbol not found in Yahoo Finance."""
         mock_ticker.return_value.info = {}
@@ -76,7 +76,7 @@ class TestAssetTypeDetector:
         assert result.error is not None
         assert "not found" in result.error.lower()
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_symbol_not_found_none_price(self, mock_ticker):
         """Test handling when regularMarketPrice is None."""
         mock_ticker.return_value.info = {"quoteType": "ETF", "regularMarketPrice": None}
@@ -86,7 +86,7 @@ class TestAssetTypeDetector:
         assert result.detected_type is None
         assert result.source == "not_found"
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_unknown_quote_type(self, mock_ticker):
         """Test handling of unknown quoteType."""
         mock_ticker.return_value.info = {
@@ -101,7 +101,7 @@ class TestAssetTypeDetector:
         assert result.error is not None
         assert "Unknown quoteType" in result.error
 
-    @patch("app.services.asset_type_detector.yf.Ticker")
+    @patch("app.services.shared.asset_type_detector.yf.Ticker")
     def test_api_error(self, mock_ticker):
         """Test handling of API errors."""
         mock_ticker.side_effect = Exception("Network error")

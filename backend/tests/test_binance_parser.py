@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.binance_parser import BinanceParser, parse_symbol
+from app.services.brokers.binance.parser import BinanceParser, parse_symbol
 
 
 class TestSymbolParsing:

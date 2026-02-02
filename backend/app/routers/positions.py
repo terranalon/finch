@@ -12,9 +12,9 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import Account, Asset, AssetPrice, Holding
 from app.models.user import User
-from app.services.currency_conversion_helper import CurrencyConversionHelper
-from app.services.currency_service import CurrencyService
-from app.services.trading_calendar_service import TradingCalendarService
+from app.services.portfolio.trading_calendar_service import TradingCalendarService
+from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
 

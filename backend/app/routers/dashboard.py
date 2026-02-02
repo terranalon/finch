@@ -14,8 +14,8 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import Account, Asset, HistoricalSnapshot, Holding
 from app.models.user import User
-from app.services.currency_conversion_helper import CurrencyConversionHelper
-from app.services.currency_service import CurrencyService
+from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.currency_service import CurrencyService
 
 logger = logging.getLogger(__name__)
 

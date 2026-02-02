@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.services.kraken_parser import KrakenParser
+from app.services.brokers.kraken.parser import KrakenParser
 
 if TYPE_CHECKING:
     from app.schemas.broker_import import BrokerImportData

@@ -21,7 +21,7 @@ from app.models import Account, Asset, Holding, Transaction
 from app.models.broker_data_source import BrokerDataSource
 from app.models.portfolio import Portfolio
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 @pytest.fixture

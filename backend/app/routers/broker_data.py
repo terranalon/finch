@@ -34,13 +34,16 @@ from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services.base_import_service import extract_unique_symbols
-from app.services.broker_file_storage import get_file_storage
-from app.services.broker_overlap_detector import get_overlap_detector
-from app.services.broker_parser_registry import BrokerParserRegistry
-from app.services.import_service_registry import BrokerImportServiceRegistry
-from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
-from app.services.snapshot_service import generate_snapshots_background, update_snapshot_status
+from app.services.brokers.base_import_service import extract_unique_symbols
+from app.services.brokers.broker_parser_registry import BrokerParserRegistry
+from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
+from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
+from app.services.portfolio.snapshot_service import (
+    generate_snapshots_background,
+    update_snapshot_status,
+)
+from app.services.shared.broker_file_storage import get_file_storage
+from app.services.shared.broker_overlap_detector import get_overlap_detector
 
 logger = logging.getLogger(__name__)
 
@@ -385,8 +388,8 @@ async def upload_broker_file(
     try:
         # For IBKR, use the existing parser and import service
         if broker_type == "ibkr":
-            from app.services.ibkr_import_service import IBKRImportService
-            from app.services.ibkr_parser import IBKRParser
+            from app.services.brokers.ibkr.import_service import IBKRImportService
+            from app.services.brokers.ibkr.parser import IBKRParser
 
             # Parse XML using IBKRParser
             root = IBKRParser.parse_xml(content)
@@ -446,7 +449,7 @@ async def upload_broker_file(
             )
 
             # Run validation against IBKR's authoritative cash positions
-            from app.services.ibkr_validation_service import validate_ibkr_import
+            from app.services.brokers.ibkr.validation_service import validate_ibkr_import
 
             validation_result = validate_ibkr_import(
                 transactions=transactions_data,

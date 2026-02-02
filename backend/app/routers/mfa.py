@@ -30,10 +30,10 @@ from app.schemas.mfa import (
     TotpConfirmRequest,
     TotpSetupResponse,
 )
-from app.services.auth_service import AuthService
-from app.services.email_service import EmailService
-from app.services.mfa_service import MfaService
-from app.services.security_audit_service import SecurityAuditService, SecurityEventType
+from app.services.auth.auth_service import AuthService
+from app.services.auth.mfa_service import MfaService
+from app.services.auth.security_audit_service import SecurityAuditService, SecurityEventType
+from app.services.shared.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 

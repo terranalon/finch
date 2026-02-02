@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models.exchange_rate import ExchangeRate
-from app.services.currency_service import CurrencyService
+from app.services.shared.currency_service import CurrencyService
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def db_session(test_db):
 class TestFetchAndStoreHistoricalRates:
     """Tests for bulk historical exchange rate fetching."""
 
-    @patch("app.services.currency_service.yf")
+    @patch("app.services.shared.currency_service.yf")
     def test_fetches_rates_for_date_range(self, mock_yf, db_session):
         """Should fetch and store historical exchange rates."""
         mock_history = pd.DataFrame(
@@ -91,7 +91,7 @@ class TestFetchAndStoreHistoricalRates:
         assert len(rates) == 3
         assert float(rates[0].rate) == 3.70
 
-    @patch("app.services.currency_service.yf")
+    @patch("app.services.shared.currency_service.yf")
     def test_skips_existing_rates(self, mock_yf, db_session):
         """Should skip dates that already have rates."""
         # Pre-existing rate
@@ -128,7 +128,7 @@ class TestFetchAndStoreHistoricalRates:
         )
         assert count == 0
 
-    @patch("app.services.currency_service.yf")
+    @patch("app.services.shared.currency_service.yf")
     def test_handles_empty_history(self, mock_yf, db_session):
         """Should handle empty history gracefully."""
         mock_ticker = MagicMock()
@@ -141,7 +141,7 @@ class TestFetchAndStoreHistoricalRates:
 
         assert count == 0
 
-    @patch("app.services.currency_service.yf")
+    @patch("app.services.shared.currency_service.yf")
     def test_handles_yfinance_exception(self, mock_yf, db_session):
         """Should handle yfinance exceptions gracefully."""
         mock_yf.Ticker.side_effect = Exception("API error")

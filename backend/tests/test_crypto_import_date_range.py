@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.base_broker_parser import (
+from app.services.brokers.base_broker_parser import (
     BrokerImportData,
     ParsedCashTransaction,
     ParsedTransaction,
@@ -19,8 +19,8 @@ class TestImportDataReturnsDateRange:
     @pytest.fixture
     def mock_service(self):
         """Create a CryptoImportService with all DB operations mocked."""
-        with patch("app.services.crypto_import_service.CoinGeckoClient"):
-            from app.services.crypto_import_service import CryptoImportService
+        with patch("app.services.brokers.shared.crypto_import_service.CoinGeckoClient"):
+            from app.services.brokers.shared.crypto_import_service import CryptoImportService
 
             mock_db = MagicMock()
             mock_db.query.return_value.filter.return_value.first.return_value = None

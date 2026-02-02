@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.import_service_registry import BrokerImportServiceRegistry
+from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 
 
 class TestBrokerImportServiceRegistry:

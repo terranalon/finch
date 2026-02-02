@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.base_import_service import BaseBrokerImportService
+from app.services.brokers.base_import_service import BaseBrokerImportService
 
 
 class TestBaseBrokerImportService:

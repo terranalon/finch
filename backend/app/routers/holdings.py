@@ -258,7 +258,9 @@ async def reconstruct_holdings(
     from datetime import date
     from decimal import Decimal
 
-    from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+    from app.services.portfolio.portfolio_reconstruction_service import (
+        PortfolioReconstructionService,
+    )
 
     # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)

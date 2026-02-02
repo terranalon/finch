@@ -14,7 +14,7 @@ from app.models.holding import Holding
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,7 @@ def create_demo_user(db: DBSession) -> tuple[User, Portfolio, Portfolio | None]:
         email=DEMO_EMAIL,
         password_hash=AuthService.hash_password(DEMO_PASSWORD),
         is_active=True,
+        email_verified=True,  # Demo account should be pre-verified
     )
     db.add(user)
     db.flush()  # Get user.id before creating portfolio

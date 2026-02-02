@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.kraken_client import (
+from app.services.brokers.kraken.client import (
     KrakenAPIError,
     KrakenClient,
     KrakenCredentials,

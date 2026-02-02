@@ -13,7 +13,7 @@ from app.main import app
 from app.models.portfolio import Portfolio
 from app.models.session import Session as UserSession
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 @pytest.fixture

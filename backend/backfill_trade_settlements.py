@@ -7,10 +7,11 @@ transactions that don't already have corresponding settlements.
 import logging
 from decimal import Decimal
 
-from app.database import SessionLocal
-from app.models import Asset, Holding, Transaction
 from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_parser import IBKRParser
+
+from app.database import SessionLocal
+from app.models import Asset, Holding, Transaction
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

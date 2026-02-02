@@ -12,7 +12,7 @@ from app.dependencies.auth import get_current_user
 from app.models.portfolio import Portfolio
 from app.models.session import Session
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 @pytest.fixture

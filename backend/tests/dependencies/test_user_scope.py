@@ -11,7 +11,7 @@ from app.dependencies.user_scope import get_user_account, get_user_account_ids
 from app.models.account import Account
 from app.models.portfolio import Portfolio
 from app.models.user import User
-from app.services.auth_service import AuthService
+from app.services.auth import AuthService
 
 
 @pytest.fixture

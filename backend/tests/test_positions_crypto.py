@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from app.services.trading_calendar_service import TradingCalendarService
+from app.services.portfolio.trading_calendar_service import TradingCalendarService
 
 
 class TestCryptoMarketDetection:

@@ -11,8 +11,8 @@ from app.database import get_db
 from app.models import Asset, AssetPrice, ExchangeRate
 from app.schemas.asset import Asset as AssetSchema
 from app.schemas.asset import AssetCreate, AssetUpdate
-from app.services.asset_metadata_service import AssetMetadataService
-from app.services.currency_service import CurrencyService
+from app.services.shared.asset_metadata_service import AssetMetadataService
+from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 

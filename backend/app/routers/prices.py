@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Asset
-from app.services.currency_conversion_helper import CurrencyConversionHelper
-from app.services.price_fetcher import PriceFetcher
+from app.services.market_data.price_fetcher import PriceFetcher
+from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
