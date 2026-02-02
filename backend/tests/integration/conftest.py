@@ -21,7 +21,7 @@ def engine():
     # Use test database URL from environment or default
     test_db_url = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_test",
+        "postgresql://portfolio_user:dev_password@localhost:5432/portfolio_tracker_test",
     )
     engine = create_engine(test_db_url)
     Base.metadata.create_all(bind=engine)
@@ -31,14 +31,17 @@ def engine():
 
 @pytest.fixture
 def db(engine):
-    """Create a fresh database session for each test."""
-    testing_session_local = sessionmaker(bind=engine)
+    """Create a fresh database session for each test with cleanup."""
+    connection = engine.connect()
+    transaction = connection.begin()
+    testing_session_local = sessionmaker(bind=connection)
     session = testing_session_local()
     try:
         yield session
     finally:
-        session.rollback()
         session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture
@@ -46,14 +49,11 @@ def client(db):
     """Create test client with database override."""
 
     def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
+        yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
+    with TestClient(app) as test_client:
+        yield test_client
     app.dependency_overrides.clear()
 
 
@@ -152,8 +152,7 @@ def test_holding(db, test_account, test_asset):
 
 @pytest.fixture
 def seed_holdings(db, test_account, test_asset, test_holding):
-    """Seed database with holdings for testing positions endpoint."""
-    # Add asset price for day change calculation
+    """Seed database with holdings and historical price for positions testing."""
     yesterday = date.today() - timedelta(days=1)
     price = AssetPrice(
         asset_id=test_asset.id,
@@ -163,5 +162,3 @@ def seed_holdings(db, test_account, test_asset, test_holding):
     )
     db.add(price)
     db.commit()
-
-    return {"holdings": [test_holding], "assets": [test_asset]}
