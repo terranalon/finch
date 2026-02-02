@@ -61,18 +61,6 @@ INSERT_ASSET_PRICE = """
     DO NOTHING
 """
 
-# Broker data import queries
-GET_ACCOUNTS_WITH_BROKER_API = """
-    SELECT a.id, a.metadata
-    FROM accounts a
-    WHERE a.is_active = true
-    AND a.metadata IS NOT NULL
-    AND (
-        a.metadata->'ibkr'->>'flex_token' IS NOT NULL
-        OR a.metadata->'binance'->>'api_key' IS NOT NULL
-    )
-"""
-
 # TASE securities cache queries
 UPSERT_TASE_SECURITY = """
     INSERT INTO tase_securities (
