@@ -2,6 +2,12 @@
 
 from app.schemas.account import Account, AccountCreate, AccountUpdate
 from app.schemas.asset import Asset, AssetCreate, AssetUpdate
+from app.schemas.common import (
+    ErrorDetail,
+    ErrorResponse,
+    MessageResponse,
+    PaginatedResponse,
+)
 from app.schemas.exchange_rate import ExchangeRate, ExchangeRateCreate, ExchangeRateUpdate
 from app.schemas.historical_snapshot import (
     HistoricalSnapshot,
@@ -16,6 +22,7 @@ from app.schemas.portfolio import (
     PortfolioUpdate,
     PortfolioWithAccountCount,
 )
+from app.schemas.position import PositionAccountDetail, PositionResponse
 from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.schemas.transaction_views import (
     CashActivityResponse,
@@ -33,6 +40,11 @@ __all__ = [
     "Asset",
     "AssetCreate",
     "AssetUpdate",
+    # Common schemas
+    "ErrorDetail",
+    "ErrorResponse",
+    "MessageResponse",
+    "PaginatedResponse",
     # Holding schemas
     "Holding",
     "HoldingCreate",
@@ -46,6 +58,9 @@ __all__ = [
     "PortfolioCreate",
     "PortfolioUpdate",
     "PortfolioWithAccountCount",
+    # Position schemas
+    "PositionAccountDetail",
+    "PositionResponse",
     # Transaction schemas
     "Transaction",
     "TransactionCreate",
