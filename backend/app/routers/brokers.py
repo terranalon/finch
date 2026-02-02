@@ -57,6 +57,13 @@ class FlexQueryCredentials(BaseModel):
     flex_query_id: str
 
 
+class ApiConnectionResponse(BaseModel):
+    """Response model for API connection entry."""
+
+    account_id: int
+    broker_type: str
+
+
 router = APIRouter(prefix="/api/brokers", tags=["brokers"])
 
 
@@ -313,6 +320,66 @@ async def list_brokers() -> dict[str, Any]:
             for config in BROKER_REGISTRY.values()
         ]
     }
+
+
+@router.get("/api-connections", response_model=list[ApiConnectionResponse])
+async def get_api_connections(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[ApiConnectionResponse]:
+    """Get all accounts with broker API credentials configured.
+
+    Returns account-broker pairs for all active accounts that have valid
+    API credentials configured. Used by Airflow for automated imports.
+
+    For service accounts: Returns all active accounts.
+    For regular users: Returns only accounts in their portfolios.
+
+    Returns:
+        List of {account_id, broker_type} for accounts with API credentials.
+    """
+    from app.dependencies.user_scope import get_user_account_ids
+
+    # Service accounts (Airflow) can see all accounts
+    if user.is_service_account:
+        accounts = (
+            db.query(Account)
+            .filter(
+                Account.is_active == True,  # noqa: E712
+                Account.meta_data.isnot(None),
+            )
+            .all()
+        )
+    else:
+        # Regular users only see their own accounts
+        allowed_account_ids = get_user_account_ids(user, db)
+        if not allowed_account_ids:
+            return []
+        accounts = (
+            db.query(Account)
+            .filter(
+                Account.id.in_(allowed_account_ids),
+                Account.is_active == True,  # noqa: E712
+                Account.meta_data.isnot(None),
+            )
+            .all()
+        )
+
+    results = []
+    for account in accounts:
+        if not account.meta_data:
+            continue
+        for broker_type, config in BROKER_REGISTRY.items():
+            broker_data = account.meta_data.get(broker_type, {})
+            if has_credentials(broker_data, config.credential_type):
+                results.append(
+                    ApiConnectionResponse(
+                        account_id=account.id,
+                        broker_type=broker_type,
+                    )
+                )
+
+    return results
 
 
 @router.post("/{broker_type}/import/{account_id}", response_model=dict[str, Any])

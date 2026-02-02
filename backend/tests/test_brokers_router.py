@@ -54,6 +54,17 @@ def test_db():
             )
         """)
         )
+        # Create portfolio_accounts join table for many-to-many relationship
+        conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS portfolio_accounts (
+                portfolio_id TEXT NOT NULL,
+                account_id INTEGER NOT NULL,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (portfolio_id, account_id)
+            )
+        """)
+        )
         conn.commit()
 
     return engine
@@ -95,6 +106,16 @@ def client_with_user(test_db):
         """
             ),
             {"portfolio_id": portfolio.id, "metadata": metadata},
+        )
+        # Link account to portfolio via portfolio_accounts join table
+        conn.execute(
+            text(
+                """
+            INSERT INTO portfolio_accounts (portfolio_id, account_id)
+            VALUES (:portfolio_id, 1)
+        """
+            ),
+            {"portfolio_id": portfolio.id},
         )
         conn.commit()
 
@@ -489,6 +510,151 @@ class TestIBKRImport:
         data = response.json()
         assert data["status"] == "completed"
         assert data["import_method"] == "atomic"
+
+
+class TestApiConnectionsEndpoint:
+    """Tests for GET /api/brokers/api-connections endpoint."""
+
+    def test_returns_accounts_with_kraken_credentials(self, client_with_user, auth_headers):
+        """Accounts with Kraken API credentials are included."""
+        client, _ = client_with_user
+        # The test fixture already creates an account with kraken credentials
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert any(item["account_id"] == 1 and item["broker_type"] == "kraken" for item in data)
+
+    def test_returns_accounts_with_ibkr_credentials(self, client_with_user, auth_headers):
+        """Accounts with IBKR Flex Query credentials are included."""
+        client, _ = client_with_user
+        # The test fixture already creates an account with ibkr credentials
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert any(item["account_id"] == 1 and item["broker_type"] == "ibkr" for item in data)
+
+    def test_returns_accounts_with_bit2c_credentials(self, client_with_user, auth_headers):
+        """Accounts with Bit2C API credentials are included."""
+        client, _ = client_with_user
+        # The test fixture already creates an account with bit2c credentials
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert any(item["account_id"] == 1 and item["broker_type"] == "bit2c" for item in data)
+
+    def test_returns_multiple_brokers_for_same_account(self, client_with_user, auth_headers):
+        """Account with multiple broker credentials returns multiple entries."""
+        client, _ = client_with_user
+        # The test fixture creates account with kraken, bit2c, and ibkr credentials
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        account_entries = [item for item in data if item["account_id"] == 1]
+        broker_types = {item["broker_type"] for item in account_entries}
+        assert broker_types == {"kraken", "bit2c", "ibkr"}
+
+    def test_requires_authentication(self, client_with_user):
+        """Endpoint requires valid authentication."""
+        client, _ = client_with_user
+        response = client.get("/api/brokers/api-connections")
+        assert response.status_code in [401, 403]
+
+    def test_excludes_accounts_without_credentials(self, client_with_user, auth_headers, test_db):
+        """Accounts without API credentials are excluded."""
+        client, _ = client_with_user
+
+        # Create an account without any broker credentials
+        with test_db.connect() as conn:
+            import json
+
+            metadata = json.dumps({})  # Empty metadata - no credentials
+            conn.execute(
+                text(
+                    """
+                INSERT INTO accounts (id, name, account_type, currency, is_active, metadata)
+                VALUES (999, 'Manual Only Account', 'investment', 'USD', 1, :metadata)
+            """
+                ),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert not any(item["account_id"] == 999 for item in data)
+
+    def test_excludes_inactive_accounts(self, client_with_user, auth_headers, test_db):
+        """Inactive accounts are excluded even with credentials."""
+        client, _ = client_with_user
+
+        # Create an inactive account with credentials
+        with test_db.connect() as conn:
+            import json
+
+            metadata = json.dumps(
+                {
+                    "kraken": {
+                        "api_key": "test-key",
+                        "api_secret": "test-secret",
+                    }
+                }
+            )
+            conn.execute(
+                text(
+                    """
+                INSERT INTO accounts (id, name, account_type, currency, is_active, metadata)
+                VALUES (998, 'Inactive Account', 'investment', 'USD', 0, :metadata)
+            """
+                ),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert not any(item["account_id"] == 998 for item in data)
+
+    def test_user_only_sees_own_accounts(self, client_with_user, auth_headers, test_db):
+        """Regular users only see accounts in their portfolios."""
+        client, _ = client_with_user
+
+        # Create an account NOT linked to any portfolio (orphan)
+        with test_db.connect() as conn:
+            import json
+
+            metadata = json.dumps(
+                {
+                    "kraken": {
+                        "api_key": "other-key",
+                        "api_secret": "other-secret",
+                    }
+                }
+            )
+            conn.execute(
+                text(
+                    """
+                INSERT INTO accounts (id, name, account_type, currency, is_active, metadata)
+                VALUES (997, 'Other User Account', 'investment', 'USD', 1, :metadata)
+            """
+                ),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        response = client.get("/api/brokers/api-connections", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        # The orphan account should NOT appear because it's not in user's portfolio
+        assert not any(item["account_id"] == 997 for item in data)
 
 
 class TestApiImportTriggersSnapshotGeneration:
