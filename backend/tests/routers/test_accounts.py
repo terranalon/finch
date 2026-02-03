@@ -116,7 +116,12 @@ def test_list_accounts_returns_accounts_from_all_portfolios(
     response = client.get("/api/accounts", headers=auth_headers)
 
     assert response.status_code == 200
-    account_names = [a["name"] for a in response.json()]
+    data = response.json()
+    # Response is now paginated: {items: [...], total, skip, limit, has_more}
+    assert "items" in data
+    assert "total" in data
+    assert "has_more" in data
+    account_names = [a["name"] for a in data["items"]]
     assert "Kraken" in account_names
     assert "IBKR" in account_names
 
@@ -144,7 +149,9 @@ def test_list_accounts_filtered_by_portfolio(client, auth_headers, test_user, db
     response = client.get(f"/api/accounts?portfolio_id={portfolio1.id}", headers=auth_headers)
 
     assert response.status_code == 200
-    accounts = response.json()
+    data = response.json()
+    # Response is now paginated: {items: [...], total, skip, limit, has_more}
+    accounts = data["items"]
     assert len(accounts) == 1
     assert accounts[0]["name"] == "Kraken"
 

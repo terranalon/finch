@@ -301,7 +301,8 @@ def test_delete_portfolio_removes_exclusive_keeps_shared(
 
     response = client.delete(f"/api/portfolios/{portfolio1.id}?confirm=true", headers=auth_headers)
 
-    assert response.status_code == 200
+    # DELETE now returns 204 No Content (REST best practice)
+    assert response.status_code == 204
 
     # Exclusive account should be deleted
     assert db_session.query(Account).filter(Account.id == account1_id).first() is None

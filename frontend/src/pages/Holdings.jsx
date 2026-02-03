@@ -825,7 +825,7 @@ export default function Holdings() {
         ]);
 
         setPositions(positionsData);
-        setAccounts(accountsData);
+        setAccounts(accountsData.items);
       } catch (err) {
         console.error('Error fetching holdings data:', err);
         setError(err.message);

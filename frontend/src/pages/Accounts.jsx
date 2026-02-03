@@ -740,11 +740,12 @@ export default function Accounts() {
           throw new Error(`Failed to fetch dashboard: ${dashboardRes.statusText}`);
         }
 
-        const [accountsData, dashboardData, brokerData] = await Promise.all([
+        const [accountsRawData, dashboardData, brokerData] = await Promise.all([
           accountsRes.json(),
           dashboardRes.json(),
           brokerRes.ok ? brokerRes.json() : [],
         ]);
+        const accountsData = accountsRawData.items;
 
         // Build broker config map (broker_type -> config)
         const brokerConfigMap = {};

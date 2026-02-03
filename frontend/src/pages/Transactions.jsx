@@ -42,7 +42,7 @@ function Transactions() {
       const response = await fetch('http://localhost:8000/api/accounts')
       if (!response.ok) throw new Error('Failed to fetch accounts')
       const data = await response.json()
-      setAccounts(data)
+      setAccounts(data.items)
     } catch (err) {
       console.error('Error fetching accounts:', err)
     }
