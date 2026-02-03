@@ -11,39 +11,54 @@ from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
+from app.schemas.common import PaginatedResponse
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
-@router.get("", response_model=list[AccountSchema])
+@router.get("", response_model=PaginatedResponse[AccountSchema])
 async def list_accounts(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
     is_active: bool = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get list of accounts for the current user.
+    Get paginated list of accounts for the current user.
 
     Query Parameters:
         - skip: Number of records to skip (pagination)
-        - limit: Maximum number of records to return
+        - limit: Maximum number of records to return (1-100)
         - is_active: Filter by active status
         - portfolio_id: Filter by specific portfolio (must belong to user)
+
+    Returns:
+        Paginated response with items, total count, and has_more flag
     """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
 
     query = db.query(Account).filter(Account.id.in_(allowed_account_ids))
 
     if is_active is not None:
         query = query.filter(Account.is_active == is_active)
 
+    # Get total count before pagination
+    total = query.count()
+
+    # Get paginated items
     accounts = query.offset(skip).limit(limit).all()
-    return accounts
+
+    return PaginatedResponse(
+        items=accounts,
+        total=total,
+        skip=skip,
+        limit=limit,
+        has_more=(skip + len(accounts)) < total,
+    )
 
 
 @router.get("/{account_id}", response_model=AccountSchema)
