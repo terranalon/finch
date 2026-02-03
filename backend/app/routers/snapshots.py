@@ -42,7 +42,7 @@ async def create_snapshot(
     if run_async:
         # Run in background (pass account IDs for filtering)
         background_tasks.add_task(
-            SnapshotService.create_portfolio_snapshot, db, snapshot_date, None, allowed_account_ids
+            SnapshotService.create_portfolio_snapshot, db, snapshot_date, allowed_account_ids
         )
         return {
             "status": "started",
@@ -51,9 +51,7 @@ async def create_snapshot(
         }
     else:
         # Run synchronously
-        stats = SnapshotService.create_portfolio_snapshot(
-            db, snapshot_date, None, allowed_account_ids
-        )
+        stats = SnapshotService.create_portfolio_snapshot(db, snapshot_date, allowed_account_ids)
         return {"status": "completed", "message": "Snapshot created successfully", **stats}
 
 

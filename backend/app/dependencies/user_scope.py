@@ -6,6 +6,7 @@ from app.models.account import Account
 from app.models.portfolio import Portfolio
 from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
+from app.services.repositories import AccountRepository
 
 
 def get_user_portfolio_ids(user: User) -> list[str]:
@@ -22,7 +23,12 @@ def get_user_account_ids(user: User, db: Session, portfolio_id: str | None = Non
         db: Database session
         portfolio_id: Optional portfolio ID to filter by. If provided, only returns
                       accounts in that portfolio (must belong to user).
+                      Ignored for service accounts.
     """
+    # Service accounts can access all active accounts for automated operations
+    if user.is_service_account:
+        return AccountRepository(db).find_all_active_ids()
+
     portfolio_ids = get_user_portfolio_ids(user)
     if not portfolio_ids:
         return []

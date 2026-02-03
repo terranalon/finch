@@ -75,3 +75,9 @@ class AccountRepository:
             .filter(Account.id.in_(account_ids), Account.is_active.is_(True))
             .all()
         )
+
+    def find_all_active_ids(self) -> list[int]:
+        """Find all active account IDs (for service accounts)."""
+        return [
+            row[0] for row in self._db.query(Account.id).filter(Account.is_active.is_(True)).all()
+        ]

@@ -359,12 +359,9 @@ def daily_snapshot_pipeline():
         crypto_price_stats: dict[str, int | list[str] | str],
     ) -> dict[str, int | str | float]:
         """Create portfolio snapshots for yesterday (running at midnight UTC)."""
-        import sys
+        import requests
 
-        # Add backend to path for SnapshotService import
-        if "/opt/airflow/backend" not in sys.path:
-            sys.path.insert(0, "/opt/airflow/backend")
-        from app.services.portfolio.snapshot_service import SnapshotService
+        from auth_helper import get_auth_helper
 
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
@@ -376,15 +373,21 @@ def daily_snapshot_pipeline():
         # Running at midnight UTC, snapshot is for yesterday
         snapshot_date = date.today() - timedelta(days=1)
 
-        session = SessionLocal()
-        try:
-            result = SnapshotService.create_portfolio_snapshot(
-                db=session,
-                snapshot_date=snapshot_date,
-                allowed_account_ids=None,  # None = all accounts in system
-            )
-        finally:
-            session.close()
+        # Use service account authentication
+        auth = get_auth_helper()
+
+        response = requests.post(
+            f"{BACKEND_URL}/api/snapshots/create",
+            params={"snapshot_date": str(snapshot_date)},
+            headers=auth.get_auth_headers(),
+            timeout=120,
+        )
+
+        if response.status_code != 200:
+            logger.error(f"Snapshot API error: {response.status_code} - {response.text}")
+            raise RuntimeError(f"Snapshot creation failed: {response.text}")
+
+        result = response.json()
 
         # Log per-account details
         for account_info in result.get("accounts", []):
