@@ -113,8 +113,11 @@ class PortfolioValuationService:
                     continue
             else:
                 # Market open: compare current vs previous close
+                # Filter out today's prices to avoid race condition where today's
+                # close is recorded while we're calculating
                 price_for_change = current_price
-                previous_close = asset_prices[0].closing_price if asset_prices else None
+                previous_prices = [p for p in asset_prices if p.date < today]
+                previous_close = previous_prices[0].closing_price if previous_prices else None
                 change_date = today
 
             # Calculate change
@@ -197,8 +200,11 @@ class PortfolioValuationService:
                 )
         else:
             # Market open: compare current vs previous close
+            # Filter out today's prices to avoid race condition where today's
+            # close is recorded while we're calculating
             price_for_change = current_price
-            previous_close = asset_prices[0].closing_price if asset_prices else None
+            previous_prices = [p for p in asset_prices if p.date < today]
+            previous_close = previous_prices[0].closing_price if previous_prices else None
             change_date = today
 
         # Calculate change
