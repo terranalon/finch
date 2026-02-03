@@ -24,9 +24,11 @@ def engine():
     2. Tables can persist between runs (create_all is idempotent)
     3. drop_all fails with foreign key dependencies unless using CASCADE
     """
+    # Support both Docker (portfolio_tracker_db) and local (localhost) environments
+    db_host = os.getenv("DATABASE_HOST", "portfolio_tracker_db")
     test_db_url = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql://portfolio_user:dev_password@localhost:5432/portfolio_tracker_test",
+        f"postgresql://portfolio_user:dev_password@{db_host}:5432/portfolio_tracker_test",
     )
     engine = create_engine(test_db_url)
     Base.metadata.create_all(bind=engine)

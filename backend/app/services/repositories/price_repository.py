@@ -1,6 +1,5 @@
 """Asset price data access layer."""
 
-import logging
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -11,8 +10,6 @@ from app.models import AssetPrice
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-logger = logging.getLogger(__name__)
 
 
 class PriceRepository:

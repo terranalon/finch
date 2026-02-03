@@ -732,7 +732,8 @@ export default function Activity() {
         if (!accountsRes.ok) {
           throw new Error(`Failed to fetch accounts: ${accountsRes.statusText}`);
         }
-        const accountsData = await accountsRes.json();
+        const accountsResponse = await accountsRes.json();
+        const accountsData = accountsResponse.items;
         setAccounts(accountsData);
 
         // Fetch all transaction types in parallel
