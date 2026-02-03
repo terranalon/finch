@@ -5,6 +5,7 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 
 ## Critical Rules
 
+- **Never commit directly to main** - Always use feature branches and PRs
 - **Always launch Opus subagents** for complex reasoning tasks
 - Run `ruff check --fix . && ruff format .` before committing
 
