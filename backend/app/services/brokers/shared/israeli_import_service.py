@@ -574,6 +574,31 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             logger.warning(f"Failed to fetch yfinance metadata for {symbol}: {e}")
             return None
 
+    def _update_existing_asset(
+        self,
+        asset: Asset,
+        symbol: str,
+        tase_security_number: str | None,
+        fallback_price: Decimal | None,
+        fallback_price_date: datetime | None,
+    ) -> None:
+        """Update an existing asset with new information.
+
+        Args:
+            asset: The asset to update
+            symbol: The symbol being imported
+            tase_security_number: TASE security number if available
+            fallback_price: Price to use for unresolved symbols
+            fallback_price_date: Date of the fallback price
+        """
+        # Update tase_security_number if provided and missing
+        if tase_security_number and not asset.tase_security_number:
+            asset.tase_security_number = tase_security_number
+            logger.debug(f"Updated TASE security number for {symbol}")
+
+        # Update price for unresolved TASE symbols if we have a more recent price
+        self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
+
     def _maybe_update_fallback_price(
         self,
         asset: Asset,
@@ -611,7 +636,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             and price_datetime > asset.last_fetched_at
         )
 
-        if not has_no_price and not has_no_existing_date and not is_more_recent:
+        # Only update if: no existing price, OR no existing date, OR new date is more recent
+        should_skip = not has_no_price and not has_no_existing_date and not is_more_recent
+        if should_skip:
             return False
 
         asset.last_fetched_price = fallback_price
@@ -651,14 +678,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         asset = self.db.query(Asset).filter(Asset.symbol == symbol).first()
 
         if asset:
-            # Update tase_security_number if provided and missing
-            if tase_security_number and not asset.tase_security_number:
-                asset.tase_security_number = tase_security_number
-                logger.debug(f"Updated TASE security number for {symbol}")
-
-            # Update price for unresolved TASE symbols if we have a more recent price
-            self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
-
+            self._update_existing_asset(asset, symbol, tase_security_number, fallback_price, fallback_price_date)
             return asset, False
 
         # Try to find by TASE security number
@@ -669,14 +689,10 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 .first()
             )
             if asset:
-                # Update symbol if it was a placeholder
                 if asset.symbol.startswith("TASE:"):
                     asset.symbol = symbol
                     logger.info(f"Updated symbol for TASE:{tase_security_number} → {symbol}")
-
-                # Update price for unresolved TASE symbols if we have a more recent price
                 self._maybe_update_fallback_price(asset, fallback_price, fallback_price_date)
-
                 return asset, False
 
         # Create new asset
