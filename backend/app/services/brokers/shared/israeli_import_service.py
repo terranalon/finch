@@ -14,7 +14,6 @@ from app.models import Asset, Holding, Transaction
 from app.services.brokers.base_broker_parser import (
     BrokerImportData,
     ParsedCashTransaction,
-    ParsedPosition,
     ParsedTransaction,
 )
 from app.services.brokers.base_import_service import BaseBrokerImportService
@@ -96,7 +95,6 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         stats = {
             "account_id": account_id,
             "start_time": datetime.now().isoformat(),
-            "positions": {},
             "transactions": {},
             "cash_transactions": {},
             "dividends": {},
@@ -110,10 +108,6 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         stats["symbols_in_file"] = list(unique_symbols)
 
         try:
-            # Import positions
-            if data.positions:
-                stats["positions"] = self._import_positions(account_id, data.positions)
-
             # Import cash transactions FIRST to ensure cash holdings exist
             # (required for Trade Settlements in dual-entry accounting)
             if data.cash_transactions:
@@ -147,92 +141,6 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             stats["errors"].append(str(e))
 
         stats["end_time"] = datetime.now().isoformat()
-        return stats
-
-    def _import_positions(self, account_id: int, positions: list[ParsedPosition]) -> dict:
-        """Import positions as holdings.
-
-        Args:
-            account_id: Account ID
-            positions: List of parsed positions
-
-        Returns:
-            Statistics dictionary
-        """
-        stats = {
-            "total": len(positions),
-            "assets_created": 0,
-            "holdings_created": 0,
-            "holdings_updated": 0,
-            "skipped": 0,
-            "unresolved_symbols": [],
-            "errors": [],
-        }
-
-        for pos in positions:
-            try:
-                # Resolve symbol (TASE:123456 → SYMBOL.TA)
-                symbol, tase_number = self._resolve_symbol(pos.symbol)
-
-                if not symbol:
-                    stats["unresolved_symbols"].append(pos.symbol)
-                    logger.warning(f"Could not resolve symbol: {pos.symbol}")
-                    # Continue with the raw symbol for manual resolution
-                    symbol = pos.symbol
-
-                # Find or create asset
-                # Calculate fallback price from cost basis if available
-                fallback_price = None
-                if pos.cost_basis and pos.quantity and pos.quantity > 0:
-                    fallback_price = pos.cost_basis / pos.quantity
-
-                asset, created = self._find_or_create_asset(
-                    symbol=symbol,
-                    name=pos.raw_data.get("security_name", symbol) if pos.raw_data else symbol,
-                    asset_class=pos.asset_class or "Stock",
-                    currency=pos.currency,
-                    tase_security_number=tase_number,
-                    fallback_price=fallback_price,
-                    fallback_price_date=datetime.now(),  # Positions are current state
-                )
-
-                if created:
-                    stats["assets_created"] += 1
-
-                # Find or create holding
-                holding = (
-                    self.db.query(Holding)
-                    .filter(Holding.account_id == account_id, Holding.asset_id == asset.id)
-                    .first()
-                )
-
-                if holding:
-                    # Update existing holding
-                    holding.quantity = pos.quantity
-                    holding.cost_basis = pos.cost_basis or Decimal("0")
-                    holding.is_active = pos.quantity != 0
-                    stats["holdings_updated"] += 1
-                    logger.debug(f"Updated holding for {symbol}: qty={pos.quantity}")
-                else:
-                    # Create new holding
-                    holding = Holding(
-                        account_id=account_id,
-                        asset_id=asset.id,
-                        quantity=pos.quantity,
-                        cost_basis=pos.cost_basis or Decimal("0"),
-                        is_active=(pos.quantity != 0),
-                    )
-                    self.db.add(holding)
-                    stats["holdings_created"] += 1
-                    logger.debug(f"Created holding for {symbol}: qty={pos.quantity}")
-
-                self.db.flush()
-
-            except Exception as e:
-                logger.error(f"Error importing position {pos.symbol}: {e}")
-                stats["errors"].append(f"{pos.symbol}: {str(e)}")
-                stats["skipped"] += 1
-
         return stats
 
     def _import_transactions(
