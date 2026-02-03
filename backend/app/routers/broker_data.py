@@ -37,6 +37,7 @@ from app.models.user import User
 from app.services.brokers.base_import_service import extract_unique_symbols
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
+from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
 from app.services.portfolio.snapshot_service import (
     generate_snapshots_background,
@@ -438,10 +439,6 @@ async def upload_broker_file(
             )
 
             # Reconstruct holdings from transactions
-            from app.services.portfolio.holdings_reconstruction import (
-                reconstruct_and_update_holdings,
-            )
-
             reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
 
             # Run validation against IBKR's authoritative cash positions

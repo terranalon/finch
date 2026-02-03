@@ -13,6 +13,7 @@ from app.services.brokers.base_import_service import (
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
 from app.services.brokers.ibkr.parser import IBKRParser
+from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +145,6 @@ class IBKRFlexImportService:
 
             # Step 9: Reconstruct holdings from transactions
             logger.info("Reconstructing holdings from transactions...")
-            from app.services.portfolio.holdings_reconstruction import (
-                reconstruct_and_update_holdings,
-            )
-
             reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
             stats["holdings_reconstruction"] = reconstruction_stats
 
@@ -342,10 +339,6 @@ class IBKRFlexImportService:
 
             # Step 10: Reconstruct holdings from transactions
             logger.info("Reconstructing holdings from transactions...")
-            from app.services.portfolio.holdings_reconstruction import (
-                reconstruct_and_update_holdings,
-            )
-
             reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
             stats["holdings_reconstruction"] = reconstruction_stats
 
