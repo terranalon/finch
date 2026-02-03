@@ -5,6 +5,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.constants import AssetClass
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import (
@@ -88,7 +89,7 @@ def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
             asset_currency = asset.currency or "USD"
 
             # Handle Cash assets - value is the quantity itself
-            if asset.asset_class == "Cash":
+            if asset.asset_class == AssetClass.CASH:
                 if holding.quantity <= 0:
                     continue
                 market_value_native = holding.quantity
