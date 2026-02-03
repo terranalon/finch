@@ -6,6 +6,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.constants import AssetClass
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
@@ -16,6 +17,11 @@ from app.services.shared.currency_conversion_helper import CurrencyConversionHel
 from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
+
+
+def _to_float(value: Decimal | None) -> float | None:
+    """Convert Decimal to float, handling None values."""
+    return float(value) if value is not None else None
 
 
 @router.get("")
@@ -54,12 +60,13 @@ async def list_positions(
 
     # Group by asset
     positions_map = {}
+    assets_map = {}  # Store Asset objects separately for day change calculation
     for holding, account, asset in holdings_query:
         asset_id = asset.id
 
         if asset_id not in positions_map:
             # For Cash assets, price is 1.0 (1 unit = 1 unit in native currency)
-            price = Decimal("1") if asset.asset_class == "Cash" else asset.last_fetched_price
+            price = Decimal("1") if asset.asset_class == AssetClass.CASH else asset.last_fetched_price
             positions_map[asset_id] = {
                 "asset_id": asset.id,
                 "symbol": asset.symbol,
@@ -75,15 +82,15 @@ async def list_positions(
                 "total_cost_basis_native": Decimal("0"),  # Native currency accumulator
                 "account_count": 0,
                 "accounts": [],
-                "_asset": asset,  # Store Asset object for day change calculation
             }
+            assets_map[asset_id] = asset  # Store Asset object separately
 
         # Calculate P&L for this account holding
         asset_currency = asset.currency or "USD"
 
         # For Cash assets, price is 1.0 (1 unit = 1 unit in native currency)
         # For other assets, use the fetched price
-        if asset.asset_class == "Cash":
+        if asset.asset_class == AssetClass.CASH:
             current_price = Decimal("1")
             market_value_native = holding.quantity  # Value equals quantity for cash
         else:
@@ -144,13 +151,19 @@ async def list_positions(
         )
         positions_map[asset_id]["account_count"] = len(positions_map[asset_id]["accounts"])
 
-    # Initialize valuation service for day change calculations
+    # Batch calculate day changes for all assets (avoids N+1 queries)
     valuation_service = PortfolioValuationService(db)
     today = date.today()
+    current_prices = {
+        asset_id: pos["current_price"] for asset_id, pos in positions_map.items()
+    }
+    day_changes = valuation_service.calculate_day_changes_batch(
+        list(assets_map.values()), current_prices, today
+    )
 
     # Convert to list and format
     positions = []
-    for position in positions_map.values():
+    for asset_id, position in positions_map.items():
         current_price = position["current_price"]
         total_quantity = position["total_quantity"]
         total_cost_basis = position["total_cost_basis"]
@@ -186,14 +199,17 @@ async def list_positions(
             (total_market_value - total_cost_basis) if total_market_value is not None else None
         )
 
-        # Calculate day change using valuation service
-        asset_obj = position["_asset"]
-        day_change_result = valuation_service.calculate_day_change(asset_obj, current_price, today)
-        day_change = day_change_result.day_change
-        day_change_pct = day_change_result.day_change_pct
-        previous_close_price = day_change_result.previous_close_price
-        day_change_date = day_change_result.day_change_date
-        is_asset_market_closed = day_change_result.is_market_closed
+        # Get day change from batch result
+        day_change_result = day_changes.get(asset_id)
+        if day_change_result:
+            day_change = day_change_result.day_change
+            day_change_pct = day_change_result.day_change_pct
+            previous_close_price = day_change_result.previous_close_price
+            day_change_date = day_change_result.day_change_date
+            is_asset_market_closed = day_change_result.is_market_closed
+        else:
+            day_change = day_change_pct = previous_close_price = day_change_date = None
+            is_asset_market_closed = False
 
         positions.append(
             {
@@ -205,38 +221,30 @@ async def list_positions(
                 "industry": position["industry"],
                 "currency": asset_currency,
                 "is_favorite": position["is_favorite"],
-                "current_price": float(current_price) if current_price else None,
-                "previous_close_price": float(previous_close_price)
-                if previous_close_price
-                else None,
-                "day_change": float(day_change) if day_change is not None else None,
-                "day_change_pct": float(day_change_pct) if day_change_pct is not None else None,
-                "day_change_date": str(day_change_date) if day_change_date else None,
+                "current_price": _to_float(current_price),
+                "previous_close_price": _to_float(previous_close_price),
+                "day_change": _to_float(day_change),
+                "day_change_pct": _to_float(day_change_pct),
+                "day_change_date": day_change_date,
                 "is_market_closed": is_asset_market_closed,
-                "total_quantity": float(total_quantity),
+                "total_quantity": _to_float(total_quantity),
                 # Native currency values (for per-holding display)
-                "total_cost_basis_native": float(total_cost_basis_native),
-                "total_market_value_native": float(total_market_value_native)
-                if total_market_value_native is not None
-                else None,
-                "total_pnl_native": float(total_pnl_native)
-                if total_pnl_native is not None
-                else None,
-                "avg_cost_per_unit_native": float(total_cost_basis_native / total_quantity)
-                if total_quantity > 0
-                else 0,
+                "total_cost_basis_native": _to_float(total_cost_basis_native),
+                "total_market_value_native": _to_float(total_market_value_native),
+                "total_pnl_native": _to_float(total_pnl_native),
+                "avg_cost_per_unit_native": _to_float(
+                    total_cost_basis_native / total_quantity if total_quantity > 0 else Decimal("0")
+                ),
                 # Display currency values (for portfolio aggregation)
-                "total_cost_basis": float(total_cost_basis),
-                "total_market_value": float(total_market_value)
-                if total_market_value is not None
-                else None,
-                "total_pnl": float(total_pnl) if total_pnl is not None else None,
-                "total_pnl_pct": float(total_pnl_pct) if total_pnl_pct is not None else None,
+                "total_cost_basis": _to_float(total_cost_basis),
+                "total_market_value": _to_float(total_market_value),
+                "total_pnl": _to_float(total_pnl),
+                "total_pnl_pct": _to_float(total_pnl_pct),
                 "account_count": position["account_count"],
                 "accounts": position["accounts"],
-                "avg_cost_per_unit": float(total_cost_basis / total_quantity)
-                if total_quantity > 0
-                else 0,
+                "avg_cost_per_unit": _to_float(
+                    total_cost_basis / total_quantity if total_quantity > 0 else Decimal("0")
+                ),
             }
         )
 

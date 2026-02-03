@@ -1,6 +1,5 @@
 """Account data access layer."""
 
-import logging
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session, joinedload
@@ -9,8 +8,6 @@ from app.models import Account, Portfolio
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-logger = logging.getLogger(__name__)
 
 
 class AccountRepository:

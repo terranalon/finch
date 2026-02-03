@@ -819,13 +819,13 @@ export default function Holdings() {
           throw new Error(`Failed to fetch accounts: ${accountsRes.statusText}`);
         }
 
-        const [positionsData, accountsData] = await Promise.all([
+        const [positionsData, accountsResponse] = await Promise.all([
           positionsRes.json(),
           accountsRes.json(),
         ]);
 
         setPositions(positionsData);
-        setAccounts(accountsData.items);
+        setAccounts(accountsResponse.items);
       } catch (err) {
         console.error('Error fetching holdings data:', err);
         setError(err.message);
