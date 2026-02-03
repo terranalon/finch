@@ -4,15 +4,14 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
-from app.models import Account, Asset, AssetPrice, Holding
+from app.models import Account, Asset, Holding
 from app.models.user import User
-from app.services.portfolio.trading_calendar_service import TradingCalendarService
+from app.services.portfolio.valuation_service import PortfolioValuationService
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
 from app.services.shared.currency_service import CurrencyService
 
@@ -76,6 +75,7 @@ async def list_positions(
                 "total_cost_basis_native": Decimal("0"),  # Native currency accumulator
                 "account_count": 0,
                 "accounts": [],
+                "_asset": asset,  # Store Asset object for day change calculation
             }
 
         # Calculate P&L for this account holding
@@ -144,41 +144,9 @@ async def list_positions(
         )
         positions_map[asset_id]["account_count"] = len(positions_map[asset_id]["accounts"])
 
-    # Get closing prices for day change calculation (per-asset market detection)
-    asset_ids = list(positions_map.keys())
+    # Initialize valuation service for day change calculations
+    valuation_service = PortfolioValuationService(db)
     today = date.today()
-
-    # Fetch the two most recent closing prices for each asset
-    # This covers both market-open and market-closed scenarios
-    latest_prices_map: dict[int, list[AssetPrice]] = {}
-    for asset_id in asset_ids:
-        prices = (
-            db.query(AssetPrice)
-            .filter(AssetPrice.asset_id == asset_id)
-            .order_by(desc(AssetPrice.date))
-            .limit(2)
-            .all()
-        )
-        if prices:
-            latest_prices_map[asset_id] = prices
-
-    # Also fetch previous close for market-open scenario (price before today)
-    latest_date_subquery = (
-        db.query(AssetPrice.asset_id, func.max(AssetPrice.date).label("max_date"))
-        .filter(AssetPrice.asset_id.in_(asset_ids), AssetPrice.date < today)
-        .group_by(AssetPrice.asset_id)
-        .subquery()
-    )
-    previous_prices = (
-        db.query(AssetPrice)
-        .join(
-            latest_date_subquery,
-            (AssetPrice.asset_id == latest_date_subquery.c.asset_id)
-            & (AssetPrice.date == latest_date_subquery.c.max_date),
-        )
-        .all()
-    )
-    previous_close_map = {price.asset_id: price.closing_price for price in previous_prices}
 
     # Convert to list and format
     positions = []
@@ -218,53 +186,14 @@ async def list_positions(
             (total_market_value - total_cost_basis) if total_market_value is not None else None
         )
 
-        # Calculate day change from closing prices (per-asset market detection)
-        asset_id = position["asset_id"]
-        symbol = position["symbol"]
-
-        if position["asset_class"] == "Cash":
-            # Cash assets don't have market prices (1 USD = 1 USD always)
-            day_change = None
-            day_change_pct = None
-            previous_close_price = None
-            day_change_date = None
-            is_asset_market_closed = False
-        else:
-            # Determine market status: crypto is 24/7, others check trading calendar
-            if position["asset_class"] == "Crypto":
-                is_asset_market_closed = False
-            else:
-                market = TradingCalendarService.get_market_for_symbol(symbol)
-                is_asset_market_closed = TradingCalendarService.is_market_closed(today, market)
-
-            if is_asset_market_closed:
-                # Market closed: compare two most recent closing prices
-                prices = latest_prices_map.get(asset_id, [])
-                if len(prices) >= 2:
-                    price_for_day_change = prices[0].closing_price
-                    previous_close_price = prices[1].closing_price
-                    day_change_date = prices[0].date
-                elif len(prices) == 1:
-                    price_for_day_change = prices[0].closing_price
-                    previous_close_price = None
-                    day_change_date = prices[0].date
-                else:
-                    price_for_day_change = None
-                    previous_close_price = None
-                    day_change_date = None
-            else:
-                # Market open (or crypto 24/7): compare current price vs previous close
-                price_for_day_change = current_price
-                previous_close_price = previous_close_map.get(asset_id)
-                day_change_date = today
-
-            if previous_close_price and price_for_day_change:
-                day_change = price_for_day_change - previous_close_price
-                day_change_pct = (day_change / previous_close_price) * 100
-            else:
-                day_change = None
-                day_change_pct = None
-                previous_close_price = None
+        # Calculate day change using valuation service
+        asset_obj = position["_asset"]
+        day_change_result = valuation_service.calculate_day_change(asset_obj, current_price, today)
+        day_change = day_change_result.day_change
+        day_change_pct = day_change_result.day_change_pct
+        previous_close_price = day_change_result.previous_close_price
+        day_change_date = day_change_result.day_change_date
+        is_asset_market_closed = day_change_result.is_market_closed
 
         positions.append(
             {
