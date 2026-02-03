@@ -235,13 +235,13 @@ async def get_deletion_preview(
     )
 
 
-@router.delete("/{portfolio_id}")
+@router.delete("/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_portfolio(
     portfolio_id: str,
     confirm: bool = Query(False, description="Must be true to delete portfolio with accounts"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> None:
     """Delete a portfolio. Exclusive accounts are deleted, shared accounts are unlinked."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
@@ -269,8 +269,6 @@ async def delete_portfolio(
 
     db.delete(portfolio)
     db.commit()
-
-    return {"message": "Portfolio deleted successfully"}
 
 
 @router.put("/{portfolio_id}/set-default", response_model=PortfolioSchema)

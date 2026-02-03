@@ -22,7 +22,6 @@ from dotenv import load_dotenv
 from queries import (
     CHECK_ASSET_PRICE_EXISTS,
     CHECK_EXCHANGE_RATE_EXISTS,
-    GET_ACTIVE_ACCOUNTS,
     GET_CRYPTO_ASSETS,
     GET_NON_CRYPTO_ASSETS,
     INSERT_ASSET_PRICE,
@@ -360,6 +359,13 @@ def daily_snapshot_pipeline():
         crypto_price_stats: dict[str, int | list[str] | str],
     ) -> dict[str, int | str | float]:
         """Create portfolio snapshots for yesterday (running at midnight UTC)."""
+        import sys
+
+        # Add backend to path for SnapshotService import
+        if "/opt/airflow/backend" not in sys.path:
+            sys.path.insert(0, "/opt/airflow/backend")
+        from app.services.portfolio.snapshot_service import SnapshotService
+
         logger.info(f"Exchange rates updated: {exchange_rate_stats['updated']}")
         logger.info(f"Asset prices updated: {asset_price_stats['updated']}")
         logger.info(
@@ -367,82 +373,37 @@ def daily_snapshot_pipeline():
             f"{crypto_price_stats.get('skipped', 0)} skipped"
         )
 
-        import requests
+        # Running at midnight UTC, snapshot is for yesterday
+        snapshot_date = date.today() - timedelta(days=1)
 
         session = SessionLocal()
-
         try:
-            # Get all active accounts
-            accounts = session.execute(text(GET_ACTIVE_ACCOUNTS)).fetchall()
-
-            # Running at midnight UTC, snapshot is for yesterday
-            snapshot_date = date.today() - timedelta(days=1)
-
-            stats = {
-                "date": str(snapshot_date),
-                "total_accounts": len(accounts),
-                "created": 0,
-                "skipped": 0,
-                "failed": 0,
-                "total_value_usd": 0.0,
-            }
-
-            # Call the snapshot creation API once for all accounts
-            try:
-                logger.info("Creating snapshots for all accounts")
-
-                response = requests.post(
-                    f"{BACKEND_URL}/api/snapshots/create",
-                    params={
-                        "snapshot_date": str(snapshot_date),
-                        "entity_id": None,  # Will snapshot all accounts
-                    },
-                    timeout=60,
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-
-                    for account_id, account_name in accounts:
-                        account_stats = next(
-                            (
-                                acc
-                                for acc in result.get("accounts", [])
-                                if acc["account_id"] == account_id
-                            ),
-                            None,
-                        )
-
-                        if account_stats:
-                            stats["created"] += 1
-                            stats["total_value_usd"] += account_stats["value_usd"]
-                            logger.info(
-                                f"Created snapshot for {account_name}: ${account_stats['value_usd']:.2f} USD"
-                            )
-                        else:
-                            stats["skipped"] += 1
-                            logger.info(f"Skipped {account_name}: Already exists or no holdings")
-                else:
-                    stats["failed"] = len(accounts)
-                    logger.error(f"API error: {response.status_code} - {response.text}")
-
-            except Exception as e:
-                stats["failed"] = len(accounts)
-                logger.error(f"Error creating snapshots: {str(e)}")
-
-            logger.info(
-                f"Snapshot creation complete: {stats['created']} created, "
-                f"{stats['skipped']} skipped, {stats['failed']} failed"
+            result = SnapshotService.create_portfolio_snapshot(
+                db=session,
+                snapshot_date=snapshot_date,
+                allowed_account_ids=None,  # None = all accounts in system
             )
-            logger.info(f"Total portfolio value: ${stats['total_value_usd']:,.2f} USD")
-
-            return stats
-
-        except Exception as e:
-            logger.error(f"Snapshot creation failed: {str(e)}")
-            raise
         finally:
             session.close()
+
+        # Log per-account details
+        for account_info in result.get("accounts", []):
+            logger.info(
+                f"Created snapshot for {account_info['account_name']}: "
+                f"${account_info['value_usd']:.2f} USD"
+            )
+
+        snapshots_created = result.get("snapshots_created", 0)
+        total_value_usd = float(result.get("total_value_usd", 0))
+
+        logger.info(f"Snapshot creation complete: {snapshots_created} snapshots created")
+        logger.info(f"Total portfolio value: ${total_value_usd:,.2f} USD")
+
+        return {
+            "date": str(snapshot_date),
+            "created": snapshots_created,
+            "total_value_usd": total_value_usd,
+        }
 
     # Define task dependencies (TaskFlow API creates implicit deps via argument passing)
     exchange_rate_stats = fetch_exchange_rates()

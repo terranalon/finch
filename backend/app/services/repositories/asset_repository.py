@@ -51,9 +51,7 @@ class AssetRepository:
     def find_by_tase_security_number(self, tase_security_number: str) -> Asset | None:
         """Find asset by Israeli security number (TASE)."""
         return (
-            self._db.query(Asset)
-            .filter(Asset.tase_security_number == tase_security_number)
-            .first()
+            self._db.query(Asset).filter(Asset.tase_security_number == tase_security_number).first()
         )
 
     def find_by_conid(self, conid: str) -> Asset | None:

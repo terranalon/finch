@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.services.auth.auth_service import AuthService
+from app.services.repositories.user_repository import UserRepository
 
 security = HTTPBearer()
 
@@ -41,7 +42,8 @@ def get_current_user(
         )
 
     user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id).first()
+    user_repo = UserRepository(db)
+    user = user_repo.find_by_id(user_id)
 
     if not user:
         raise HTTPException(
@@ -60,9 +62,7 @@ def get_current_user(
 
 
 def get_current_user_optional(
-    credentials: HTTPAuthorizationCredentials | None = Depends(
-        HTTPBearer(auto_error=False)
-    ),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
     db: Session = Depends(get_db),
 ) -> User | None:
     """
