@@ -678,7 +678,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         asset = self.db.query(Asset).filter(Asset.symbol == symbol).first()
 
         if asset:
-            self._update_existing_asset(asset, symbol, tase_security_number, fallback_price, fallback_price_date)
+            self._update_existing_asset(
+                asset, symbol, tase_security_number, fallback_price, fallback_price_date
+            )
             return asset, False
 
         # Try to find by TASE security number
