@@ -7,17 +7,18 @@ from unittest.mock import MagicMock, patch
 class TestImportAllReturnsDateRange:
     """Tests for date_range in IBKRFlexImportService.import_all stats."""
 
-    @patch("app.services.ibkr_flex_import_service.IBKRImportService")
-    @patch("app.services.ibkr_flex_import_service.IBKRParser")
-    @patch("app.services.ibkr_flex_import_service.IBKRFlexClient")
+    @patch("app.services.portfolio.holdings_reconstruction.reconstruct_and_update_holdings")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRImportService")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRParser")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRFlexClient")
     def test_stats_include_date_range_from_transactions(
-        self, mock_client, mock_parser, mock_import_service
+        self, mock_client, mock_parser, mock_import_service, mock_reconstruct
     ):
         """import_all should return date_range calculated from transaction dates."""
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
+        from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 
         # Create mock session
         mock_db = MagicMock(spec=Session)
@@ -49,16 +50,15 @@ class TestImportAllReturnsDateRange:
         mock_parser.extract_forex_transactions.return_value = []
 
         # Mock import service methods
-        mock_import_service._import_positions.return_value = {
-            "holdings_created": 0,
-            "holdings_updated": 0,
-        }
         mock_import_service._import_cash_balances.return_value = {}
         mock_import_service._import_transactions.return_value = {"imported": 2}
         mock_import_service._import_dividends.return_value = {"imported": 1}
         mock_import_service._import_transfers.return_value = {"imported": 0}
         mock_import_service._import_forex_transactions.return_value = {"imported": 0}
         mock_import_service._update_asset_prices.return_value = {}
+
+        # Mock reconstruction
+        mock_reconstruct.return_value = {"updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -69,17 +69,18 @@ class TestImportAllReturnsDateRange:
         assert stats["date_range"]["start_date"] == "2024-02-01"
         assert stats["date_range"]["end_date"] == "2024-04-15"
 
-    @patch("app.services.ibkr_flex_import_service.IBKRImportService")
-    @patch("app.services.ibkr_flex_import_service.IBKRParser")
-    @patch("app.services.ibkr_flex_import_service.IBKRFlexClient")
+    @patch("app.services.portfolio.holdings_reconstruction.reconstruct_and_update_holdings")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRImportService")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRParser")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRFlexClient")
     def test_date_range_includes_all_data_types(
-        self, mock_client, mock_parser, mock_import_service
+        self, mock_client, mock_parser, mock_import_service, mock_reconstruct
     ):
         """date_range should include dates from transactions, dividends, transfers, and forex."""
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
+        from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 
         mock_db = MagicMock(spec=Session)
         mock_account = MagicMock(spec=Account)
@@ -110,16 +111,15 @@ class TestImportAllReturnsDateRange:
             {"date": date(2024, 2, 10)},
         ]
 
-        mock_import_service._import_positions.return_value = {
-            "holdings_created": 0,
-            "holdings_updated": 0,
-        }
         mock_import_service._import_cash_balances.return_value = {}
         mock_import_service._import_transactions.return_value = {"imported": 1}
         mock_import_service._import_dividends.return_value = {"imported": 1}
         mock_import_service._import_transfers.return_value = {"imported": 1}
         mock_import_service._import_forex_transactions.return_value = {"imported": 1}
         mock_import_service._update_asset_prices.return_value = {}
+
+        # Mock reconstruction
+        mock_reconstruct.return_value = {"updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -129,17 +129,18 @@ class TestImportAllReturnsDateRange:
         assert stats["date_range"]["start_date"] == "2024-01-15"
         assert stats["date_range"]["end_date"] == "2024-05-20"
 
-    @patch("app.services.ibkr_flex_import_service.IBKRImportService")
-    @patch("app.services.ibkr_flex_import_service.IBKRParser")
-    @patch("app.services.ibkr_flex_import_service.IBKRFlexClient")
+    @patch("app.services.portfolio.holdings_reconstruction.reconstruct_and_update_holdings")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRImportService")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRParser")
+    @patch("app.services.brokers.ibkr.flex_import_service.IBKRFlexClient")
     def test_no_date_range_when_no_dated_data(
-        self, mock_client, mock_parser, mock_import_service
+        self, mock_client, mock_parser, mock_import_service, mock_reconstruct
     ):
         """date_range should not be present when there are no dated transactions."""
-        from app.services.ibkr_flex_import_service import IBKRFlexImportService
         from sqlalchemy.orm import Session
 
         from app.models import Account
+        from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 
         mock_db = MagicMock(spec=Session)
         mock_account = MagicMock(spec=Account)
@@ -160,16 +161,15 @@ class TestImportAllReturnsDateRange:
         mock_parser.extract_transfers.return_value = []
         mock_parser.extract_forex_transactions.return_value = []
 
-        mock_import_service._import_positions.return_value = {
-            "holdings_created": 1,
-            "holdings_updated": 0,
-        }
         mock_import_service._import_cash_balances.return_value = {}
         mock_import_service._import_transactions.return_value = {"imported": 0}
         mock_import_service._import_dividends.return_value = {"imported": 0}
         mock_import_service._import_transfers.return_value = {"imported": 0}
         mock_import_service._import_forex_transactions.return_value = {"imported": 0}
         mock_import_service._update_asset_prices.return_value = {}
+
+        # Mock reconstruction
+        mock_reconstruct.return_value = {"updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
