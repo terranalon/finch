@@ -41,10 +41,36 @@ def generate_snapshots_background(account_id: int, start_date: date) -> None:
         account_id: Account to generate snapshots for
         start_date: Earliest date from the imported data
     """
+    import time
+
     from app.database import SessionLocal
+
+    # Brief delay to ensure import transaction is fully committed and visible
+    # This prevents race conditions where the background task starts before
+    # the database transaction isolation allows visibility of new records
+    time.sleep(2)
 
     db = SessionLocal()
     try:
+        # Verify we can see recent data before generating snapshots
+        # This catches cases where the import transaction isn't yet visible
+        from app.models import Transaction, Holding
+
+        recent_txn_count = (
+            db.query(Transaction)
+            .join(Holding)
+            .filter(Holding.account_id == account_id)
+            .limit(1)
+            .count()
+        )
+        if recent_txn_count == 0:
+            logger.warning(
+                "No transactions found for account %d after import - "
+                "possible race condition, retrying after delay",
+                account_id,
+            )
+            time.sleep(3)
+
         SnapshotService.generate_account_snapshots(
             db, account_id, start_date, date.today(), invalidate_existing=True
         )

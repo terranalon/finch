@@ -46,7 +46,7 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
     try:
         today = date.today()
         reconstructed = PortfolioReconstructionService.reconstruct_holdings(
-            db, account_id, today, apply_ticker_changes=False
+            db, account_id, today, apply_ticker_changes=True
         )
 
         logger.info(f"Reconstructed {len(reconstructed)} holdings for account {account_id}")
