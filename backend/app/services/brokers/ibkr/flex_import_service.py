@@ -181,7 +181,7 @@ class IBKRFlexImportService:
             stats["end_time"] = datetime.now().isoformat()
             logger.info("IBKR Flex Query import completed successfully")
             logger.info(
-                f"Summary: {reconstruction_stats.get('updated', 0)} holdings reconstructed, "
+                f"Summary: {reconstruction_stats.get('holdings_updated', 0)} holdings reconstructed, "
                 f"{txn_stats['imported']} transactions, "
                 f"{div_stats['imported']} dividends, "
                 f"{transfer_stats['imported']} transfers, "
@@ -369,7 +369,7 @@ class IBKRFlexImportService:
             stats["end_time"] = datetime.now().isoformat()
             logger.info("Historical IBKR import completed successfully")
             logger.info(
-                f"Summary: {reconstruction_stats.get('updated', 0)} holdings reconstructed, "
+                f"Summary: {reconstruction_stats.get('holdings_updated', 0)} holdings reconstructed, "
                 f"{txn_stats['imported']} transactions, "
                 f"{div_stats['imported']} dividends, "
                 f"{transfer_stats['imported']} transfers, "
