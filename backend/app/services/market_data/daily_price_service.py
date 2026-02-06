@@ -5,9 +5,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import yfinance as yf
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.models.asset import Asset
+from app.models.asset_price import AssetPrice
+from app.models.holding import Holding
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
 
@@ -19,29 +21,49 @@ AGOROT_DIVISOR = Decimal("100")
 # CoinGecko only has ~1 year of historical data
 COINGECKO_HISTORY_LIMIT_DAYS = 365
 
-GET_NON_CRYPTO_ASSETS = """
-SELECT a.id, a.symbol, a.currency
-FROM assets a
-WHERE a.asset_class != 'Crypto'
-AND EXISTS (SELECT 1 FROM holdings h WHERE h.asset_id = a.id AND h.is_active = true)
-"""
 
-GET_CRYPTO_ASSETS = """
-SELECT a.id, a.symbol, a.currency
-FROM assets a
-WHERE a.asset_class = 'Crypto'
-AND EXISTS (SELECT 1 FROM holdings h WHERE h.asset_id = a.id AND h.is_active = true)
-"""
+def _get_active_assets(db: Session, *, is_crypto: bool) -> list[Asset]:
+    """Query assets with active holdings, filtered by asset class."""
+    op = Asset.asset_class.__eq__ if is_crypto else Asset.asset_class.__ne__
+    return (
+        db.query(Asset)
+        .filter(
+            op("Crypto"),
+            Asset.holdings.any(Holding.is_active.is_(True)),
+        )
+        .all()
+    )
 
-CHECK_ASSET_PRICE_EXISTS = """
-SELECT 1 FROM asset_prices
-WHERE asset_id = :asset_id AND date = :date
-"""
 
-INSERT_ASSET_PRICE = """
-INSERT INTO asset_prices (asset_id, date, closing_price, currency, source)
-VALUES (:asset_id, :date, :closing_price, :currency, :source)
-"""
+def _price_exists(db: Session, asset_id: int, target_date: date) -> bool:
+    """Check whether a price record already exists for the given asset and date."""
+    return (
+        db.query(AssetPrice)
+        .filter(AssetPrice.asset_id == asset_id, AssetPrice.date == target_date)
+        .first()
+        is not None
+    )
+
+
+def _store_price(
+    db: Session,
+    *,
+    asset_id: int,
+    target_date: date,
+    closing_price: Decimal,
+    currency: str,
+    source: str,
+) -> None:
+    """Add a new price record to the session (does not commit)."""
+    db.add(
+        AssetPrice(
+            asset_id=asset_id,
+            date=target_date,
+            closing_price=closing_price,
+            currency=currency,
+            source=source,
+        )
+    )
 
 
 class DailyPriceService:
@@ -49,8 +71,7 @@ class DailyPriceService:
 
     @staticmethod
     def refresh_stock_prices(db: Session, target_date: date | None = None) -> dict:
-        """
-        Fetch and store closing prices for non-crypto assets.
+        """Fetch and store closing prices for non-crypto assets.
 
         Args:
             db: Database session
@@ -62,70 +83,66 @@ class DailyPriceService:
         if target_date is None:
             target_date = date.today() - timedelta(days=1)
 
-        stats: dict = {
-            "date": target_date,
-            "updated": 0,
-            "skipped": 0,
-            "failed": 0,
-            "source": "yfinance",
-            "errors": [],
-        }
+        updated = 0
+        skipped = 0
+        failed = 0
+        errors: list[dict[str, str]] = []
 
-        assets = db.execute(text(GET_NON_CRYPTO_ASSETS)).fetchall()
+        assets = _get_active_assets(db, is_crypto=False)
 
-        for asset_id, symbol, currency in assets:
+        for asset in assets:
             try:
-                existing = db.execute(
-                    text(CHECK_ASSET_PRICE_EXISTS),
-                    {"asset_id": asset_id, "date": target_date},
-                ).first()
-
-                if existing:
-                    logger.info("Price for %s already exists for %s", symbol, target_date)
-                    stats["skipped"] += 1
+                if _price_exists(db, asset.id, target_date):
+                    logger.info("Price for %s already exists for %s", asset.symbol, target_date)
+                    skipped += 1
                     continue
 
-                ticker = yf.Ticker(symbol)
+                ticker = yf.Ticker(asset.symbol)
                 hist = ticker.history(period="5d")
 
-                if not hist.empty and "Close" in hist.columns:
-                    price = Decimal(str(hist["Close"].iloc[-1]))
+                if hist.empty or "Close" not in hist.columns:
+                    logger.warning("No data for %s", asset.symbol)
+                    failed += 1
+                    errors = [*errors, {"symbol": asset.symbol, "error": "No data available"}]
+                    continue
 
-                    # Convert Israeli stocks from Agorot to ILS
-                    if symbol.endswith(".TA"):
-                        price = price / AGOROT_DIVISOR
+                price = Decimal(str(hist["Close"].iloc[-1]))
 
-                    db.execute(
-                        text(INSERT_ASSET_PRICE),
-                        {
-                            "asset_id": asset_id,
-                            "date": target_date,
-                            "closing_price": float(price),
-                            "currency": currency or "USD",
-                            "source": "Yahoo Finance",
-                        },
-                    )
-                    db.commit()
+                # Convert Israeli stocks from Agorot to ILS
+                if asset.symbol.endswith(".TA"):
+                    price = price / AGOROT_DIVISOR
 
-                    logger.info("Updated %s: %s", symbol, price)
-                    stats["updated"] += 1
-                else:
-                    logger.warning("No data for %s", symbol)
-                    stats["failed"] += 1
-                    stats["errors"].append({"symbol": symbol, "error": "No data available"})
+                _store_price(
+                    db,
+                    asset_id=asset.id,
+                    target_date=target_date,
+                    closing_price=price,
+                    currency=asset.currency or "USD",
+                    source="Yahoo Finance",
+                )
+                db.commit()
+
+                logger.info("Updated %s: %s", asset.symbol, price)
+                updated += 1
 
             except Exception:
-                logger.exception("Failed to fetch %s", symbol)
-                stats["failed"] += 1
-                stats["errors"].append({"symbol": symbol, "error": "Fetch failed"})
+                logger.exception("Failed to fetch %s", asset.symbol)
+                failed += 1
+                errors = [*errors, {"symbol": asset.symbol, "error": "Fetch failed"}]
                 db.rollback()
 
-        return stats
+        return {
+            "date": target_date,
+            "updated": updated,
+            "skipped": skipped,
+            "failed": failed,
+            "source": "yfinance",
+            "errors": errors,
+        }
 
     @staticmethod
     def refresh_crypto_prices(db: Session, target_date: date | None = None) -> dict:
-        """
-        Fetch and store prices for crypto assets.
+        """Fetch and store prices for crypto assets.
 
         Uses CoinGecko for recent dates (<1 year), CryptoCompare for older dates.
 
@@ -141,94 +158,104 @@ class DailyPriceService:
 
         days_ago = (date.today() - target_date).days
         use_coingecko = days_ago <= COINGECKO_HISTORY_LIMIT_DAYS
+        source = "CoinGecko" if use_coingecko else "CryptoCompare"
 
-        stats: dict = {
-            "date": target_date,
-            "updated": 0,
-            "skipped": 0,
-            "failed": 0,
-            "source": "coingecko" if use_coingecko else "cryptocompare",
-            "errors": [],
-        }
+        updated = 0
+        skipped = 0
+        failed = 0
+        errors: list[dict[str, str]] = []
 
-        assets = db.execute(text(GET_CRYPTO_ASSETS)).fetchall()
+        assets = _get_active_assets(db, is_crypto=True)
 
         if not assets:
             logger.info("No crypto assets found")
-            return stats
+            return {
+                "date": target_date,
+                "updated": 0,
+                "skipped": 0,
+                "failed": 0,
+                "source": source.lower(),
+                "errors": [],
+            }
 
         # Collect assets needing prices
-        assets_needing_prices = []
-        for asset_id, symbol, _currency in assets:
-            existing = db.execute(
-                text(CHECK_ASSET_PRICE_EXISTS),
-                {"asset_id": asset_id, "date": target_date},
-            ).first()
-
-            if existing:
-                logger.info("Price for %s already exists for %s", symbol, target_date)
-                stats["skipped"] += 1
+        assets_needing_prices: list[Asset] = []
+        for asset in assets:
+            if _price_exists(db, asset.id, target_date):
+                logger.info("Price for %s already exists for %s", asset.symbol, target_date)
+                skipped += 1
             else:
-                assets_needing_prices.append((asset_id, symbol))
+                assets_needing_prices = [*assets_needing_prices, asset]
 
         if not assets_needing_prices:
             logger.info("All crypto prices already up to date")
-            return stats
+            return {
+                "date": target_date,
+                "updated": 0,
+                "skipped": skipped,
+                "failed": 0,
+                "source": source.lower(),
+                "errors": [],
+            }
 
-        # Batch fetch prices
-        symbols = [symbol for _, symbol in assets_needing_prices]
+        # Batch fetch prices from the appropriate provider
+        symbols = [asset.symbol for asset in assets_needing_prices]
 
         if use_coingecko:
-            prices = _fetch_coingecko_prices(symbols)
+            prices = CoinGeckoClient().get_current_prices(symbols, "usd")
         else:
-            prices = _fetch_cryptocompare_prices(symbols, target_date)
+            client = CryptoCompareClient()
+            prices = {
+                symbol: price
+                for symbol in symbols
+                if (price := client.get_historical_price(symbol, target_date)) is not None
+            }
 
         # Store prices
-        for asset_id, symbol in assets_needing_prices:
+        for asset in assets_needing_prices:
             try:
-                price = prices.get(symbol)
-                if price is not None:
-                    db.execute(
-                        text(INSERT_ASSET_PRICE),
-                        {
-                            "asset_id": asset_id,
-                            "date": target_date,
-                            "closing_price": float(price),
-                            "currency": "USD",
-                            "source": "CoinGecko" if use_coingecko else "CryptoCompare",
-                        },
-                    )
-                    db.commit()
+                price = prices.get(asset.symbol)
+                if price is None:
+                    logger.warning("%s: No price returned from API", asset.symbol)
+                    failed += 1
+                    errors = [
+                        *errors,
+                        {"symbol": asset.symbol, "error": "No price returned from API"},
+                    ]
+                    continue
 
-                    logger.info("Updated %s: %s", symbol, price)
-                    stats["updated"] += 1
-                else:
-                    error_msg = "No price returned from API"
-                    logger.warning("%s: %s", symbol, error_msg)
-                    stats["failed"] += 1
-                    stats["errors"].append({"symbol": symbol, "error": error_msg})
+                _store_price(
+                    db,
+                    asset_id=asset.id,
+                    target_date=target_date,
+                    closing_price=price,
+                    currency="USD",
+                    source=source,
+                )
+
+                logger.info("Updated %s: %s", asset.symbol, price)
+                updated += 1
 
             except Exception:
-                logger.exception("Failed to store %s", symbol)
-                stats["failed"] += 1
-                stats["errors"].append({"symbol": symbol, "error": "Store failed"})
+                logger.exception("Failed to store %s", asset.symbol)
+                failed += 1
+                errors = [*errors, {"symbol": asset.symbol, "error": "Store failed"}]
                 db.rollback()
 
-        return stats
+        if updated > 0:
+            try:
+                db.commit()
+            except Exception:
+                logger.exception("Failed to commit crypto prices")
+                db.rollback()
+                failed += updated
+                updated = 0
 
-
-def _fetch_coingecko_prices(symbols: list[str]) -> dict[str, Decimal]:
-    """Fetch current prices from CoinGecko."""
-    client = CoinGeckoClient()
-    return client.get_current_prices(symbols, "usd")
-
-
-def _fetch_cryptocompare_prices(symbols: list[str], target_date: date) -> dict[str, Decimal]:
-    """Fetch historical prices from CryptoCompare."""
-    client = CryptoCompareClient()
-    prices: dict[str, Decimal] = {}
-    for symbol in symbols:
-        price = client.get_historical_price(symbol, target_date)
-        if price is not None:
-            prices[symbol] = price
-    return prices
+        return {
+            "date": target_date,
+            "updated": updated,
+            "skipped": skipped,
+            "failed": failed,
+            "source": source.lower(),
+            "errors": errors,
+        }
