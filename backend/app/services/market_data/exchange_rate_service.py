@@ -2,15 +2,17 @@
 
 import logging
 from datetime import date, timedelta
+from decimal import Decimal
 
 import yfinance as yf
-from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from app.models.exchange_rate import ExchangeRate
 
 logger = logging.getLogger(__name__)
 
 # Currency pairs to fetch (matches current DAG)
-CURRENCY_PAIRS = [
+CURRENCY_PAIRS = (
     ("USD", "ILS"),
     ("USD", "CAD"),
     ("USD", "EUR"),
@@ -19,19 +21,7 @@ CURRENCY_PAIRS = [
     ("EUR", "USD"),
     ("GBP", "USD"),
     ("ILS", "USD"),
-]
-
-CHECK_EXCHANGE_RATE_EXISTS = """
-SELECT 1 FROM exchange_rates
-WHERE from_currency = :from_curr
-AND to_currency = :to_curr
-AND date = :date
-"""
-
-INSERT_EXCHANGE_RATE = """
-INSERT INTO exchange_rates (from_currency, to_currency, rate, date)
-VALUES (:from_curr, :to_curr, :rate, :date)
-"""
+)
 
 
 class ExchangeRateService:
@@ -39,8 +29,7 @@ class ExchangeRateService:
 
     @staticmethod
     def refresh(db: Session, target_date: date | None = None) -> dict:
-        """
-        Fetch and store exchange rates for the given date.
+        """Fetch and store exchange rates for the given date.
 
         Args:
             db: Database session
@@ -52,54 +41,61 @@ class ExchangeRateService:
         if target_date is None:
             target_date = date.today() - timedelta(days=1)
 
-        stats: dict = {
-            "date": target_date,
-            "updated": 0,
-            "skipped": 0,
-            "failed": 0,
-            "pairs": [],
-        }
+        updated = 0
+        skipped = 0
+        failed = 0
+        pairs: list[str] = []
 
         for from_curr, to_curr in CURRENCY_PAIRS:
             try:
-                existing = db.execute(
-                    text(CHECK_EXCHANGE_RATE_EXISTS),
-                    {"from_curr": from_curr, "to_curr": to_curr, "date": target_date},
-                ).first()
+                existing = (
+                    db.query(ExchangeRate)
+                    .filter(
+                        ExchangeRate.from_currency == from_curr,
+                        ExchangeRate.to_currency == to_curr,
+                        ExchangeRate.date == target_date,
+                    )
+                    .first()
+                )
 
                 if existing:
                     logger.info("Rate %s/%s already exists for %s", from_curr, to_curr, target_date)
-                    stats["skipped"] += 1
+                    skipped += 1
                     continue
 
                 ticker_symbol = f"{from_curr}{to_curr}=X"
                 ticker = yf.Ticker(ticker_symbol)
                 hist = ticker.history(period="5d")
 
-                if not hist.empty and "Close" in hist.columns:
-                    rate = float(hist["Close"].iloc[-1])
-
-                    db.execute(
-                        text(INSERT_EXCHANGE_RATE),
-                        {
-                            "from_curr": from_curr,
-                            "to_curr": to_curr,
-                            "rate": rate,
-                            "date": target_date,
-                        },
-                    )
-                    db.commit()
-
-                    logger.info("Updated %s/%s = %s", from_curr, to_curr, rate)
-                    stats["updated"] += 1
-                    stats["pairs"].append(f"{from_curr}/{to_curr}")
-                else:
+                if hist.empty or "Close" not in hist.columns:
                     logger.warning("No data for %s/%s", from_curr, to_curr)
-                    stats["failed"] += 1
+                    failed += 1
+                    continue
+
+                rate = Decimal(str(hist["Close"].iloc[-1]))
+                db.add(
+                    ExchangeRate(
+                        from_currency=from_curr,
+                        to_currency=to_curr,
+                        rate=rate,
+                        date=target_date,
+                    )
+                )
+                db.commit()
+
+                logger.info("Updated %s/%s = %s", from_curr, to_curr, rate)
+                updated += 1
+                pairs = [*pairs, f"{from_curr}/{to_curr}"]
 
             except Exception:
                 logger.exception("Failed to fetch %s/%s", from_curr, to_curr)
-                stats["failed"] += 1
+                failed += 1
                 db.rollback()
 
-        return stats
+        return {
+            "date": target_date,
+            "updated": updated,
+            "skipped": skipped,
+            "failed": failed,
+            "pairs": pairs,
+        }
