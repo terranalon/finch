@@ -63,6 +63,7 @@ from app.routers import (
     brokers,
     dashboard,
     holdings,
+    market_data,
     mfa,
     portfolios,
     positions,
@@ -84,6 +85,7 @@ app.include_router(holdings.router)
 app.include_router(portfolios.router)
 app.include_router(positions.router)
 app.include_router(prices.router)
+app.include_router(market_data.router)
 app.include_router(snapshots.router)
 app.include_router(transaction_views.router)  # Must come before transactions for path priority
 app.include_router(transactions.router)
