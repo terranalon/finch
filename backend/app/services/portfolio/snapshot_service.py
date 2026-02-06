@@ -54,22 +54,38 @@ def generate_snapshots_background(account_id: int, start_date: date) -> None:
     try:
         # Verify we can see recent data before generating snapshots
         # This catches cases where the import transaction isn't yet visible
-        from app.models import Transaction, Holding
+        from app.models import Holding, Transaction
 
-        recent_txn_count = (
-            db.query(Transaction)
-            .join(Holding)
-            .filter(Holding.account_id == account_id)
-            .limit(1)
-            .count()
-        )
-        if recent_txn_count == 0:
-            logger.warning(
-                "No transactions found for account %d after import - "
-                "possible race condition, retrying after delay",
-                account_id,
+        max_retries = 3
+        retry_delay = 2
+        for attempt in range(max_retries):
+            recent_txn_count = (
+                db.query(Transaction)
+                .join(Holding)
+                .filter(Holding.account_id == account_id)
+                .limit(1)
+                .count()
             )
-            time.sleep(3)
+            if recent_txn_count > 0:
+                break
+            if attempt < max_retries - 1:
+                logger.warning(
+                    "No transactions found for account %d after import - "
+                    "possible race condition, retry %d/%d after %ds delay",
+                    account_id,
+                    attempt + 1,
+                    max_retries - 1,
+                    retry_delay,
+                )
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+        else:
+            logger.warning(
+                "No transactions found for account %d after %d retries - "
+                "proceeding with snapshot generation anyway",
+                account_id,
+                max_retries,
+            )
 
         SnapshotService.generate_account_snapshots(
             db, account_id, start_date, date.today(), invalidate_existing=True

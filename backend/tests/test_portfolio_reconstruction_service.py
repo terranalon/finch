@@ -385,7 +385,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.query.return_value.get.return_value = mock_new_asset
+        mock_db.get.return_value = mock_new_asset
 
         # Create mock corporate action
         action = MagicMock()
@@ -424,7 +424,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.query.return_value.get.return_value = mock_new_asset
+        mock_db.get.return_value = mock_new_asset
 
         action = MagicMock()
         action.old_asset_id = 100
@@ -502,7 +502,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.query.return_value.get.return_value = mock_new_asset
+        mock_db.get.return_value = mock_new_asset
 
         # Action only affects asset 100
         action = MagicMock()

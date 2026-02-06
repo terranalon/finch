@@ -463,18 +463,22 @@ class PortfolioReconstructionService:
             if asset_id in merge_map:
                 # This asset has a corporate action
                 new_asset_id = merge_map[asset_id]
-                old_asset = db.query(Asset).get(asset_id)
-                new_asset = db.query(Asset).get(new_asset_id)
+                old_asset = db.get(Asset, asset_id)
+                new_asset = db.get(Asset, new_asset_id)
 
                 logger.info(
                     f"Merging {old_asset.symbol} ({holding['quantity']} shares) "
                     f"into {new_asset.symbol} due to corporate action"
                 )
 
-                # Merge into new asset
+                # Merge into new asset (immutable - create new dict)
                 if new_asset_id in merged_holdings:
-                    merged_holdings[new_asset_id]["quantity"] += holding["quantity"]
-                    merged_holdings[new_asset_id]["cost_basis"] += holding["cost_basis"]
+                    existing = merged_holdings[new_asset_id]
+                    merged_holdings[new_asset_id] = {
+                        **existing,
+                        "quantity": existing["quantity"] + holding["quantity"],
+                        "cost_basis": existing["cost_basis"] + holding["cost_basis"],
+                    }
                 else:
                     merged_holdings[new_asset_id] = {
                         **holding,
@@ -485,12 +489,16 @@ class PortfolioReconstructionService:
                         "cost_basis": holding["cost_basis"],
                     }
             else:
-                # No corporate action for this asset
+                # No corporate action for this asset (immutable - create new dict)
                 if asset_id in merged_holdings:
-                    merged_holdings[asset_id]["quantity"] += holding["quantity"]
-                    merged_holdings[asset_id]["cost_basis"] += holding["cost_basis"]
+                    existing = merged_holdings[asset_id]
+                    merged_holdings[asset_id] = {
+                        **existing,
+                        "quantity": existing["quantity"] + holding["quantity"],
+                        "cost_basis": existing["cost_basis"] + holding["cost_basis"],
+                    }
                 else:
-                    merged_holdings[asset_id] = holding
+                    merged_holdings[asset_id] = holding.copy()
 
         return list(merged_holdings.values())
 
@@ -517,7 +525,7 @@ class PortfolioReconstructionService:
 
         for holding in holdings:
             # Get price as of target date (or closest available)
-            asset = db.query(Asset).get(holding["asset_id"])
+            asset = db.get(Asset, holding["asset_id"])
 
             # For cash assets, price is always 1.0 in their own currency
             if asset.asset_class == "Cash":
@@ -623,7 +631,7 @@ class PortfolioReconstructionService:
 
             # Allow small rounding differences (0.0001 shares)
             if diff > Decimal("0.0001"):
-                asset = db.query(Asset).get(asset_id)
+                asset = db.get(Asset, asset_id)
                 discrepancies.append(
                     {
                         "asset_id": asset_id,
@@ -939,6 +947,35 @@ class PortfolioReconstructionService:
                     h["cost_basis"] += abs(credit_qty)
 
     @staticmethod
+    def _build_corporate_action_merge_map(
+        corporate_actions: list, as_of_date: date
+    ) -> dict[int, int]:
+        """Build a map of old_asset_id -> new_asset_id from corporate actions."""
+        applicable_actions = [
+            action for action in corporate_actions if action.effective_date <= as_of_date
+        ]
+        return {
+            action.old_asset_id: action.new_asset_id
+            for action in applicable_actions
+            if action.new_asset_id
+        }
+
+    @staticmethod
+    def _accumulate_holding(
+        merged_holdings: dict[int, dict], asset_id: int, holding: dict
+    ) -> None:
+        """Add holding to merged_holdings, accumulating if already present (immutable)."""
+        if asset_id in merged_holdings:
+            existing = merged_holdings[asset_id]
+            merged_holdings[asset_id] = {
+                **existing,
+                "quantity": existing["quantity"] + holding["quantity"],
+                "cost_basis": existing["cost_basis"] + holding["cost_basis"],
+            }
+        else:
+            merged_holdings[asset_id] = holding.copy()
+
+    @staticmethod
     def _apply_corporate_actions_to_snapshot(
         db: Session,
         snapshot: list[dict],
@@ -950,74 +987,52 @@ class PortfolioReconstructionService:
 
         This merges holdings where corporate actions indicate asset changes
         (e.g., SPAC mergers, ticker changes).
-
-        Args:
-            db: Database session
-            snapshot: List of holding dicts from reconstruction
-            corporate_actions: Pre-fetched corporate actions
-            as_of_date: Date to apply actions up to
-
-        Returns:
-            Snapshot with corporate actions applied
         """
         from app.models import Asset
 
-        # Filter to actions effective on or before as_of_date
-        applicable_actions = [
-            action for action in corporate_actions if action.effective_date <= as_of_date
-        ]
-
-        if not applicable_actions:
-            return snapshot
-
-        # Build merge map: old_asset_id -> new_asset_id
-        merge_map = {}
-        for action in applicable_actions:
-            if action.new_asset_id:
-                merge_map[action.old_asset_id] = action.new_asset_id
-
+        merge_map = PortfolioReconstructionService._build_corporate_action_merge_map(
+            corporate_actions, as_of_date
+        )
         if not merge_map:
             return snapshot
 
-        # Apply merges
         merged_holdings: dict[int, dict] = {}
 
         for holding in snapshot:
             asset_id = holding["asset_id"]
 
-            if asset_id in merge_map:
-                # This asset has a corporate action - merge into new asset
-                new_asset_id = merge_map[asset_id]
-                new_asset = db.query(Asset).get(new_asset_id)
+            if asset_id not in merge_map:
+                PortfolioReconstructionService._accumulate_holding(
+                    merged_holdings, asset_id, holding
+                )
+                continue
 
-                if not new_asset:
-                    # New asset not found, keep original
-                    if asset_id not in merged_holdings:
-                        merged_holdings[asset_id] = holding.copy()
-                    else:
-                        merged_holdings[asset_id]["quantity"] += holding["quantity"]
-                        merged_holdings[asset_id]["cost_basis"] += holding["cost_basis"]
-                    continue
+            new_asset_id = merge_map[asset_id]
+            new_asset = db.get(Asset, new_asset_id)
 
-                if new_asset_id in merged_holdings:
-                    merged_holdings[new_asset_id]["quantity"] += holding["quantity"]
-                    merged_holdings[new_asset_id]["cost_basis"] += holding["cost_basis"]
-                else:
-                    merged_holdings[new_asset_id] = {
-                        "asset_id": new_asset_id,
-                        "symbol": new_asset.symbol,
-                        "name": new_asset.name,
-                        "asset_class": new_asset.asset_class,
-                        "currency": new_asset.currency,
-                        "quantity": holding["quantity"],
-                        "cost_basis": holding["cost_basis"],
-                    }
+            if not new_asset:
+                PortfolioReconstructionService._accumulate_holding(
+                    merged_holdings, asset_id, holding
+                )
+                continue
+
+            # Merge into new asset (immutable - create new dict)
+            if new_asset_id in merged_holdings:
+                existing = merged_holdings[new_asset_id]
+                merged_holdings[new_asset_id] = {
+                    **existing,
+                    "quantity": existing["quantity"] + holding["quantity"],
+                    "cost_basis": existing["cost_basis"] + holding["cost_basis"],
+                }
             else:
-                # No corporate action for this asset
-                if asset_id in merged_holdings:
-                    merged_holdings[asset_id]["quantity"] += holding["quantity"]
-                    merged_holdings[asset_id]["cost_basis"] += holding["cost_basis"]
-                else:
-                    merged_holdings[asset_id] = holding.copy()
+                merged_holdings[new_asset_id] = {
+                    "asset_id": new_asset_id,
+                    "symbol": new_asset.symbol,
+                    "name": new_asset.name,
+                    "asset_class": new_asset.asset_class,
+                    "currency": new_asset.currency,
+                    "quantity": holding["quantity"],
+                    "cost_basis": holding["cost_basis"],
+                }
 
         return list(merged_holdings.values())
