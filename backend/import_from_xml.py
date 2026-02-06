@@ -9,8 +9,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.database import SessionLocal
-from app.services.ibkr_import_service import IBKRImportService
-from app.services.ibkr_parser import IBKRParser
+from app.services.brokers.ibkr.import_service import IBKRImportService
+from app.services.brokers.ibkr.parser import IBKRParser
+from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -62,10 +63,6 @@ def main():
     # Import to database
     db = SessionLocal()
     try:
-        logger.info("Importing positions...")
-        pos_stats = IBKRImportService._import_positions(db, account_id, positions_data)
-        logger.info(f"Position stats: {pos_stats}")
-
         logger.info("Importing cash balances...")
         cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
         logger.info(f"Cash stats: {cash_stats}")
@@ -86,19 +83,23 @@ def main():
         forex_stats = IBKRImportService._import_forex_transactions(db, account_id, forex_data)
         logger.info(f"Forex stats: {forex_stats}")
 
+        logger.info("Reconstructing holdings from transactions...")
+        reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+        logger.info(f"Reconstruction stats: {reconstruction_stats}")
+
         db.commit()
-        logger.info("✅ Import completed successfully!")
+        logger.info("Import completed successfully!")
 
         # Print summary
         print("\n" + "=" * 80)
         print("IMPORT SUMMARY")
         print("=" * 80)
-        print(f"Positions: {pos_stats}")
         print(f"Transactions: {txn_stats}")
         print(f"Dividends: {div_stats}")
         print(f"Transfers: {transfer_stats}")
         print(f"Forex: {forex_stats}")
         print(f"Cash: {cash_stats}")
+        print(f"Holdings Reconstruction: {reconstruction_stats}")
         print("=" * 80)
 
     except Exception as e:

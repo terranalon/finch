@@ -48,12 +48,12 @@ class IBKRFlexImportService:
             "account_id": account_id,
             "start_time": datetime.now().isoformat(),
             "status": "in_progress",
-            "positions": {},
             "transactions": {},
             "dividends": {},
             "transfers": {},
             "forex": {},
             "cash": {},
+            "holdings_reconstruction": {},
             "errors": [],
             "warnings": [],
         }
@@ -117,35 +117,40 @@ class IBKRFlexImportService:
                 f"{len(cash_data)} cash balances"
             )
 
-            # Step 4: Import positions
-            logger.info("Importing positions...")
-            pos_stats = IBKRImportService._import_positions(db, account_id, positions_data)
-            stats["positions"] = pos_stats
-
-            # Step 5: Import cash balances
+            # Step 4: Import cash balances
             logger.info("Importing cash balances...")
             cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
             stats["cash"] = cash_stats
 
-            # Step 6: Import transactions
+            # Step 5: Import transactions
             logger.info("Importing transactions...")
             txn_stats = IBKRImportService._import_transactions(db, account_id, transactions_data)
             stats["transactions"] = txn_stats
 
-            # Step 7: Import dividends
+            # Step 6: Import dividends
             logger.info("Importing dividends...")
             div_stats = IBKRImportService._import_dividends(db, account_id, dividends_data)
             stats["dividends"] = div_stats
 
-            # Step 8: Import transfers
+            # Step 7: Import transfers
             logger.info("Importing transfers...")
             transfer_stats = IBKRImportService._import_transfers(db, account_id, transfers_data)
             stats["transfers"] = transfer_stats
 
-            # Step 9: Import forex conversions
+            # Step 8: Import forex conversions
             logger.info("Importing forex conversions...")
             forex_stats = IBKRImportService._import_forex_transactions(db, account_id, forex_data)
             stats["forex"] = forex_stats
+
+            # Step 9: Reconstruct holdings from transactions
+            logger.info("Reconstructing holdings from transactions...")
+            # Import inline to avoid circular import
+            from app.services.portfolio.holdings_reconstruction import (
+                reconstruct_and_update_holdings,
+            )
+
+            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+            stats["holdings_reconstruction"] = reconstruction_stats
 
             # Step 10: Update asset prices
             logger.info("Updating asset prices...")
@@ -176,7 +181,7 @@ class IBKRFlexImportService:
             stats["end_time"] = datetime.now().isoformat()
             logger.info("IBKR Flex Query import completed successfully")
             logger.info(
-                f"Summary: {pos_stats['holdings_created'] + pos_stats['holdings_updated']} holdings, "
+                f"Summary: {reconstruction_stats.get('updated', 0)} holdings reconstructed, "
                 f"{txn_stats['imported']} transactions, "
                 f"{div_stats['imported']} dividends, "
                 f"{transfer_stats['imported']} transfers, "
@@ -241,12 +246,12 @@ class IBKRFlexImportService:
                 "end": end_date.isoformat(),
                 "total_days": (end_date - start_date).days + 1,
             },
-            "positions": {},
             "transactions": {},
             "dividends": {},
             "transfers": {},
             "forex": {},
             "cash": {},
+            "holdings_reconstruction": {},
             "errors": [],
             "warnings": [],
         }
@@ -311,35 +316,40 @@ class IBKRFlexImportService:
                 f"{len(cash_data)} cash balances"
             )
 
-            # Step 5: Import positions
-            logger.info("Importing positions...")
-            pos_stats = IBKRImportService._import_positions(db, account_id, positions_data)
-            stats["positions"] = pos_stats
-
-            # Step 6: Import cash balances
+            # Step 5: Import cash balances
             logger.info("Importing cash balances...")
             cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
             stats["cash"] = cash_stats
 
-            # Step 7: Import transactions
+            # Step 6: Import transactions
             logger.info("Importing transactions...")
             txn_stats = IBKRImportService._import_transactions(db, account_id, transactions_data)
             stats["transactions"] = txn_stats
 
-            # Step 8: Import dividends
+            # Step 7: Import dividends
             logger.info("Importing dividends...")
             div_stats = IBKRImportService._import_dividends(db, account_id, dividends_data)
             stats["dividends"] = div_stats
 
-            # Step 9: Import transfers
+            # Step 8: Import transfers
             logger.info("Importing transfers...")
             transfer_stats = IBKRImportService._import_transfers(db, account_id, transfers_data)
             stats["transfers"] = transfer_stats
 
-            # Step 10: Import forex conversions
+            # Step 9: Import forex conversions
             logger.info("Importing forex conversions...")
             forex_stats = IBKRImportService._import_forex_transactions(db, account_id, forex_data)
             stats["forex"] = forex_stats
+
+            # Step 10: Reconstruct holdings from transactions
+            logger.info("Reconstructing holdings from transactions...")
+            # Import inline to avoid circular import
+            from app.services.portfolio.holdings_reconstruction import (
+                reconstruct_and_update_holdings,
+            )
+
+            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+            stats["holdings_reconstruction"] = reconstruction_stats
 
             # Step 11: Update asset prices
             logger.info("Updating asset prices...")
@@ -359,7 +369,7 @@ class IBKRFlexImportService:
             stats["end_time"] = datetime.now().isoformat()
             logger.info("Historical IBKR import completed successfully")
             logger.info(
-                f"Summary: {pos_stats['holdings_created'] + pos_stats['holdings_updated']} holdings, "
+                f"Summary: {reconstruction_stats.get('updated', 0)} holdings reconstructed, "
                 f"{txn_stats['imported']} transactions, "
                 f"{div_stats['imported']} dividends, "
                 f"{transfer_stats['imported']} transfers, "

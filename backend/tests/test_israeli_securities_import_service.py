@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from app.services.brokers.base_broker_parser import (
     BrokerImportData,
     ParsedCashTransaction,
-    ParsedPosition,
     ParsedTransaction,
 )
 from app.services.brokers.shared.israeli_import_service import IsraeliSecuritiesImportService
@@ -146,36 +145,6 @@ class TestFindOrCreateAsset:
         assert call_args.last_fetched_price == Decimal("1")
 
 
-class TestImportPositions:
-    """Test position import."""
-
-    def test_import_positions_creates_holdings(self):
-        """Test importing positions creates holdings."""
-        mock_db = MagicMock()
-        service = IsraeliSecuritiesImportService(mock_db, "meitav")
-
-        # Mock asset lookup (not found, so creates new)
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-
-        positions = [
-            ParsedPosition(
-                symbol="TEVA.TA",
-                quantity=Decimal("100"),
-                cost_basis=Decimal("5000"),
-                currency="ILS",
-                asset_class="Stock",
-                raw_data={"security_name": "Teva"},
-            ),
-        ]
-
-        with patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)):
-            stats = service._import_positions(account_id=1, positions=positions)
-
-        assert stats["total"] == 1
-        assert stats["assets_created"] == 1
-        assert stats["holdings_created"] == 1
-
-
 class TestImportTransactions:
     """Test transaction import."""
 
@@ -217,19 +186,19 @@ class TestImportTransactions:
         assert stats["imported"] == 1
 
     def test_import_transactions_skips_duplicates(self):
-        """Test that duplicate transactions are skipped."""
+        """Test that duplicate transactions are skipped via hash-based dedup."""
+        from app.services.shared.transaction_hash_service import DedupResult
+
         mock_db = MagicMock()
         service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
         # Mock queries
         mock_asset = MagicMock()
         mock_holding = MagicMock()
-        mock_existing_txn = MagicMock()  # Existing duplicate
 
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             mock_asset,
             mock_holding,
-            mock_existing_txn,  # Duplicate found
         ]
 
         transactions = [
@@ -245,10 +214,18 @@ class TestImportTransactions:
             ),
         ]
 
-        with patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)):
+        # Mock both symbol resolution and the hash-based dedup to return SKIPPED
+        with (
+            patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)),
+            patch(
+                "app.services.brokers.shared.israeli_import_service.check_and_transfer_ownership",
+                return_value=(DedupResult.SKIPPED, MagicMock()),
+            ),
+        ):
             stats = service._import_transactions(account_id=1, transactions=transactions)
 
-        assert stats["duplicates_skipped"] == 1
+        # Hash-based dedup uses "skipped" key
+        assert stats["skipped"] == 1
         assert stats["imported"] == 0
 
 
@@ -344,15 +321,18 @@ class TestImportData:
         mock_db = MagicMock()
         service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
-        # Make _import_positions raise an error
-        with patch.object(service, "_import_positions", side_effect=Exception("Test error")):
+        # Make _import_transactions raise an error
+        with patch.object(service, "_import_transactions", side_effect=Exception("Test error")):
             data = BrokerImportData(
                 start_date=date(2024, 1, 1),
                 end_date=date(2024, 1, 31),
-                positions=[
-                    ParsedPosition(
+                transactions=[
+                    ParsedTransaction(
+                        trade_date=date(2024, 1, 15),
                         symbol="TEST",
+                        transaction_type="Buy",
                         quantity=Decimal("100"),
+                        price_per_unit=Decimal("10"),
                         currency="ILS",
                     )
                 ],

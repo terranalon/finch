@@ -37,6 +37,7 @@ from app.models.user import User
 from app.services.brokers.base_import_service import extract_unique_symbols
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
+from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
 from app.services.portfolio.snapshot_service import (
     generate_snapshots_background,
@@ -407,17 +408,6 @@ async def upload_broker_file(
             fx_positions = IBKRParser.extract_fx_positions(root)
             stmt_funds_balances = IBKRParser.extract_statement_of_funds_balances(root)
 
-            # Get current position symbols for stale holdings cleanup
-            current_symbols = {pos["symbol"] for pos in positions_data}
-
-            # Import all data types
-            pos_stats = IBKRImportService._import_positions(db, account_id, positions_data)
-
-            # Mark stale holdings as inactive (positions we had before but not in current data)
-            stale_stats = IBKRImportService._mark_stale_holdings_inactive(
-                db, account_id, current_symbols
-            )
-
             # Import cash from FxPositions (authoritative source)
             fx_cash_stats = IBKRImportService._import_fx_positions(db, account_id, fx_positions)
 
@@ -448,6 +438,9 @@ async def upload_broker_file(
                 db, account_id, dividends_data, source.id
             )
 
+            # Reconstruct holdings from transactions
+            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+
             # Run validation against IBKR's authoritative cash positions
             from app.services.brokers.ibkr.validation_service import validate_ibkr_import
 
@@ -469,8 +462,6 @@ async def upload_broker_file(
             all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
 
             source.import_stats = {
-                "positions": pos_stats,
-                "stale_cleanup": stale_stats,
                 "fx_cash": fx_cash_stats,
                 "stmt_funds": stmt_funds_stats,
                 "cash": cash_stats,
@@ -480,6 +471,7 @@ async def upload_broker_file(
                 "forex": forex_stats,
                 "other_cash": other_cash_stats,
                 "dividend_cash": div_cash_stats,
+                "holdings_reconstruction": reconstruction_stats,
                 "validation": validation_result,
                 "unique_assets_in_file": len(all_symbols),
                 "symbols_in_file": list(all_symbols),
