@@ -16,6 +16,12 @@ from app.schemas.historical_snapshot import (
 )
 from app.schemas.holding import Holding, HoldingCreate, HoldingUpdate
 from app.schemas.holding_lot import HoldingLot, HoldingLotCreate, HoldingLotUpdate
+from app.schemas.market_data import (
+    ExchangeRateRefreshResponse,
+    PriceRefreshError,
+    PriceRefreshResponse,
+    RefreshStats,
+)
 from app.schemas.portfolio import (
     Portfolio,
     PortfolioCreate,
@@ -78,4 +84,9 @@ __all__ = [
     "HistoricalSnapshot",
     "HistoricalSnapshotCreate",
     "HistoricalSnapshotUpdate",
+    # Market data schemas
+    "ExchangeRateRefreshResponse",
+    "PriceRefreshError",
+    "PriceRefreshResponse",
+    "RefreshStats",
 ]
