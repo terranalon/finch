@@ -142,7 +142,7 @@ class TestCryptoPriceRefresh:
     def test_refresh_success(self, mock_client_class, service_client):
         """Service account can refresh crypto prices."""
         mock_client = MagicMock()
-        mock_client.get_current_prices.return_value = {}
+        mock_client.get_historical_price.return_value = None
         mock_client_class.return_value = mock_client
 
         yesterday = date.today() - timedelta(days=1)

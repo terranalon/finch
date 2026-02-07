@@ -201,11 +201,16 @@ class DailyPriceService:
                 "errors": [],
             }
 
-        # Batch fetch prices from the appropriate provider
+        # Fetch historical prices from the appropriate provider
         symbols = [asset.symbol for asset in assets_needing_prices]
 
         if use_coingecko:
-            prices = CoinGeckoClient().get_current_prices(symbols, "usd")
+            client = CoinGeckoClient()
+            prices = {
+                symbol: price
+                for symbol in symbols
+                if (price := client.get_historical_price(symbol, target_date)) is not None
+            }
         else:
             client = CryptoCompareClient()
             prices = {
@@ -213,6 +218,9 @@ class DailyPriceService:
                 for symbol in symbols
                 if (price := client.get_historical_price(symbol, target_date)) is not None
             }
+
+        if not prices and assets_needing_prices:
+            raise RuntimeError(f"{source} API returned no prices - possible API outage")
 
         # Store prices
         for asset in assets_needing_prices:
