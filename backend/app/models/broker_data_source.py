@@ -13,14 +13,18 @@ from app.database import Base
 class BrokerDataSource(Base):
     """Tracks data sources imported from various brokers.
 
-    Each record represents a single import event - either a file upload,
-    an API fetch, or legacy data from before this tracking system.
+    Each record represents a single import event:
+    - file_upload: User-uploaded historical data file
+    - api_fetch: Data automatically fetched from broker API
+    - synthetic: Auto-generated from current broker positions (snapshot onboarding)
+    - legacy: Data from before this tracking system existed
 
     Used for:
     - Preventing overlapping imports (strict date range enforcement)
     - Providing audit trail (which source provided which data)
     - Detecting coverage gaps
     - Deduplicating file uploads (via file_hash)
+    - Tracking synthetic snapshots for validation when real history is uploaded
     """
 
     __tablename__ = "broker_data_sources"
@@ -46,7 +50,7 @@ class BrokerDataSource(Base):
     broker_type: Mapped[str] = mapped_column(String(50))  # 'ibkr', 'binance', 'ibi', etc.
 
     # Source type and identifier
-    source_type: Mapped[str] = mapped_column(String(20))  # 'file_upload', 'api_fetch', 'legacy'
+    source_type: Mapped[str] = mapped_column(String(20))  # 'file_upload', 'api_fetch', 'synthetic', 'legacy'
     source_identifier: Mapped[str] = mapped_column(
         String(255)
     )  # Filename or "Daily Auto-Fetch YYYY-MM-DD"
