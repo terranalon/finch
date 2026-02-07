@@ -65,14 +65,17 @@ class ExchangeRateService:
 
                 ticker_symbol = f"{from_curr}{to_curr}=X"
                 ticker = yf.Ticker(ticker_symbol)
-                hist = ticker.history(period="5d")
+                hist = ticker.history(
+                    start=target_date,
+                    end=target_date + timedelta(days=1),
+                )
 
                 if hist.empty or "Close" not in hist.columns:
-                    logger.warning("No data for %s/%s", from_curr, to_curr)
+                    logger.warning("No data for %s/%s on %s", from_curr, to_curr, target_date)
                     failed += 1
                     continue
 
-                rate = Decimal(str(hist["Close"].iloc[-1]))
+                rate = Decimal(str(hist["Close"].iloc[0]))
                 db.add(
                     ExchangeRate(
                         from_currency=from_curr,

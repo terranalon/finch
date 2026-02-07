@@ -98,15 +98,18 @@ class DailyPriceService:
                     continue
 
                 ticker = yf.Ticker(asset.symbol)
-                hist = ticker.history(period="5d")
+                hist = ticker.history(
+                    start=target_date,
+                    end=target_date + timedelta(days=1),
+                )
 
                 if hist.empty or "Close" not in hist.columns:
-                    logger.warning("No data for %s", asset.symbol)
+                    logger.warning("No data for %s on %s", asset.symbol, target_date)
                     failed += 1
                     errors = [*errors, {"symbol": asset.symbol, "error": "No data available"}]
                     continue
 
-                price = Decimal(str(hist["Close"].iloc[-1]))
+                price = Decimal(str(hist["Close"].iloc[0]))
 
                 # Convert Israeli stocks from Agorot to ILS
                 if asset.symbol.endswith(".TA"):
