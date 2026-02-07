@@ -27,6 +27,7 @@ from app.services.brokers.binance.client import BinanceClient, BinanceCredential
 from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
+from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
 from app.services.portfolio.snapshot_service import (
@@ -477,6 +478,57 @@ async def import_broker_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"{config.name} import failed: {str(e)}",
         )
+
+
+@router.post("/ibkr/snapshot/{account_id}", response_model=dict[str, Any])
+async def import_ibkr_snapshot(
+    account_id: int,
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Create a synthetic snapshot from current IBKR positions.
+
+    This fetches the user's current IBKR positions and cash balances,
+    then creates synthetic transactions representing the current state.
+    Use this for instant onboarding -- the user can upload full history later.
+
+    The synthetic data is automatically replaced when historical files are uploaded.
+
+    Args:
+        account_id: Account with stored IBKR credentials
+
+    Returns:
+        Snapshot import statistics
+    """
+    config = _get_broker_config(BrokerType.IBKR)
+    account = _get_validated_account(account_id, current_user, db)
+
+    flex_token, flex_query_id = _get_flex_query_credentials(
+        account, config.key, config.name, config.env_fallback_prefix
+    )
+
+    stats = IBKRSyntheticImportService.import_snapshot(db, account_id, flex_token, flex_query_id)
+
+    if stats.get("status") == "failed":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Snapshot import failed: {stats.get('errors', ['Unknown error'])}",
+        )
+
+    _update_last_import(account, config.key, db)
+
+    # Trigger background snapshot generation
+    if background_tasks:
+        update_snapshot_status(db, account_id, "generating")
+        background_tasks.add_task(generate_snapshots_background, account_id, date.today())
+
+    return {
+        "status": "completed",
+        "message": f"Synthetic snapshot created for account {account.name}",
+        "account_id": account_id,
+        "stats": stats,
+    }
 
 
 @router.post("/{broker_type}/test-credentials/{account_id}", response_model=dict[str, Any])
