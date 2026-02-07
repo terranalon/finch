@@ -58,7 +58,7 @@ class TestImportAllReturnsDateRange:
         mock_import_service._update_asset_prices.return_value = {}
 
         # Mock reconstruction
-        mock_reconstruct.return_value = {"updated": 0}
+        mock_reconstruct.return_value = {"holdings_updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -119,7 +119,7 @@ class TestImportAllReturnsDateRange:
         mock_import_service._update_asset_prices.return_value = {}
 
         # Mock reconstruction
-        mock_reconstruct.return_value = {"updated": 0}
+        mock_reconstruct.return_value = {"holdings_updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -169,7 +169,7 @@ class TestImportAllReturnsDateRange:
         mock_import_service._update_asset_prices.return_value = {}
 
         # Mock reconstruction
-        mock_reconstruct.return_value = {"updated": 0}
+        mock_reconstruct.return_value = {"holdings_updated": 0}
 
         stats = IBKRFlexImportService.import_all(
             mock_db, account_id=1, flex_token="token", flex_query_id="query_id"
