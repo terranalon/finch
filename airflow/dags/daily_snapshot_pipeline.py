@@ -10,16 +10,19 @@ All data operations are handled by the backend - this DAG is a pure orchestrator
 """
 
 import logging
+import os
 from datetime import date, datetime, timedelta
 
 import requests
 from airflow.sdk import dag, task
 from auth_helper import get_auth_helper
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Backend API URL (Docker cross-network access)
-BACKEND_URL = "http://host.docker.internal:8000"
+load_dotenv("/opt/airflow/backend/.env")
+
+BACKEND_URL = os.getenv("BACKEND_URL", "http://host.docker.internal:8000")
 
 default_args = {
     "owner": "portfolio_tracker",
@@ -30,6 +33,11 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "retry_exponential_backoff": True,
 }
+
+
+def _get_snapshot_date() -> date:
+    """Return yesterday's date as the snapshot target."""
+    return date.today() - timedelta(days=1)
 
 
 def _make_api_call(endpoint: str, params: dict | None = None) -> dict:
@@ -45,7 +53,6 @@ def _make_api_call(endpoint: str, params: dict | None = None) -> dict:
     )
 
     if response.status_code == 401:
-        # Token expired, force refresh and retry
         auth.force_refresh()
         response = requests.post(
             url,
@@ -59,6 +66,17 @@ def _make_api_call(endpoint: str, params: dict | None = None) -> dict:
         raise RuntimeError(f"API call failed: {response.text}")
 
     return response.json()
+
+
+def _log_refresh_stats(label: str, result: dict) -> None:
+    """Log the standard updated/skipped/failed stats from a refresh result."""
+    logger.info(
+        "%s: %s updated, %s skipped, %s failed",
+        label,
+        result["updated"],
+        result["skipped"],
+        result["failed"],
+    )
 
 
 @dag(
@@ -76,7 +94,7 @@ def daily_snapshot_pipeline():
     @task(task_id="fetch_exchange_rates")
     def fetch_exchange_rates() -> dict:
         """Fetch exchange rates via backend API."""
-        snapshot_date = date.today() - timedelta(days=1)
+        snapshot_date = _get_snapshot_date()
         logger.info("Fetching exchange rates for %s", snapshot_date)
 
         result = _make_api_call(
@@ -84,18 +102,13 @@ def daily_snapshot_pipeline():
             params={"target_date": str(snapshot_date)},
         )
 
-        logger.info(
-            "Exchange rates: %s updated, %s skipped, %s failed",
-            result["updated"],
-            result["skipped"],
-            result["failed"],
-        )
+        _log_refresh_stats("Exchange rates", result)
         return result
 
     @task(task_id="fetch_asset_prices", pool="db_write_pool")
     def fetch_asset_prices() -> dict:
         """Fetch stock prices via backend API."""
-        snapshot_date = date.today() - timedelta(days=1)
+        snapshot_date = _get_snapshot_date()
         logger.info("Fetching stock prices for %s", snapshot_date)
 
         result = _make_api_call(
@@ -103,18 +116,13 @@ def daily_snapshot_pipeline():
             params={"target_date": str(snapshot_date)},
         )
 
-        logger.info(
-            "Stock prices: %s updated, %s skipped, %s failed",
-            result["updated"],
-            result["skipped"],
-            result["failed"],
-        )
+        _log_refresh_stats("Stock prices", result)
         return result
 
     @task(task_id="fetch_crypto_prices", pool="db_write_pool")
     def fetch_crypto_prices() -> dict:
         """Fetch crypto prices via backend API."""
-        snapshot_date = date.today() - timedelta(days=1)
+        snapshot_date = _get_snapshot_date()
         logger.info("Fetching crypto prices for %s", snapshot_date)
 
         result = _make_api_call(
@@ -122,13 +130,7 @@ def daily_snapshot_pipeline():
             params={"target_date": str(snapshot_date)},
         )
 
-        logger.info(
-            "Crypto prices (%s): %s updated, %s skipped, %s failed",
-            result["source"],
-            result["updated"],
-            result["skipped"],
-            result["failed"],
-        )
+        _log_refresh_stats(f"Crypto prices ({result['source']})", result)
         return result
 
     @task(task_id="create_snapshots")
@@ -138,19 +140,18 @@ def daily_snapshot_pipeline():
         crypto_price_stats: dict,
     ) -> dict:
         """Create portfolio snapshots via backend API."""
-        snapshot_date = date.today() - timedelta(days=1)
-
         logger.info("Exchange rates: %s updated", exchange_rate_stats["updated"])
         logger.info("Stock prices: %s updated", asset_price_stats["updated"])
         logger.info("Crypto prices: %s updated", crypto_price_stats["updated"])
 
         result = _make_api_call(
             "/api/snapshots/create",
-            params={"snapshot_date": str(snapshot_date)},
+            params={"snapshot_date": str(_get_snapshot_date())},
         )
 
         logger.info("Snapshots created: %s", result.get("snapshots_created", 0))
-        logger.info("Total value: $%s", f"{result.get('total_value_usd', 0):,.2f}")
+        total_value = result.get("total_value_usd", 0)
+        logger.info("Total value: $%s", f"{total_value:,.2f}")
 
         return result
 
