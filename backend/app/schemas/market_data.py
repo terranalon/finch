@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class RefreshStats(BaseModel):
     """Base statistics for refresh operations."""
 
-    date: date = Field(..., description="The date prices were fetched for")
+    date: date
     updated: int = Field(..., description="Number of records inserted/updated")
     skipped: int = Field(..., description="Number of records skipped (already exist)")
     failed: int = Field(0, description="Number of failed fetches")
