@@ -525,9 +525,7 @@ async def upload_broker_file(
         if session_id:
             # Batch mode: stage the source, skip reconstruction and snapshots
             source.status = "staged"
-            if source.import_stats is None:
-                source.import_stats = {}
-            source.import_stats = {**source.import_stats, "session_id": session_id}
+            source.import_stats = {**(source.import_stats or {}), "session_id": session_id}
             db.commit()
 
             logger.info(
