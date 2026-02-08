@@ -454,9 +454,6 @@ async def upload_broker_file(
                 db, account_id, dividends_data, source.id
             )
 
-            # Reconstruct holdings from transactions
-            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
-
             # Run validation against IBKR's authoritative cash positions
             from app.services.brokers.ibkr.validation_service import validate_ibkr_import
 
@@ -487,7 +484,6 @@ async def upload_broker_file(
                 "forex": forex_stats,
                 "other_cash": other_cash_stats,
                 "dividend_cash": div_cash_stats,
-                "holdings_reconstruction": reconstruction_stats,
                 "validation": validation_result,
                 "unique_assets_in_file": len(all_symbols),
                 "symbols_in_file": list(all_symbols),
@@ -506,7 +502,9 @@ async def upload_broker_file(
             # Use registry for all supported import services (meitav, kraken, bit2c, binance)
             parsed_data = parser.parse(content)
             import_service = BrokerImportServiceRegistry.get_import_service(broker_type, db)
-            import_stats = import_service.import_data(account_id, parsed_data, source_id=source.id)
+            import_stats = import_service.import_data(
+                account_id, parsed_data, source_id=source.id, skip_reconstruction=bool(session_id)
+            )
 
             # Pass through all stats from service (unified structure)
             source.import_stats = {
@@ -552,7 +550,14 @@ async def upload_broker_file(
                 stats=source.import_stats or {},
             )
 
-        # Single file mode: existing behavior
+        # Single file mode: run reconstruction now (batch mode defers to finalize)
+        if broker_type == "ibkr":
+            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+            source.import_stats = {
+                **(source.import_stats or {}),
+                "holdings_reconstruction": reconstruction_stats,
+            }
+
         source.status = "completed"
         db.commit()
 

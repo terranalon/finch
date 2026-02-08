@@ -62,7 +62,7 @@ class BrokerDataSource(Base):
     # Status tracking
     status: Mapped[str] = mapped_column(
         String(20), default="pending"
-    )  # 'pending', 'completed', 'failed'
+    )  # 'pending', 'staged', 'completed', 'failed'
 
     # File-specific fields (nullable for API fetches)
     file_path: Mapped[str | None] = mapped_column(String(500))

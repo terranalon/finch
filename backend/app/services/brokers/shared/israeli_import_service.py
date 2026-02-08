@@ -80,7 +80,11 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         self._broker_name = parser.broker_name()
 
     def import_data(
-        self, account_id: int, data: BrokerImportData, source_id: int | None = None
+        self,
+        account_id: int,
+        data: BrokerImportData,
+        source_id: int | None = None,
+        skip_reconstruction: bool = False,
     ) -> dict:
         """Import complete Meitav broker data into database.
 
@@ -128,7 +132,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             self.db.commit()
 
             # Reconstruct holdings from transactions and update the Holding table
-            if data.transactions or data.dividends or data.cash_transactions:
+            if not skip_reconstruction and (data.transactions or data.dividends or data.cash_transactions):
                 stats["holdings_reconstruction"] = self._reconstruct_and_update_holdings(account_id)
                 self.db.commit()
 

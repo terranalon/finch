@@ -148,6 +148,7 @@ class BaseBrokerImportService(ABC):
         account_id: int,
         data: "BrokerImportData",
         source_id: int | None = None,
+        skip_reconstruction: bool = False,
     ) -> dict:
         """Import broker data and return statistics dict.
 
@@ -155,6 +156,8 @@ class BaseBrokerImportService(ABC):
             account_id: Account ID to import data into
             data: Parsed broker data from parser
             source_id: Optional broker source ID for tracking import lineage
+            skip_reconstruction: If True, skip holdings reconstruction (used in
+                batch upload mode where reconstruction is deferred to finalize)
 
         Returns:
             Statistics dictionary with import results including:

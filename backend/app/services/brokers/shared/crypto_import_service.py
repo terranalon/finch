@@ -48,6 +48,7 @@ class CryptoImportService(BaseBrokerImportService):
         account_id: int,
         data: BrokerImportData,
         source_id: int | None = None,
+        skip_reconstruction: bool = False,
         import_positions: bool = False,
     ) -> dict:
         """Import complete crypto broker data into database.
@@ -101,7 +102,7 @@ class CryptoImportService(BaseBrokerImportService):
             self.db.commit()
 
             # Reconstruct holdings from transactions (like Meitav/IBKR do)
-            if data.transactions or data.dividends or data.cash_transactions:
+            if not skip_reconstruction and (data.transactions or data.dividends or data.cash_transactions):
                 stats["holdings_reconstruction"] = self._reconstruct_and_update_holdings(account_id)
                 self.db.commit()
 
