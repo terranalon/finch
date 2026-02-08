@@ -132,8 +132,8 @@ async def list_assets_with_changes(
                 change_1m, change_1m_pct = None, None
             else:
                 # Get current exchange rate (this will fetch from Yahoo if not cached)
-                current_price = CurrencyService.get_exchange_rate(
-                    db, asset_currency, display_currency, today
+                current_price = CurrencyService(db).get_exchange_rate(
+                    asset_currency, display_currency, today
                 )
 
                 # Get historical rates from our cached data

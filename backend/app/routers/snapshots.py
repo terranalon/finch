@@ -39,20 +39,17 @@ async def create_snapshot(
     if not allowed_account_ids:
         return {"status": "completed", "message": "No accounts to snapshot", "stats": {}}
 
+    svc = SnapshotService(db)
     if run_async:
-        # Run in background (pass account IDs for filtering)
-        background_tasks.add_task(
-            SnapshotService.create_portfolio_snapshot, db, snapshot_date, allowed_account_ids
-        )
+        background_tasks.add_task(svc.create_portfolio_snapshot, snapshot_date, allowed_account_ids)
         return {
             "status": "started",
             "message": "Snapshot creation started in background",
             "date": snapshot_date.isoformat() if snapshot_date else date.today().isoformat(),
         }
-    else:
-        # Run synchronously
-        stats = SnapshotService.create_portfolio_snapshot(db, snapshot_date, allowed_account_ids)
-        return {"status": "completed", "message": "Snapshot created successfully", **stats}
+
+    stats = svc.create_portfolio_snapshot(snapshot_date, allowed_account_ids)
+    return {"status": "completed", "message": "Snapshot created successfully", **stats}
 
 
 @router.get("/account/{account_id}")
@@ -90,13 +87,10 @@ async def get_account_snapshots(
 
     snapshots = SnapshotService.get_account_history(db, account_id, start_date, end_date, limit)
 
-    # Convert to display currency
-    converted_snapshots = [
+    return [
         CurrencyConversionHelper.convert_snapshot_dict(db, snapshot, display_currency)
         for snapshot in snapshots
     ]
-
-    return converted_snapshots
 
 
 @router.get("/portfolio")
@@ -132,13 +126,10 @@ async def get_portfolio_snapshots(
         db, start_date, end_date, limit, allowed_account_ids
     )
 
-    # Convert to display currency
-    converted_snapshots = [
+    return [
         CurrencyConversionHelper.convert_snapshot_dict(db, snapshot, display_currency)
         for snapshot in snapshots
     ]
-
-    return converted_snapshots
 
 
 @router.get("/validate-reconstruction/{account_id}", response_model=dict[str, Any])
@@ -173,9 +164,7 @@ async def validate_reconstruction(
             detail=f"Account {account_id} not found",
         )
 
-    validation = PortfolioReconstructionService.validate_reconstruction(db, account_id, as_of_date)
-
-    return validation
+    return PortfolioReconstructionService.validate_reconstruction(db, account_id, as_of_date)
 
 
 @router.get("/portfolio-value/{account_id}", response_model=dict[str, Any])
@@ -211,11 +200,9 @@ async def get_portfolio_value(
             detail=f"Account {account_id} not found",
         )
 
-    value = PortfolioReconstructionService.calculate_portfolio_value(
+    return PortfolioReconstructionService.calculate_portfolio_value(
         db, account_id, as_of_date, currency
     )
-
-    return value
 
 
 @router.post("/backfill/{account_id}", response_model=dict[str, Any])
@@ -268,12 +255,9 @@ async def backfill_historical_snapshots(
             detail=f"Date range too large ({total_days} days). Maximum is 730 days (2 years).",
         )
 
-    # Execute backfill using reconstruction
     try:
-        stats = SnapshotService.backfill_historical_snapshots(db, account_id, start_date, end_date)
-
+        stats = SnapshotService(db).backfill_historical_snapshots(account_id, start_date, end_date)
         return {"status": "completed", "message": "Backfill completed successfully", **stats}
-
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

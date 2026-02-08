@@ -72,8 +72,7 @@ class TestFetchAndStoreHistoricalRates:
         mock_ticker.history.return_value = mock_history
         mock_yf.Ticker.return_value = mock_ticker
 
-        count = CurrencyService.fetch_and_store_historical_rates(
-            db_session, "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
+        count = CurrencyService(db_session).fetch_and_store_historical_rates( "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
         )
 
         assert count == 3
@@ -112,8 +111,7 @@ class TestFetchAndStoreHistoricalRates:
         mock_ticker.history.return_value = mock_history
         mock_yf.Ticker.return_value = mock_ticker
 
-        count = CurrencyService.fetch_and_store_historical_rates(
-            db_session, "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
+        count = CurrencyService(db_session).fetch_and_store_historical_rates( "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
         )
 
         assert count == 2  # Skipped Jan 3
@@ -123,8 +121,7 @@ class TestFetchAndStoreHistoricalRates:
 
     def test_returns_zero_for_same_currency(self, db_session):
         """Should return 0 when from_currency equals to_currency."""
-        count = CurrencyService.fetch_and_store_historical_rates(
-            db_session, "USD", "USD", date(2024, 1, 2), date(2024, 1, 4)
+        count = CurrencyService(db_session).fetch_and_store_historical_rates( "USD", "USD", date(2024, 1, 2), date(2024, 1, 4)
         )
         assert count == 0
 
@@ -135,8 +132,7 @@ class TestFetchAndStoreHistoricalRates:
         mock_ticker.history.return_value = pd.DataFrame()
         mock_yf.Ticker.return_value = mock_ticker
 
-        count = CurrencyService.fetch_and_store_historical_rates(
-            db_session, "USD", "EUR", date(2024, 1, 2), date(2024, 1, 4)
+        count = CurrencyService(db_session).fetch_and_store_historical_rates( "USD", "EUR", date(2024, 1, 2), date(2024, 1, 4)
         )
 
         assert count == 0
@@ -146,8 +142,7 @@ class TestFetchAndStoreHistoricalRates:
         """Should handle yfinance exceptions gracefully."""
         mock_yf.Ticker.side_effect = Exception("API error")
 
-        count = CurrencyService.fetch_and_store_historical_rates(
-            db_session, "USD", "CAD", date(2024, 1, 2), date(2024, 1, 4)
+        count = CurrencyService(db_session).fetch_and_store_historical_rates( "USD", "CAD", date(2024, 1, 2), date(2024, 1, 4)
         )
 
         assert count == 0

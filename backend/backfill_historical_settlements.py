@@ -4,9 +4,10 @@ import logging
 import xml.etree.ElementTree as ET
 from decimal import Decimal
 
+from app.services.ibkr_parser import IBKRParser
+
 from app.database import SessionLocal
 from app.models import Asset, Holding, Transaction
-from app.services.ibkr_parser import IBKRParser
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

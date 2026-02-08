@@ -2,9 +2,10 @@
 
 import xml.etree.ElementTree as ET
 
-from app.database import SessionLocal
 from app.services.ibkr_import_service import IBKRImportService
 from app.services.ibkr_parser import IBKRParser
+
+from app.database import SessionLocal
 
 db = SessionLocal()
 account_id = 7

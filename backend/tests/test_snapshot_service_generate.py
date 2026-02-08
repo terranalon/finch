@@ -86,8 +86,8 @@ class TestGenerateAccountSnapshots:
 
     @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
     @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
-    @patch("app.services.portfolio.snapshot_service.PriceFetcher")
-    @patch("app.services.portfolio.snapshot_service.CurrencyService")
+    @patch("app.services.portfolio.holding_valuation_service.PriceFetcher")
+    @patch("app.services.portfolio.holding_valuation_service.CurrencyService")
     def test_generates_snapshots_for_date_range(
         self, mock_currency, mock_price, mock_recon, mock_fetcher, db_session, test_account
     ):
@@ -95,56 +95,29 @@ class TestGenerateAccountSnapshots:
         start = date(2024, 1, 1)
         end = date(2024, 1, 3)
 
-        # Mock streaming reconstruction
+        holding = {
+            "asset_id": 1,
+            "quantity": Decimal("10"),
+            "currency": "USD",
+            "asset_class": "Stock",
+            "symbol": "AAPL",
+        }
         mock_recon.reconstruct_holdings_timeline.return_value = iter(
             [
-                (
-                    date(2024, 1, 1),
-                    [
-                        {
-                            "asset_id": 1,
-                            "quantity": Decimal("10"),
-                            "currency": "USD",
-                            "asset_class": "Stock",
-                            "symbol": "AAPL",
-                        }
-                    ],
-                ),
-                (
-                    date(2024, 1, 2),
-                    [
-                        {
-                            "asset_id": 1,
-                            "quantity": Decimal("10"),
-                            "currency": "USD",
-                            "asset_class": "Stock",
-                            "symbol": "AAPL",
-                        }
-                    ],
-                ),
-                (
-                    date(2024, 1, 3),
-                    [
-                        {
-                            "asset_id": 1,
-                            "quantity": Decimal("10"),
-                            "currency": "USD",
-                            "asset_class": "Stock",
-                            "symbol": "AAPL",
-                        }
-                    ],
-                ),
+                (date(2024, 1, 1), [holding]),
+                (date(2024, 1, 2), [holding]),
+                (date(2024, 1, 3), [holding]),
             ]
         )
 
         mock_price.get_price_for_date.return_value = Decimal("150")
-        mock_currency.get_exchange_rate.return_value = Decimal("3.70")
+        mock_currency.return_value.get_exchange_rate.return_value = Decimal("3.70")
         mock_fetcher.ensure_historical_data.return_value = {
             "prices_fetched": 3,
             "rates_fetched": 3,
         }
 
-        stats = SnapshotService.generate_account_snapshots(db_session, test_account.id, start, end)
+        stats = SnapshotService(db_session).generate_account_snapshots(test_account.id, start, end)
 
         assert stats["created"] == 3
 
@@ -182,8 +155,7 @@ class TestGenerateAccountSnapshots:
         )
         mock_fetcher.ensure_historical_data.return_value = {}
 
-        SnapshotService.generate_account_snapshots(
-            db_session,
+        SnapshotService(db_session).generate_account_snapshots(
             test_account.id,
             date(2024, 1, 2),
             date(2024, 1, 2),
@@ -218,8 +190,7 @@ class TestGenerateAccountSnapshots:
         )
         mock_fetcher.ensure_historical_data.return_value = {}
 
-        stats = SnapshotService.generate_account_snapshots(
-            db_session,
+        stats = SnapshotService(db_session).generate_account_snapshots(
             test_account.id,
             date(2024, 1, 1),
             date(2024, 1, 3),
