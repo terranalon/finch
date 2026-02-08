@@ -57,6 +57,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [fileUploads, setFileUploads] = useState([]);
   const [showFileUploadResult, setShowFileUploadResult] = useState(false);
   const [lastFileUpload, setLastFileUpload] = useState(null);
+  const [hasSnapshotData, setHasSnapshotData] = useState(false);
 
   // Notification state (replaces alert())
   const [notification, setNotification] = useState({ message: null, type: 'error' });
@@ -85,6 +86,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setFileUploads([]);
     setShowFileUploadResult(false);
     setLastFileUpload(null);
+    setHasSnapshotData(false);
     setNotification({ message: null, type: 'error' });
   };
 
@@ -181,19 +183,35 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           throw new Error(error.detail || 'Failed to save credentials');
         }
 
-        // Trigger data import using correct endpoint
-        const importResponse = await api(`/brokers/${broker.type}/import/${createdAccountId}`, {
-          method: 'POST',
-        });
+        if (broker.supportsSnapshot) {
+          // Snapshot-capable broker: import current positions
+          const snapshotResponse = await api(`/brokers/ibkr/snapshot/${createdAccountId}`, {
+            method: 'POST',
+          });
 
-        if (!importResponse.ok) {
-          const error = await importResponse.json();
-          throw new Error(error.detail || 'Failed to import data');
+          if (!snapshotResponse.ok) {
+            const error = await snapshotResponse.json();
+            throw new Error(error.detail || 'Failed to import snapshot');
+          }
+
+          const results = await snapshotResponse.json();
+          setImportResults(transformSnapshotResults(results));
+          setHasSnapshotData(true);
+        } else {
+          // Regular broker: trigger full data import
+          const importResponse = await api(`/brokers/${broker.type}/import/${createdAccountId}`, {
+            method: 'POST',
+          });
+
+          if (!importResponse.ok) {
+            const error = await importResponse.json();
+            throw new Error(error.detail || 'Failed to import data');
+          }
+
+          const results = await importResponse.json();
+          setImportResults(transformImportResults(results));
         }
 
-        const results = await importResponse.json();
-        // Transform backend response to match UI expectations
-        setImportResults(transformImportResults(results));
         setSkippedData(false);
         setIsImporting(false);
         setShowImportResults(true);
@@ -286,6 +304,25 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         dateRange: {
           start: formatDateForDisplay(dateRange.start_date),
           end: formatDateForDisplay(dateRange.end_date),
+        },
+      },
+      message: backendResults.message,
+    };
+  }
+
+  function transformSnapshotResults(backendResults) {
+    const stats = backendResults.stats || {};
+    const positionsImported = stats.positions_imported || 0;
+    const holdingsUpdated = stats.holdings_reconstruction?.holdings_updated || 0;
+
+    return {
+      assets: [],
+      summary: {
+        totalAssets: holdingsUpdated || positionsImported,
+        totalTransactions: positionsImported,
+        dateRange: {
+          start: 'Today',
+          end: 'Today',
         },
       },
       message: backendResults.message,
@@ -468,6 +505,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         broker={brokerConfig}
         accountDetails={accountDetails}
         skippedData={skippedData}
+        hasSnapshotData={hasSnapshotData}
+        createdAccountId={createdAccountId}
         onViewAccount={handleViewAccount}
         onAddAnother={handleAddAnother}
         onDone={handleClose}
