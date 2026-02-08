@@ -101,7 +101,7 @@ def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
 
             # Convert to USD
             if asset_currency != "USD":
-                rate_to_usd = CurrencyService(db).get_exchange_rate( asset_currency, "USD")
+                rate_to_usd = CurrencyService(db).get_exchange_rate(asset_currency, "USD")
                 market_value_usd = (
                     market_value_native * rate_to_usd if rate_to_usd else market_value_native
                 )
@@ -112,7 +112,7 @@ def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
 
     # Convert from USD to portfolio's default currency
     if portfolio.default_currency != "USD":
-        rate = CurrencyService(db).get_exchange_rate( "USD", portfolio.default_currency)
+        rate = CurrencyService(db).get_exchange_rate("USD", portfolio.default_currency)
         total_value = total_value_usd * rate if rate else total_value_usd
     else:
         total_value = total_value_usd

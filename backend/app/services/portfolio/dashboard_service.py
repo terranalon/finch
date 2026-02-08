@@ -35,7 +35,8 @@ class DashboardService:
     def get_summary(self, account_ids: list[int]) -> DashboardSummary:
         """Build a complete dashboard summary.
 
-        All monetary values are returned in USD.
+        All monetary values are computed in USD and ILS.
+        Display-currency conversion is the router's responsibility.
         """
         accounts = self._build_accounts(account_ids)
         total_usd = sum(a.value_usd for a in accounts)

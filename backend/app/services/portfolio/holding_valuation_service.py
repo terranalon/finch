@@ -77,8 +77,8 @@ class HoldingValuationService:
     ) -> tuple[Decimal, Decimal]:
         """Value a batch of holdings, returning totals in USD and ILS.
 
-        This is the replacement for SnapshotService._value_holdings().
         Each holding dict must have keys: asset_id, quantity, currency, asset_class.
+        Optional keys: symbol, name, last_fetched_price.
 
         Returns:
             (total_value_usd, total_value_ils)
