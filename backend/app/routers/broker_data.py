@@ -37,6 +37,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.brokers.base_import_service import extract_unique_symbols
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
+from app.services.brokers.ibkr.synthetic_import_service import delete_synthetic_sources
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
@@ -78,72 +79,6 @@ def _get_parser_for_file(broker_type: str, filename: str):
         return BrokerParserRegistry.get_parser_for_file(broker_type, filename)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-def _delete_synthetic_sources(db: Session, account_id: int, broker_type: str) -> dict:
-    """Delete synthetic sources and their linked transactions/cash balances.
-
-    When a user uploads real historical data, any existing synthetic sources
-    for the same account+broker should be cleaned up. This function:
-    1. Finds all BrokerDataSource records with source_type="synthetic"
-    2. Saves their snapshot_positions from import_stats (for later validation)
-    3. Deletes linked transactions and cash balances
-    4. Deletes the source records themselves
-
-    Args:
-        db: Database session
-        account_id: Account to clean up synthetic sources for
-        broker_type: Broker type (e.g., 'ibkr')
-
-    Returns:
-        Stats about what was deleted, plus the snapshot_positions for validation
-    """
-    synthetic_sources = (
-        db.query(BrokerDataSource)
-        .filter(
-            BrokerDataSource.account_id == account_id,
-            BrokerDataSource.broker_type == broker_type,
-            BrokerDataSource.source_type == "synthetic",
-        )
-        .all()
-    )
-
-    if not synthetic_sources:
-        return {"deleted_sources": 0, "deleted_transactions": 0, "snapshot_positions": []}
-
-    total_txns_deleted = 0
-    total_cash_deleted = 0
-    snapshot_positions: list[dict] = []
-
-    for source in synthetic_sources:
-        # Save snapshot data for validation (last source wins -- typically only one exists)
-        if source.import_stats and "snapshot_positions" in source.import_stats:
-            snapshot_positions = source.import_stats["snapshot_positions"]
-
-        # Delete linked transactions
-        txns_deleted = (
-            db.query(Transaction)
-            .filter(Transaction.broker_source_id == source.id)
-            .delete(synchronize_session=False)
-        )
-        total_txns_deleted += txns_deleted
-
-        # Delete linked cash balances
-        cash_deleted = (
-            db.query(DailyCashBalance)
-            .filter(DailyCashBalance.broker_source_id == source.id)
-            .delete(synchronize_session=False)
-        )
-        total_cash_deleted += cash_deleted
-
-        db.delete(source)
-
-    return {
-        "deleted_sources": len(synthetic_sources),
-        "deleted_transactions": total_txns_deleted,
-        "deleted_cash_balances": total_cash_deleted,
-        "snapshot_positions": snapshot_positions,
-    }
 
 
 # Response Models
@@ -433,7 +368,7 @@ async def upload_broker_file(
         )
 
     # Auto-delete synthetic sources when uploading real historical data
-    synthetic_cleanup = _delete_synthetic_sources(db, account_id, broker_type)
+    synthetic_cleanup = delete_synthetic_sources(db, account_id, broker_type)
     if synthetic_cleanup["deleted_sources"] > 0:
         logger.info(
             "Auto-deleted %d synthetic source(s) for account %d: %d transactions removed",
@@ -713,7 +648,7 @@ async def finalize_batch_upload(
         )
 
     # Auto-delete synthetic sources before finalizing
-    synthetic_cleanup = _delete_synthetic_sources(db, account_id, matching[0].broker_type)
+    synthetic_cleanup = delete_synthetic_sources(db, account_id, matching[0].broker_type)
 
     # Mark all staged sources as completed
     for source in matching:

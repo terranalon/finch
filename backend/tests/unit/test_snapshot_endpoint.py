@@ -141,6 +141,22 @@ def auth_headers(client_with_user):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _make_completed_stats(**overrides) -> dict:
+    """Build a realistic completed stats dict from the service, with optional overrides."""
+    stats = {
+        "account_id": 1,
+        "status": "completed",
+        "source_type": "synthetic",
+        "positions_imported": 0,
+        "cash_balances": {},
+        "assets_created": 0,
+        "errors": [],
+        "start_time": "2026-02-07T00:00:00",
+        "end_time": "2026-02-07T00:00:01",
+    }
+    return {**stats, **overrides}
+
+
 class TestSnapshotEndpoint:
     """Tests for POST /api/brokers/ibkr/snapshot/{account_id}."""
 
@@ -149,13 +165,9 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
 
         with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = {
-                "status": "completed",
-                "source_type": "synthetic",
-                "positions_imported": 3,
-                "cash_balances": {"USD": 5000},
-                "assets_created": 2,
-            }
+            mock_service.import_snapshot.return_value = _make_completed_stats(
+                positions_imported=3, cash_balances={"USD": 5000}, assets_created=2
+            )
 
             response = client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -171,11 +183,7 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
 
         with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = {
-                "status": "completed",
-                "source_type": "synthetic",
-                "positions_imported": 0,
-            }
+            mock_service.import_snapshot.return_value = _make_completed_stats()
 
             client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -224,11 +232,9 @@ class TestSnapshotEndpoint:
             patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service,
             patch("app.routers.brokers._update_last_import") as mock_update,
         ):
-            mock_service.import_snapshot.return_value = {
-                "status": "completed",
-                "source_type": "synthetic",
-                "positions_imported": 1,
-            }
+            mock_service.import_snapshot.return_value = _make_completed_stats(
+                positions_imported=1
+            )
 
             client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -239,11 +245,9 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
 
         with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = {
-                "status": "completed",
-                "source_type": "synthetic",
-                "positions_imported": 5,
-            }
+            mock_service.import_snapshot.return_value = _make_completed_stats(
+                positions_imported=5
+            )
 
             response = client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 

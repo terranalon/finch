@@ -15,10 +15,12 @@ from unittest.mock import patch
 import pytest
 
 from app.models import Account, Asset, BrokerDataSource, Holding, Portfolio, Transaction, User
-from app.routers.broker_data import _delete_synthetic_sources
 from app.services.auth.auth_service import AuthService
 from app.services.brokers.ibkr.snapshot_validation_service import validate_against_snapshot
-from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
+from app.services.brokers.ibkr.synthetic_import_service import (
+    IBKRSyntheticImportService,
+    delete_synthetic_sources,
+)
 from app.services.shared.asset_metadata_service import AssetMetadataResult
 
 # ---------------------------------------------------------------------------
@@ -296,9 +298,9 @@ class TestSyntheticSnapshotImport:
 
 
 class TestSyntheticCleanup:
-    """Tests for _delete_synthetic_sources function."""
+    """Tests for delete_synthetic_sources function."""
 
-    def test_delete_synthetic_sources_removes_source_and_transactions(self, db, test_account):
+    def testdelete_synthetic_sources_removes_source_and_transactions(self, db, test_account):
         """Deleting synthetic sources removes the source record and linked transactions."""
         # Arrange: create a synthetic source with a transaction
         source = BrokerDataSource(
@@ -353,7 +355,7 @@ class TestSyntheticCleanup:
         db.flush()
 
         # Act
-        result = _delete_synthetic_sources(db, test_account.id, "ibkr")
+        result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         # Assert: sources and transactions deleted
         assert result["deleted_sources"] == 1
@@ -380,14 +382,14 @@ class TestSyntheticCleanup:
         )
         assert remaining_txns == 0
 
-    def test_delete_synthetic_sources_returns_empty_when_none_exist(self, db, test_account):
+    def testdelete_synthetic_sources_returns_empty_when_none_exist(self, db, test_account):
         """Returns zero counts when no synthetic sources exist for the account."""
-        result = _delete_synthetic_sources(db, test_account.id, "ibkr")
+        result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         assert result["deleted_sources"] == 0
         assert result["deleted_transactions"] == 0
 
-    def test_delete_synthetic_sources_ignores_non_synthetic(self, db, test_account):
+    def testdelete_synthetic_sources_ignores_non_synthetic(self, db, test_account):
         """Non-synthetic sources (file_upload) are not deleted."""
         # Arrange: create a non-synthetic source
         source = BrokerDataSource(
@@ -403,7 +405,7 @@ class TestSyntheticCleanup:
         db.flush()
 
         # Act
-        result = _delete_synthetic_sources(db, test_account.id, "ibkr")
+        result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         # Assert: non-synthetic source is untouched
         assert result["deleted_sources"] == 0
@@ -414,7 +416,7 @@ class TestSyntheticCleanup:
         )
         assert remaining == 1
 
-    def test_delete_synthetic_sources_scoped_to_broker_type(self, db, test_account):
+    def testdelete_synthetic_sources_scoped_to_broker_type(self, db, test_account):
         """Synthetic cleanup is scoped by broker_type."""
         # Arrange: create synthetic source for a different broker
         source = BrokerDataSource(
@@ -430,7 +432,7 @@ class TestSyntheticCleanup:
         db.flush()
 
         # Act: clean up ibkr (not kraken)
-        result = _delete_synthetic_sources(db, test_account.id, "ibkr")
+        result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         # Assert: kraken source is untouched
         assert result["deleted_sources"] == 0
@@ -677,7 +679,7 @@ class TestFullSyntheticToHistoryFlow:
         assert len(synthetic_source.import_stats["snapshot_positions"]) == 2
 
         # -- Step 2: Clean up synthetic sources (simulates historical upload) --
-        cleanup_result = _delete_synthetic_sources(db, test_account.id, "ibkr")
+        cleanup_result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         assert cleanup_result["deleted_sources"] == 1
         assert cleanup_result["deleted_transactions"] == 2

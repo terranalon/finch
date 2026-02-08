@@ -69,7 +69,7 @@ class TestBatchUploadStaging:
         )
         assert source.import_stats["session_id"] == session_id
 
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data.get_overlap_detector")
     @patch("app.routers.broker_data.get_file_storage")
     @patch("app.routers.broker_data._get_parser_for_file")
@@ -153,7 +153,7 @@ class TestBatchUploadStaging:
         assert result.status == "staged"
         assert "staged" in result.message.lower() or "batch" in result.message.lower()
 
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data.get_overlap_detector")
     @patch("app.routers.broker_data.get_file_storage")
     @patch("app.routers.broker_data._get_parser_for_file")
@@ -232,7 +232,7 @@ class TestBatchUploadStaging:
 
         assert result.status == "completed"
 
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data.get_overlap_detector")
     @patch("app.routers.broker_data.get_file_storage")
     @patch("app.routers.broker_data._get_parser_for_file")
@@ -328,7 +328,7 @@ class TestFinalizeBatchEndpoint:
     @patch("app.routers.broker_data.generate_snapshots_background")
     @patch("app.routers.broker_data.update_snapshot_status")
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_marks_sources_completed(
         self,
@@ -390,7 +390,7 @@ class TestFinalizeBatchEndpoint:
         assert mock_source2.status == "completed"
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_runs_single_reconstruction(
         self,
@@ -438,7 +438,7 @@ class TestFinalizeBatchEndpoint:
 
     @patch("app.routers.broker_data.PortfolioReconstructionService")
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_deletes_synthetic_sources(
         self,
@@ -519,7 +519,7 @@ class TestFinalizeBatchEndpoint:
     @patch("app.routers.broker_data.generate_snapshots_background")
     @patch("app.routers.broker_data.update_snapshot_status")
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_triggers_snapshot_generation(
         self,
@@ -570,7 +570,7 @@ class TestFinalizeBatchEndpoint:
         mock_bg_tasks.add_task.assert_called_once()
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_returns_correct_date_range(
         self,
@@ -637,7 +637,7 @@ class TestFinalizeBatchEndpoint:
         assert result["sources_finalized"] == 3
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_only_matches_correct_session_id(
         self,
@@ -702,7 +702,7 @@ class TestFinalizeBatchEndpoint:
         assert mock_source_other.status == "staged"
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_includes_reconstruction_stats(
         self,
@@ -750,7 +750,7 @@ class TestFinalizeBatchEndpoint:
         assert result["holdings_reconstruction"] == reconstruction_result
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_commits_changes(
         self,
@@ -798,7 +798,7 @@ class TestFinalizeBatchEndpoint:
 
     @patch("app.routers.broker_data.PortfolioReconstructionService")
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_runs_validation_when_snapshot_positions_exist(
         self,
@@ -858,7 +858,7 @@ class TestFinalizeBatchEndpoint:
         assert result["validation"]["positions_matched"] == 1
 
     @patch("app.routers.broker_data.reconstruct_and_update_holdings")
-    @patch("app.routers.broker_data._delete_synthetic_sources")
+    @patch("app.routers.broker_data.delete_synthetic_sources")
     @patch("app.routers.broker_data._validate_account_access")
     def test_finalize_skips_validation_when_no_snapshot_positions(
         self,

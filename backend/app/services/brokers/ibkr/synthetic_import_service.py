@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.models import Account, BrokerDataSource, Holding, Transaction
+from app.models.daily_cash_balance import DailyCashBalance
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
 from app.services.brokers.ibkr.parser import IBKRParser
@@ -80,6 +81,72 @@ def _build_snapshot_positions(positions_data: list[dict]) -> list[dict]:
         for p in positions_data
         if p["quantity"] != 0
     ]
+
+
+def delete_synthetic_sources(db: Session, account_id: int, broker_type: str) -> dict:
+    """Delete synthetic sources and their linked transactions/cash balances.
+
+    When a user uploads real historical data, any existing synthetic sources
+    for the same account+broker should be cleaned up. This function:
+    1. Finds all BrokerDataSource records with source_type="synthetic"
+    2. Saves their snapshot_positions from import_stats (for later validation)
+    3. Deletes linked transactions and cash balances
+    4. Deletes the source records themselves
+
+    Args:
+        db: Database session
+        account_id: Account to clean up synthetic sources for
+        broker_type: Broker type (e.g., 'ibkr')
+
+    Returns:
+        Stats about what was deleted, plus the snapshot_positions for validation
+    """
+    synthetic_sources = (
+        db.query(BrokerDataSource)
+        .filter(
+            BrokerDataSource.account_id == account_id,
+            BrokerDataSource.broker_type == broker_type,
+            BrokerDataSource.source_type == "synthetic",
+        )
+        .all()
+    )
+
+    if not synthetic_sources:
+        return {"deleted_sources": 0, "deleted_transactions": 0, "snapshot_positions": []}
+
+    total_txns_deleted = 0
+    total_cash_deleted = 0
+    snapshot_positions: list[dict] = []
+
+    for source in synthetic_sources:
+        # Save snapshot data for validation (last source wins -- typically only one exists)
+        if source.import_stats and "snapshot_positions" in source.import_stats:
+            snapshot_positions = source.import_stats["snapshot_positions"]
+
+        # Delete linked transactions
+        txns_deleted = (
+            db.query(Transaction)
+            .filter(Transaction.broker_source_id == source.id)
+            .delete(synchronize_session=False)
+        )
+        total_txns_deleted += txns_deleted
+
+        # Delete linked cash balances
+        cash_deleted = (
+            db.query(DailyCashBalance)
+            .filter(DailyCashBalance.broker_source_id == source.id)
+            .delete(synchronize_session=False)
+        )
+        total_cash_deleted += cash_deleted
+
+        db.delete(source)
+
+    return {
+        "deleted_sources": len(synthetic_sources),
+        "deleted_transactions": total_txns_deleted,
+        "deleted_cash_balances": total_cash_deleted,
+        "snapshot_positions": snapshot_positions,
+    }
 
 
 class IBKRSyntheticImportService:

@@ -65,6 +65,30 @@ class ApiConnectionResponse(BaseModel):
     broker_type: str
 
 
+class SnapshotImportStats(BaseModel):
+    """Statistics from a synthetic snapshot import."""
+
+    account_id: int
+    source_type: str
+    status: str
+    positions_imported: int
+    cash_balances: dict[str, Any]
+    assets_created: int
+    errors: list[str]
+    start_time: str | None = None
+    end_time: str | None = None
+    holdings_reconstruction: dict[str, Any] | None = None
+
+
+class SnapshotImportResponse(BaseModel):
+    """Response model for POST /ibkr/snapshot/{account_id}."""
+
+    status: str
+    message: str
+    account_id: int
+    stats: SnapshotImportStats
+
+
 router = APIRouter(prefix="/api/brokers", tags=["brokers"])
 
 
@@ -480,13 +504,13 @@ async def import_broker_data(
         )
 
 
-@router.post("/ibkr/snapshot/{account_id}", response_model=dict[str, Any])
+@router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)
 async def import_ibkr_snapshot(
     account_id: int,
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
+):
     """Create a synthetic snapshot from current IBKR positions.
 
     This fetches the user's current IBKR positions and cash balances,
