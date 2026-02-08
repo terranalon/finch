@@ -34,6 +34,7 @@ export const BROKERS = {
     defaultCurrency: 'USD',
     defaultAccountType: 'Investment',
     hasApi: true,
+    supportsSnapshot: true,
     supportedFormats: ['.xml'],
     apiType: 'flex', // Uses flex_token and flex_query_id
     instructions: {
