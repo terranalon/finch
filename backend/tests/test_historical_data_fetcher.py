@@ -150,7 +150,7 @@ class TestEnsureHistoricalData:
         account_id = test_account_with_holdings["account_id"]
 
         mock_price.fetch_and_store_historical_prices.return_value = 5
-        mock_currency.fetch_and_store_historical_rates.return_value = 3
+        mock_currency.return_value.fetch_and_store_historical_rates.return_value = 3
 
         stats = HistoricalDataFetcher.ensure_historical_data(
             db_session, account_id, date(2024, 1, 1), date(2024, 1, 5)
@@ -160,7 +160,7 @@ class TestEnsureHistoricalData:
         assert mock_price.fetch_and_store_historical_prices.call_count == 2
 
         # Should fetch exchange rates
-        mock_currency.fetch_and_store_historical_rates.assert_called()
+        mock_currency.return_value.fetch_and_store_historical_rates.assert_called()
 
         assert "prices_fetched" in stats
         assert "rates_fetched" in stats
@@ -174,7 +174,7 @@ class TestEnsureHistoricalData:
         account_id = test_account_with_holdings["account_id"]
 
         mock_price.fetch_and_store_historical_prices.return_value = 10
-        mock_currency.fetch_and_store_historical_rates.return_value = 5
+        mock_currency.return_value.fetch_and_store_historical_rates.return_value = 5
 
         stats = HistoricalDataFetcher.ensure_historical_data(
             db_session, account_id, date(2024, 1, 1), date(2024, 1, 10)
@@ -197,7 +197,7 @@ class TestEnsureHistoricalData:
             Exception("API error"),
             5,
         ]
-        mock_currency.fetch_and_store_historical_rates.return_value = 3
+        mock_currency.return_value.fetch_and_store_historical_rates.return_value = 3
 
         stats = HistoricalDataFetcher.ensure_historical_data(
             db_session, account_id, date(2024, 1, 1), date(2024, 1, 5)

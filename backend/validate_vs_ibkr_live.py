@@ -8,11 +8,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import SessionLocal
-from app.models import Account
 from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_parser import IBKRParser
 from app.services.portfolio_reconstruction_service import PortfolioReconstructionService
+
+from app.database import SessionLocal
+from app.models import Account
 
 
 def main():

@@ -22,8 +22,9 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import SessionLocal
 from app.services.asset_metadata_service import AssetMetadataService
+
+from app.database import SessionLocal
 
 # Configure logging
 logging.basicConfig(

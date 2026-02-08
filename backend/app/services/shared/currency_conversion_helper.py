@@ -47,7 +47,7 @@ class CurrencyConversionHelper:
             return value
 
         # Get exchange rate
-        rate = CurrencyService.get_exchange_rate(db, from_currency, to_currency, conversion_date)
+        rate = CurrencyService(db).get_exchange_rate(from_currency, to_currency, conversion_date)
 
         if rate:
             return value * rate

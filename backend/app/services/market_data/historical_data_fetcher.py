@@ -87,10 +87,11 @@ class HistoricalDataFetcher:
 
         rate_pairs.append(("USD", "ILS"))
 
+        currency_svc = CurrencyService(db)
         for from_curr, to_curr in rate_pairs:
             try:
-                count = CurrencyService.fetch_and_store_historical_rates(
-                    db, from_curr, to_curr, start_date, end_date
+                count = currency_svc.fetch_and_store_historical_rates(
+                    from_curr, to_curr, start_date, end_date
                 )
                 stats["rates_fetched"] += count
             except Exception as e:

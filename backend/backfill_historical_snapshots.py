@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.database import SessionLocal
 from app.models import Account
-from app.services.snapshot_service import SnapshotService
+from app.services.portfolio.snapshot_service import SnapshotService
 
 
 def parse_args():
@@ -136,8 +136,8 @@ def main():
         print("Starting backfill...")
         print()
 
-        stats = SnapshotService.backfill_historical_snapshots(
-            db, args.account_id, start_date, end_date
+        stats = SnapshotService(db).backfill_historical_snapshots(
+            args.account_id, start_date, end_date
         )
 
         # Print results

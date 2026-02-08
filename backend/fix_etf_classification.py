@@ -18,11 +18,11 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from app.services.asset_type_detector import AssetTypeDetector
 from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import Asset
-from app.services.asset_type_detector import AssetTypeDetector
 
 # Configure logging
 logging.basicConfig(

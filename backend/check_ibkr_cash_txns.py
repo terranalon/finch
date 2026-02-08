@@ -1,9 +1,10 @@
 """Check what CashTransactions IBKR provides."""
 
-from app.database import SessionLocal
-from app.models import Account
 from app.services.ibkr_flex_client import IBKRFlexClient
 from app.services.ibkr_parser import IBKRParser
+
+from app.database import SessionLocal
+from app.models import Account
 
 db = SessionLocal()
 account = db.query(Account).filter(Account.id == 7).first()

@@ -5,9 +5,10 @@ sys.path.insert(0, "/Users/alonsamocha/PycharmProjects/portofolio_tracker/backen
 
 from decimal import Decimal
 
+from app.services.kraken_client import KrakenClient, KrakenCredentials
+
 from app.database import SessionLocal
 from app.models import Account, Holding, Transaction
-from app.services.kraken_client import KrakenClient, KrakenCredentials
 
 KRAKEN_ACCOUNT_ID = 23
 db = SessionLocal()
