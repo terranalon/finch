@@ -4,26 +4,17 @@
  * Used in BatchUploadModal (during upload) and Accounts page (data coverage).
  */
 
-const SEGMENT_COLORS = [
-  'bg-blue-500 dark:bg-blue-400',
-  'bg-emerald-500 dark:bg-emerald-400',
-  'bg-purple-500 dark:bg-purple-400',
-  'bg-amber-500 dark:bg-amber-400',
-  'bg-rose-500 dark:bg-rose-400',
-  'bg-cyan-500 dark:bg-cyan-400',
+const PALETTE = [
+  { segment: 'bg-blue-500 dark:bg-blue-400', dot: 'bg-blue-500' },
+  { segment: 'bg-emerald-500 dark:bg-emerald-400', dot: 'bg-emerald-500' },
+  { segment: 'bg-purple-500 dark:bg-purple-400', dot: 'bg-purple-500' },
+  { segment: 'bg-amber-500 dark:bg-amber-400', dot: 'bg-amber-500' },
+  { segment: 'bg-rose-500 dark:bg-rose-400', dot: 'bg-rose-500' },
+  { segment: 'bg-cyan-500 dark:bg-cyan-400', dot: 'bg-cyan-500' },
 ];
 
-const DOT_COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-purple-500',
-  'bg-amber-500',
-  'bg-rose-500',
-  'bg-cyan-500',
-];
-
-function formatDateShort(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+function formatDateShort(date) {
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
 function daysBetween(a, b) {
@@ -43,12 +34,13 @@ export function CoverageTimeline({ files = [], gaps = [] }) {
   const fileSegments = files.map((file, idx) => {
     const start = daysBetween(minDate, file.startDate);
     const width = daysBetween(file.startDate, file.endDate);
+    const color = PALETTE[idx % PALETTE.length];
     return {
       ...file,
       leftPercent: ((start - 1) / totalDays) * 100,
       widthPercent: (width / totalDays) * 100,
-      colorClass: SEGMENT_COLORS[idx % SEGMENT_COLORS.length],
-      dotClass: DOT_COLORS[idx % DOT_COLORS.length],
+      colorClass: color.segment,
+      dotClass: color.dot,
     };
   });
 
@@ -67,8 +59,8 @@ export function CoverageTimeline({ files = [], gaps = [] }) {
     <div data-testid="coverage-timeline">
       {/* Date range labels */}
       <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
-        <span>{formatDateShort(minDate.toISOString())}</span>
-        <span>{formatDateShort(maxDate.toISOString())}</span>
+        <span>{formatDateShort(minDate)}</span>
+        <span>{formatDateShort(maxDate)}</span>
       </div>
 
       {/* Timeline bar */}

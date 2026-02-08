@@ -138,13 +138,11 @@ export function BatchUploadModal({
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        const detail = errData.detail;
-        throw new Error(
-          typeof detail === 'string'
-            ? detail
-            : detail?.message || detail?.error || JSON.stringify(detail)
-        );
+        const { detail } = await res.json();
+        if (typeof detail === 'string') {
+          throw new Error(detail);
+        }
+        throw new Error(detail?.message || detail?.error || JSON.stringify(detail));
       }
 
       const result = await res.json();
@@ -388,14 +386,7 @@ export function BatchUploadModal({
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Coverage
                     </h4>
-                    <CoverageTimeline
-                      files={uploads.map((u) => ({
-                        fileName: u.fileName,
-                        startDate: u.startDate,
-                        endDate: u.endDate,
-                        transactions: u.transactions,
-                      }))}
-                    />
+                    <CoverageTimeline files={uploads} />
                   </div>
                 )}
 
