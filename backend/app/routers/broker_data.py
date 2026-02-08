@@ -18,6 +18,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -36,6 +37,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.brokers.base_import_service import extract_unique_symbols
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
+from app.services.brokers.ibkr.synthetic_import_service import delete_synthetic_sources
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
@@ -272,6 +274,7 @@ async def upload_broker_file(
     broker_type: str = Form(...),
     file: UploadFile = File(...),
     confirm_overlap: bool = Form(False),
+    session_id: str | None = Form(None),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -290,6 +293,9 @@ async def upload_broker_file(
         broker_type: Broker type (e.g., 'ibkr', 'binance')
         file: Uploaded file
         confirm_overlap: If True, allow overlapping imports with ownership transfer
+        session_id: Optional batch session ID. When provided, the source is staged
+            (status='staged') instead of completed, and reconstruction/snapshot
+            generation are deferred until finalize_batch_upload is called.
 
     Returns:
         Import statistics and source ID
@@ -359,6 +365,16 @@ async def upload_broker_file(
                 },
                 "hint": "Use confirm_overlap=true to proceed with ownership transfer",
             },
+        )
+
+    # Auto-delete synthetic sources when uploading real historical data
+    synthetic_cleanup = delete_synthetic_sources(db, account_id, broker_type)
+    if synthetic_cleanup["deleted_sources"] > 0:
+        logger.info(
+            "Auto-deleted %d synthetic source(s) for account %d: %d transactions removed",
+            synthetic_cleanup["deleted_sources"],
+            account_id,
+            synthetic_cleanup["deleted_transactions"],
         )
 
     # Save file to disk
@@ -438,9 +454,6 @@ async def upload_broker_file(
                 db, account_id, dividends_data, source.id
             )
 
-            # Reconstruct holdings from transactions
-            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
-
             # Run validation against IBKR's authoritative cash positions
             from app.services.brokers.ibkr.validation_service import validate_ibkr_import
 
@@ -471,7 +484,6 @@ async def upload_broker_file(
                 "forex": forex_stats,
                 "other_cash": other_cash_stats,
                 "dividend_cash": div_cash_stats,
-                "holdings_reconstruction": reconstruction_stats,
                 "validation": validation_result,
                 "unique_assets_in_file": len(all_symbols),
                 "symbols_in_file": list(all_symbols),
@@ -490,7 +502,9 @@ async def upload_broker_file(
             # Use registry for all supported import services (meitav, kraken, bit2c, binance)
             parsed_data = parser.parse(content)
             import_service = BrokerImportServiceRegistry.get_import_service(broker_type, db)
-            import_stats = import_service.import_data(account_id, parsed_data, source_id=source.id)
+            import_stats = import_service.import_data(
+                account_id, parsed_data, source_id=source.id, skip_reconstruction=bool(session_id)
+            )
 
             # Pass through all stats from service (unified structure)
             source.import_stats = {
@@ -506,6 +520,40 @@ async def upload_broker_file(
                 "cash_transactions": len(parsed_data.cash_transactions),
                 "dividends": len(parsed_data.dividends),
                 "total_records": parsed_data.total_records,
+            }
+
+        if session_id:
+            # Batch mode: stage the source, skip reconstruction and snapshots
+            source.status = "staged"
+            source.import_stats = {**(source.import_stats or {}), "session_id": session_id}
+            db.commit()
+
+            logger.info(
+                "Staged %s file for account %d (session %s): %d records from %s to %s",
+                broker_type,
+                account_id,
+                session_id,
+                source.import_stats.get("total_records", 0),
+                start_date,
+                end_date,
+            )
+
+            return UploadResponse(
+                status="staged",
+                message=f"File staged for batch import "
+                f"({source.import_stats.get('total_records', 0)} records). "
+                f"Call finalize when all files are uploaded.",
+                source_id=source.id,
+                date_range={"start_date": str(start_date), "end_date": str(end_date)},
+                stats=source.import_stats or {},
+            )
+
+        # Single file mode: run reconstruction now (batch mode defers to finalize)
+        if broker_type == "ibkr":
+            reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+            source.import_stats = {
+                **(source.import_stats or {}),
+                "holdings_reconstruction": reconstruction_stats,
             }
 
         source.status = "completed"
@@ -550,6 +598,119 @@ async def upload_broker_file(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Import failed: {e}",
         )
+
+
+@router.post("/finalize-batch/{account_id}")
+async def finalize_batch_upload(
+    account_id: int,
+    session_id: str = Query(..., description="The batch session ID to finalize"),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Finalize a batch upload session: reconstruct holdings and generate snapshots.
+
+    This should be called after all files for a historical import have been
+    uploaded with a shared session_id. It:
+    1. Finds all staged sources matching the session_id
+    2. Auto-deletes any synthetic sources for the account/broker
+    3. Marks all staged sources as 'completed'
+    4. Runs a single reconstruction from all transactions
+    5. Triggers background snapshot generation
+
+    Args:
+        account_id: Account that owns the staged uploads
+        session_id: The session ID used during uploads
+
+    Returns:
+        Finalization statistics including reconstruction results
+    """
+    _validate_account_access(account_id, current_user, db)
+
+    # Find all staged sources for this account
+    staged_sources = (
+        db.query(BrokerDataSource)
+        .filter(
+            BrokerDataSource.account_id == account_id,
+            BrokerDataSource.status == "staged",
+        )
+        .all()
+    )
+
+    # Filter to only those matching the session_id
+    matching = [
+        s
+        for s in staged_sources
+        if s.import_stats and s.import_stats.get("session_id") == session_id
+    ]
+
+    if not matching:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No staged uploads found for session {session_id}",
+        )
+
+    # Auto-delete synthetic sources before finalizing
+    synthetic_cleanup = delete_synthetic_sources(db, account_id, matching[0].broker_type)
+
+    # Mark all staged sources as completed
+    for source in matching:
+        source.status = "completed"
+
+    # Single reconstruction from all transactions
+    reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
+
+    # Calculate overall date range
+    earliest = min(s.start_date for s in matching)
+    latest = max(s.end_date for s in matching)
+
+    # Validate against snapshot data if available
+    validation_result = None
+    if synthetic_cleanup.get("snapshot_positions"):
+        from app.services.brokers.ibkr.snapshot_validation_service import (
+            validate_against_snapshot,
+        )
+
+        reconstructed = PortfolioReconstructionService.reconstruct_holdings(
+            db, account_id, latest, apply_ticker_changes=True
+        )
+        validation_result = validate_against_snapshot(
+            synthetic_cleanup["snapshot_positions"], reconstructed
+        )
+
+        if not validation_result["is_valid"]:
+            for d in validation_result["discrepancies"]:
+                logger.warning("Snapshot validation: %s", d["message"])
+
+    db.commit()
+
+    # Trigger background snapshot generation
+    if background_tasks:
+        update_snapshot_status(db, account_id, "generating")
+        background_tasks.add_task(generate_snapshots_background, account_id, earliest)
+
+    logger.info(
+        "Finalized batch upload for account %d (session %s): %d files, %s to %s",
+        account_id,
+        session_id,
+        len(matching),
+        earliest,
+        latest,
+    )
+
+    return {
+        "status": "completed",
+        "message": f"Finalized {len(matching)} files",
+        "session_id": session_id,
+        "sources_finalized": len(matching),
+        "date_range": {
+            "start_date": str(earliest),
+            "end_date": str(latest),
+        },
+        "synthetic_cleanup": synthetic_cleanup,
+        "holdings_reconstruction": reconstruction_stats,
+        "validation": validation_result,
+    }
 
 
 @router.get("/coverage/{account_id}", response_model=CoverageResponse)
