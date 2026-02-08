@@ -73,6 +73,15 @@ class PositionService:
 # ------------------------------------------------------------------
 
 
+_NO_DAY_CHANGE = DayChangeResult(
+    day_change=None,
+    day_change_pct=None,
+    previous_close_price=None,
+    day_change_date=None,
+    is_market_closed=False,
+)
+
+
 class _PositionAccumulator:
     """Mutable accumulator used only inside PositionService.get_positions."""
 
@@ -174,13 +183,7 @@ class _PositionAccumulator:
             (total_mv_usd - self.total_cost_basis_usd) if total_mv_usd is not None else None
         )
 
-        dc = day_change or DayChangeResult(
-            day_change=None,
-            day_change_pct=None,
-            previous_close_price=None,
-            day_change_date=None,
-            is_market_closed=False,
-        )
+        dc = day_change or _NO_DAY_CHANGE
 
         return PositionResult(
             asset_id=self.asset.id,
