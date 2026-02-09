@@ -101,7 +101,8 @@ class IBKRFlexClient:
             reference_code: Reference code from request_flex_query
 
         Returns:
-            'success' if ready, 'pending' if still processing, or None if error
+            'success' if ready, 'pending' if still generating,
+            'rate_limited' if IBKR throttled the request, or None if fatal error
         """
         try:
             url = f"{IBKRFlexClient.BASE_URL}/FlexStatementService.GetStatement"
@@ -113,22 +114,20 @@ class IBKRFlexClient:
             # Parse XML response
             root = ET.fromstring(response.content)
 
-            if root.tag == "Status":
-                error_code = root.findtext("ErrorCode")
-                if error_code == "1019":
-                    # Statement generation in progress
-                    return "pending"
-                else:
-                    error_message = root.findtext("ErrorMessage")
-                    logger.error(f"IBKR Flex Query status error: {error_code} - {error_message}")
-                    return None
+            # Errors can arrive as <Status> or <FlexStatementResponse> wrappers
+            error_code = root.findtext("ErrorCode")
+            error_message = root.findtext("ErrorMessage")
 
-            if root.tag == "FlexStatementResponse":
-                # Successfully generated, data is ready
-                return "success"
+            if error_code:
+                if error_code in ("1018", "1019"):
+                    # 1018 = rate limited, 1019 = still generating
+                    status = "rate_limited" if error_code == "1018" else "pending"
+                    logger.info(f"Flex Query {status}: {error_code} - {error_message}")
+                    return status
+                logger.error(f"IBKR Flex Query status error: {error_code} - {error_message}")
+                return None
 
             if root.tag == "FlexQueryResponse":
-                # Full statement is ready
                 return "success"
 
             logger.warning(f"Unknown status response: {response.text[:200]}")
