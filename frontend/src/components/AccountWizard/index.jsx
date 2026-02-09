@@ -185,7 +185,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
         if (broker.supportsSnapshot) {
           // Snapshot-capable broker: import current positions
-          const snapshotResponse = await api(`/brokers/ibkr/snapshot/${createdAccountId}`, {
+          const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${createdAccountId}`, {
             method: 'POST',
           });
 
