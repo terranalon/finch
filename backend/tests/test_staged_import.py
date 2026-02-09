@@ -17,6 +17,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import Account, Asset, Holding, Transaction
+from app.services.brokers.ibkr.models import (
+    IBKRCashBalance,
+    IBKRDividend,
+    IBKRPosition,
+    IBKRTransaction,
+)
 from app.services.shared.staged_import_service import StagedImportService
 from app.services.shared.staging_utils import (
     cleanup_staging,
@@ -73,32 +79,38 @@ def sample_account(test_db):
 def sample_positions_data():
     """Sample positions data from IBKR parser."""
     return [
-        {
-            "symbol": "AAPL",
-            "original_symbol": "AAPL",
-            "description": "Apple Inc",
-            "asset_class": "Stock",
-            "currency": "USD",
-            "quantity": Decimal("100"),
-            "cost_basis": Decimal("15000.00"),
-            "needs_validation": False,
-            "cusip": "037833100",
-            "isin": "US0378331005",
-            "conid": "265598",
-        },
-        {
-            "symbol": "MSFT",
-            "original_symbol": "MSFT",
-            "description": "Microsoft Corporation",
-            "asset_class": "Stock",
-            "currency": "USD",
-            "quantity": Decimal("50"),
-            "cost_basis": Decimal("17500.00"),
-            "needs_validation": False,
-            "cusip": "594918104",
-            "isin": "US5949181045",
-            "conid": "272093",
-        },
+        IBKRPosition(
+            symbol="AAPL",
+            original_symbol="AAPL",
+            description="Apple Inc",
+            asset_category="STK",
+            asset_class="Stock",
+            listing_exchange="NASDAQ",
+            quantity=Decimal("100"),
+            cost_basis=Decimal("15000.00"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+            cusip="037833100",
+            isin="US0378331005",
+            conid="265598",
+        ),
+        IBKRPosition(
+            symbol="MSFT",
+            original_symbol="MSFT",
+            description="Microsoft Corporation",
+            asset_category="STK",
+            asset_class="Stock",
+            listing_exchange="NASDAQ",
+            quantity=Decimal("50"),
+            cost_basis=Decimal("17500.00"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+            cusip="594918104",
+            isin="US5949181045",
+            conid="272093",
+        ),
     ]
 
 
@@ -106,32 +118,40 @@ def sample_positions_data():
 def sample_transactions_data():
     """Sample transactions data from IBKR parser."""
     return [
-        {
-            "symbol": "AAPL",
-            "original_symbol": "AAPL",
-            "description": "Apple Inc",
-            "asset_class": "Stock",
-            "currency": "USD",
-            "trade_date": date(2025, 6, 15),
-            "transaction_type": "Buy",
-            "quantity": Decimal("100"),
-            "price": Decimal("150.00"),
-            "commission": Decimal("1.00"),
-            "net_cash": Decimal("-15001.00"),
-        },
-        {
-            "symbol": "MSFT",
-            "original_symbol": "MSFT",
-            "description": "Microsoft Corporation",
-            "asset_class": "Stock",
-            "currency": "USD",
-            "trade_date": date(2025, 7, 1),
-            "transaction_type": "Buy",
-            "quantity": Decimal("50"),
-            "price": Decimal("350.00"),
-            "commission": Decimal("1.00"),
-            "net_cash": Decimal("-17501.00"),
-        },
+        IBKRTransaction(
+            symbol="AAPL",
+            original_symbol="AAPL",
+            description="Apple Inc",
+            asset_category="STK",
+            asset_class="Stock",
+            listing_exchange="NASDAQ",
+            trade_date=date(2025, 6, 15),
+            transaction_type="Buy",
+            quantity=Decimal("100"),
+            price=Decimal("150.00"),
+            commission=Decimal("1.00"),
+            net_cash=Decimal("-15001.00"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+        ),
+        IBKRTransaction(
+            symbol="MSFT",
+            original_symbol="MSFT",
+            description="Microsoft Corporation",
+            asset_category="STK",
+            asset_class="Stock",
+            listing_exchange="NASDAQ",
+            trade_date=date(2025, 7, 1),
+            transaction_type="Buy",
+            quantity=Decimal("50"),
+            price=Decimal("350.00"),
+            commission=Decimal("1.00"),
+            net_cash=Decimal("-17501.00"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+        ),
     ]
 
 
@@ -139,15 +159,18 @@ def sample_transactions_data():
 def sample_dividends_data():
     """Sample dividends data from IBKR parser."""
     return [
-        {
-            "symbol": "AAPL",
-            "original_symbol": "AAPL",
-            "description": "Apple Inc",
-            "asset_class": "Stock",
-            "currency": "USD",
-            "date": date(2025, 8, 15),
-            "amount": Decimal("24.00"),
-        },
+        IBKRDividend(
+            symbol="AAPL",
+            original_symbol="AAPL",
+            description="Apple Inc",
+            asset_category="STK",
+            asset_class="Stock",
+            date=date(2025, 8, 15),
+            amount=Decimal("24.00"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+        ),
     ]
 
 
@@ -155,13 +178,14 @@ def sample_dividends_data():
 def sample_cash_data():
     """Sample cash balance data from IBKR parser."""
     return [
-        {
-            "symbol": "USD",
-            "currency": "USD",
-            "description": "US Dollar",
-            "asset_class": "Cash",
-            "balance": Decimal("5000.00"),
-        },
+        IBKRCashBalance(
+            symbol="USD",
+            currency="USD",
+            balance=Decimal("5000.00"),
+            description="US Dollar",
+            asset_class="Cash",
+            account_id="U12345",
+        ),
     ]
 
 

@@ -188,12 +188,12 @@ class StagedImportService:
     def _import_to_staging(
         db: Session,
         account_id: int,
-        positions_data: list[dict],
-        transactions_data: list[dict],
-        dividends_data: list[dict],
-        transfers_data: list[dict],
-        forex_data: list[dict],
-        cash_data: list[dict],
+        positions_data: list,
+        transactions_data: list,
+        dividends_data: list,
+        transfers_data: list,
+        forex_data: list,
+        cash_data: list,
     ) -> dict[str, Any]:
         """
         Import data to staging tables using direct SQL.
@@ -216,7 +216,7 @@ class StagedImportService:
                 StagedImportService._import_position_to_staging(db, account_id, pos)
                 stats["positions"]["imported"] += 1
             except Exception as e:
-                stats["positions"]["errors"].append(f"{pos.get('symbol')}: {str(e)}")
+                stats["positions"]["errors"].append(f"{getattr(pos, 'symbol', None)}: {str(e)}")
 
         # Import cash balances
         for cash in cash_data:
@@ -224,7 +224,7 @@ class StagedImportService:
                 StagedImportService._import_cash_to_staging(db, account_id, cash)
                 stats["cash"]["imported"] += 1
             except Exception as e:
-                stats["cash"]["errors"].append(f"{cash.get('symbol')}: {str(e)}")
+                stats["cash"]["errors"].append(f"{getattr(cash, 'symbol', None)}: {str(e)}")
 
         # Import transactions
         for txn in transactions_data:
@@ -232,7 +232,7 @@ class StagedImportService:
                 StagedImportService._import_transaction_to_staging(db, account_id, txn)
                 stats["transactions"]["imported"] += 1
             except Exception as e:
-                stats["transactions"]["errors"].append(f"{txn.get('symbol')}: {str(e)}")
+                stats["transactions"]["errors"].append(f"{getattr(txn, 'symbol', None)}: {str(e)}")
 
         # Import dividends
         for div in dividends_data:
@@ -240,7 +240,7 @@ class StagedImportService:
                 StagedImportService._import_dividend_to_staging(db, account_id, div)
                 stats["dividends"]["imported"] += 1
             except Exception as e:
-                stats["dividends"]["errors"].append(f"{div.get('symbol')}: {str(e)}")
+                stats["dividends"]["errors"].append(f"{getattr(div, 'symbol', None)}: {str(e)}")
 
         # Import transfers
         for transfer in transfers_data:
@@ -248,7 +248,7 @@ class StagedImportService:
                 StagedImportService._import_transfer_to_staging(db, account_id, transfer)
                 stats["transfers"]["imported"] += 1
             except Exception as e:
-                stats["transfers"]["errors"].append(f"{transfer.get('type')}: {str(e)}")
+                stats["transfers"]["errors"].append(f"{getattr(transfer, 'type', None)}: {str(e)}")
 
         # Import forex
         for forex in forex_data:
@@ -257,16 +257,16 @@ class StagedImportService:
                 stats["forex"]["imported"] += 1
             except Exception as e:
                 stats["forex"]["errors"].append(
-                    f"{forex.get('from_currency')}->{forex.get('to_currency')}: {str(e)}"
+                    f"{getattr(forex, 'from_currency', None)}->{getattr(forex, 'to_currency', None)}: {str(e)}"
                 )
 
         db.commit()
         return stats
 
     @staticmethod
-    def _find_or_create_staging_asset(db: Session, pos: dict) -> int:
+    def _find_or_create_staging_asset(db: Session, pos) -> int:
         """Find or create an asset in staging tables. Returns staging asset ID."""
-        symbol = pos["symbol"]
+        symbol = pos.symbol
 
         # Check if asset exists in staging
         result = db.execute(
@@ -291,13 +291,13 @@ class StagedImportService:
             """),
             {
                 "symbol": symbol,
-                "name": pos.get("description", symbol),
-                "asset_class": pos.get("asset_class", "Stock"),
-                "currency": pos.get("currency", "USD"),
-                "cusip": pos.get("cusip"),
-                "isin": pos.get("isin"),
-                "conid": pos.get("conid"),
-                "figi": pos.get("figi"),
+                "name": getattr(pos, "description", symbol),
+                "asset_class": getattr(pos, "asset_class", "Stock"),
+                "currency": getattr(pos, "currency", "USD"),
+                "cusip": getattr(pos, "cusip", None),
+                "isin": getattr(pos, "isin", None),
+                "conid": getattr(pos, "conid", None),
+                "figi": getattr(pos, "figi", None),
             },
         )
         return result.fetchone()[0]
@@ -343,10 +343,10 @@ class StagedImportService:
         return result.fetchone()[0]
 
     @staticmethod
-    def _import_position_to_staging(db: Session, account_id: int, pos: dict) -> None:
+    def _import_position_to_staging(db: Session, account_id: int, pos) -> None:
         """Import a single position to staging tables."""
         # Skip forex pair positions
-        symbol = pos["symbol"]
+        symbol = pos.symbol
         currency_codes = {"USD", "CAD", "ILS", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD"}
         if "." in symbol:
             parts = symbol.split(".")
@@ -367,18 +367,18 @@ class StagedImportService:
             """),
             {
                 "id": staging_holding_id,
-                "quantity": pos["quantity"],
-                "cost_basis": pos["cost_basis"],
-                "is_active": pos["quantity"] != 0,
+                "quantity": pos.quantity,
+                "cost_basis": pos.cost_basis,
+                "is_active": pos.quantity != 0,
             },
         )
 
     @staticmethod
-    def _import_cash_to_staging(db: Session, account_id: int, cash: dict) -> None:
+    def _import_cash_to_staging(db: Session, account_id: int, cash) -> None:
         """Import a cash balance to staging tables."""
-        symbol = cash["symbol"]
-        currency = cash["currency"]
-        balance = cash["balance"]
+        symbol = cash.symbol
+        currency = cash.currency
+        balance = cash.balance
 
         # Find or create cash asset
         result = db.execute(
@@ -402,7 +402,7 @@ class StagedImportService:
                 """),
                 {
                     "symbol": symbol,
-                    "name": cash.get("description", f"{currency} Cash"),
+                    "name": getattr(cash, "description", f"{currency} Cash"),
                     "currency": currency,
                 },
             )
@@ -428,10 +428,10 @@ class StagedImportService:
         )
 
     @staticmethod
-    def _import_transaction_to_staging(db: Session, account_id: int, txn: dict) -> None:
+    def _import_transaction_to_staging(db: Session, account_id: int, txn) -> None:
         """Import a transaction to staging tables."""
         # Skip forex pair transactions
-        symbol = txn["symbol"]
+        symbol = txn.symbol
         currency_codes = {"USD", "CAD", "ILS", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD"}
         if "." in symbol:
             parts = symbol.split(".")
@@ -454,9 +454,9 @@ class StagedImportService:
             """),
             {
                 "holding_id": staging_holding_id,
-                "date": txn["trade_date"],
-                "type": txn["transaction_type"],
-                "quantity": txn["quantity"],
+                "date": txn.trade_date,
+                "type": txn.transaction_type,
+                "quantity": txn.quantity,
             },
         )
         if result.fetchone():
@@ -476,17 +476,17 @@ class StagedImportService:
             {
                 "staging_holding_id": staging_holding_id,
                 "holding_id": staging_holding_id,  # Will be remapped during merge
-                "date": txn["trade_date"],
-                "type": txn["transaction_type"],
-                "quantity": txn["quantity"],
-                "price": txn["price"],
-                "fees": txn.get("commission", 0),
-                "notes": f"IBKR Import - {txn.get('description', '')}",
+                "date": txn.trade_date,
+                "type": txn.transaction_type,
+                "quantity": txn.quantity,
+                "price": txn.price,
+                "fees": getattr(txn, "commission", 0),
+                "notes": f"IBKR Import - {getattr(txn, 'description', '')}",
             },
         )
 
     @staticmethod
-    def _import_dividend_to_staging(db: Session, account_id: int, div: dict) -> None:
+    def _import_dividend_to_staging(db: Session, account_id: int, div) -> None:
         """Import a dividend to staging tables."""
         staging_asset_id = StagedImportService._find_or_create_staging_asset(db, div)
         staging_holding_id = StagedImportService._find_or_create_staging_holding(
@@ -501,7 +501,7 @@ class StagedImportService:
                 AND date = :date
                 AND type = 'Dividend'
             """),
-            {"holding_id": staging_holding_id, "date": div["date"]},
+            {"holding_id": staging_holding_id, "date": div.date},
         )
         if result.fetchone():
             return
@@ -517,16 +517,16 @@ class StagedImportService:
             {
                 "staging_holding_id": staging_holding_id,
                 "holding_id": staging_holding_id,
-                "date": div["date"],
-                "amount": div["amount"],
-                "notes": f"IBKR Import - Dividend ${div['amount']:.2f}",
+                "date": div.date,
+                "amount": div.amount,
+                "notes": f"IBKR Import - Dividend ${div.amount:.2f}",
             },
         )
 
     @staticmethod
-    def _import_transfer_to_staging(db: Session, account_id: int, transfer: dict) -> None:
+    def _import_transfer_to_staging(db: Session, account_id: int, transfer) -> None:
         """Import a transfer (deposit/withdrawal) to staging tables."""
-        currency = transfer["currency"]
+        currency = transfer.currency
 
         # Find or create cash asset
         result = db.execute(
@@ -567,9 +567,9 @@ class StagedImportService:
             """),
             {
                 "holding_id": staging_holding_id,
-                "date": transfer["date"],
-                "type": transfer["type"],
-                "amount": transfer["amount"],
+                "date": transfer.date,
+                "type": transfer.type,
+                "amount": transfer.amount,
             },
         )
         if result.fetchone():
@@ -586,18 +586,18 @@ class StagedImportService:
             {
                 "staging_holding_id": staging_holding_id,
                 "holding_id": staging_holding_id,
-                "date": transfer["date"],
-                "type": transfer["type"],
-                "amount": transfer["amount"],
-                "notes": f"IBKR Import - {transfer.get('description', '')}",
+                "date": transfer.date,
+                "type": transfer.type,
+                "amount": transfer.amount,
+                "notes": f"IBKR Import - {getattr(transfer, 'description', '')}",
             },
         )
 
     @staticmethod
-    def _import_forex_to_staging(db: Session, account_id: int, forex: dict) -> None:
+    def _import_forex_to_staging(db: Session, account_id: int, forex) -> None:
         """Import a forex conversion to staging tables."""
-        from_currency = forex["from_currency"]
-        to_currency = forex["to_currency"]
+        from_currency = forex.from_currency
+        to_currency = forex.to_currency
 
         # Find or create from_currency asset
         result = db.execute(
@@ -669,15 +669,15 @@ class StagedImportService:
             {
                 "holding_id": from_holding_id,
                 "to_holding_id": to_holding_id,
-                "date": forex["date"],
-                "amount": forex["from_amount"],
+                "date": forex.date,
+                "amount": forex.from_amount,
             },
         )
         if result.fetchone():
             return
 
-        from_amount = forex["from_amount"]
-        to_amount = forex["to_amount"]
+        from_amount = forex.from_amount
+        to_amount = forex.to_amount
         exchange_rate = to_amount / from_amount if from_amount > 0 else 0
 
         db.execute(
@@ -697,7 +697,7 @@ class StagedImportService:
                 "holding_id": from_holding_id,
                 "staging_to_holding_id": to_holding_id,
                 "to_holding_id": to_holding_id,
-                "date": forex["date"],
+                "date": forex.date,
                 "amount": from_amount,
                 "to_amount": to_amount,
                 "exchange_rate": exchange_rate,
