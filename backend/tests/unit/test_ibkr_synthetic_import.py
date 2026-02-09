@@ -1,5 +1,6 @@
 """Tests for IBKR synthetic snapshot import service."""
 
+from dataclasses import replace
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -7,51 +8,49 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Account
+from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 
-AAPL_POSITION = {
-    "symbol": "AAPL",
-    "original_symbol": "AAPL",
-    "description": "APPLE INC",
-    "asset_category": "STK",
-    "asset_class": "Stock",
-    "listing_exchange": "NASDAQ",
-    "quantity": Decimal("100"),
-    "cost_basis": Decimal("15000"),
-    "currency": "USD",
-    "account_id": "U12345",
-    "needs_validation": False,
-    "cusip": "037833100",
-    "isin": "US0378331005",
-    "conid": "265598",
-    "figi": None,
-}
+AAPL_POSITION = IBKRPosition(
+    symbol="AAPL",
+    original_symbol="AAPL",
+    description="APPLE INC",
+    asset_category="STK",
+    asset_class="Stock",
+    listing_exchange="NASDAQ",
+    quantity=Decimal("100"),
+    cost_basis=Decimal("15000"),
+    currency="USD",
+    account_id="U12345",
+    needs_validation=False,
+    cusip="037833100",
+    isin="US0378331005",
+    conid="265598",
+    figi=None,
+)
 
-MSFT_POSITION = {
-    "symbol": "MSFT",
-    "original_symbol": "MSFT",
-    "description": "MICROSOFT CORP",
-    "asset_category": "STK",
-    "asset_class": "Stock",
-    "listing_exchange": "NASDAQ",
-    "quantity": Decimal("50"),
-    "cost_basis": Decimal("20000"),
-    "currency": "USD",
-    "account_id": "U12345",
-    "needs_validation": False,
-    "cusip": None,
-    "isin": None,
-    "conid": None,
-    "figi": None,
-}
+MSFT_POSITION = IBKRPosition(
+    symbol="MSFT",
+    original_symbol="MSFT",
+    description="MICROSOFT CORP",
+    asset_category="STK",
+    asset_class="Stock",
+    listing_exchange="NASDAQ",
+    quantity=Decimal("50"),
+    cost_basis=Decimal("20000"),
+    currency="USD",
+    account_id="U12345",
+    needs_validation=False,
+)
 
-USD_CASH_BALANCE = {
-    "symbol": "USD",
-    "currency": "USD",
-    "balance": Decimal("5000"),
-    "description": "US Dollar",
-    "asset_class": "Cash",
-}
+USD_CASH_BALANCE = IBKRCashBalance(
+    symbol="USD",
+    currency="USD",
+    balance=Decimal("5000"),
+    description="US Dollar",
+    asset_class="Cash",
+    account_id="U12345",
+)
 
 
 def _find_added_synthetic_source(mock_db: MagicMock):
@@ -138,7 +137,7 @@ class TestSyntheticImportService:
         mock_client.fetch_flex_report.return_value = b"<xml>data</xml>"
         mock_parser.parse_xml.return_value = MagicMock()
         mock_parser.extract_positions.return_value = [
-            {**AAPL_POSITION, "isin": None, "conid": None}
+            replace(AAPL_POSITION, isin=None, conid=None)
         ]
         mock_parser.extract_cash_balances.return_value = []
 
