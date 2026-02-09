@@ -314,11 +314,13 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     const stats = backendResults.stats || {};
     const positionsImported = stats.positions_imported || 0;
     const holdingsUpdated = stats.holdings_reconstruction?.holdings_updated || 0;
+    const totalImported = holdingsUpdated || positionsImported;
 
     return {
       assets: [],
+      emptySnapshot: totalImported === 0,
       summary: {
-        totalAssets: holdingsUpdated || positionsImported,
+        totalAssets: totalImported,
         totalTransactions: positionsImported,
         dateRange: {
           start: 'Today',
