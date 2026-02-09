@@ -40,6 +40,7 @@ default_args = {
     schedule="*/15 * * * *",  # Every 15 minutes, all days
     start_date=datetime(2026, 1, 1),
     catchup=False,
+    max_active_runs=1,
     tags=["portfolio", "prices", "intraday"],
 )
 def intraday_price_refresh():
