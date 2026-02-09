@@ -40,6 +40,13 @@ FATAL_ERROR_XML = (
     "</FlexStatementResponse>"
 )
 
+STATUS_ERROR_XML = (
+    "<Status>"
+    "<ErrorCode>1009</ErrorCode>"
+    "<ErrorMessage>Overloaded</ErrorMessage>"
+    "</Status>"
+)
+
 FLEX_QUERY_RESPONSE_XML = (
     "<FlexQueryResponse queryName='Test' type='AF'>"
     "<FlexStatements count='1'>"
@@ -71,6 +78,13 @@ def _get_status(xml: str) -> str | None:
         return IBKRFlexClient.get_flex_query_status(FAKE_TOKEN, FAKE_REF)
 
 
+def _download(xml: str) -> bytes | None:
+    """Call download_flex_query with fake credentials and the given XML."""
+    with patch("app.services.brokers.ibkr.flex_client.requests.get") as mock_get:
+        mock_get.return_value = _mock_response(xml)
+        return IBKRFlexClient.download_flex_query(FAKE_TOKEN, FAKE_REF)
+
+
 class TestGetFlexQueryStatus:
     def test_rate_limit_returns_rate_limited(self):
         assert _get_status(RATE_LIMIT_XML) == "rate_limited"
@@ -86,3 +100,16 @@ class TestGetFlexQueryStatus:
 
     def test_flex_query_response_returns_success(self):
         assert _get_status(FLEX_QUERY_RESPONSE_XML) == "success"
+
+
+class TestDownloadFlexQuery:
+    def test_returns_data_for_flex_query_response(self):
+        result = _download(FLEX_QUERY_RESPONSE_XML)
+        assert result is not None
+        assert b"FlexQueryResponse" in result
+
+    def test_rejects_rate_limit_error(self):
+        assert _download(RATE_LIMIT_XML) is None
+
+    def test_rejects_status_error(self):
+        assert _download(STATUS_ERROR_XML) is None

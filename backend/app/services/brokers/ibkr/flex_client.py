@@ -156,25 +156,30 @@ class IBKRFlexClient:
             logger.info(f"Downloading IBKR Flex Query data for reference {reference_code}")
             response = requests.get(url, params=params, timeout=60)
             response.raise_for_status()
-
-            # Check if response is XML error or data
-            try:
-                root = ET.fromstring(response.content)
-                if root.tag == "Status":
-                    error_code = root.findtext("ErrorCode")
-                    error_message = root.findtext("ErrorMessage")
-                    logger.error(f"Download error: {error_code} - {error_message}")
-                    return None
-            except ET.ParseError:
-                # Not parseable as Status, might be full data
-                pass
-
-            logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
-            return response.content
-
         except Exception as e:
             logger.error(f"Error downloading Flex Query: {str(e)}")
             return None
+
+        # Validate response is actual data, not an error wrapper
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError:
+            # Not parseable as XML -- treat as raw data
+            logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
+            return response.content
+
+        error_code = root.findtext("ErrorCode")
+        if error_code:
+            error_message = root.findtext("ErrorMessage")
+            logger.error(f"Download error: {error_code} - {error_message}")
+            return None
+
+        if root.tag != "FlexQueryResponse":
+            logger.error(f"Unexpected download response tag: {root.tag}")
+            return None
+
+        logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
+        return response.content
 
     @staticmethod
     def fetch_flex_report(
