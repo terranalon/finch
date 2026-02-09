@@ -60,7 +60,7 @@ def generate_snapshots_background(account_id: int, start_date: date) -> None:
         for attempt in range(max_retries):
             recent_txn_count = (
                 db.query(Transaction)
-                .join(Holding)
+                .join(Transaction.holding)
                 .filter(Holding.account_id == account_id)
                 .limit(1)
                 .count()

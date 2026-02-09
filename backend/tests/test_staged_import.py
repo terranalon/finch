@@ -534,13 +534,13 @@ class TestDataIntegrity:
         # Compare transaction counts
         atomic_txn_count = (
             test_db.query(Transaction)
-            .join(Holding)
+            .join(Transaction.holding)
             .filter(Holding.account_id == account_atomic.id)
             .count()
         )
         staged_txn_count = (
             test_db.query(Transaction)
-            .join(Holding)
+            .join(Transaction.holding)
             .filter(Holding.account_id == account_staged.id)
             .count()
         )
