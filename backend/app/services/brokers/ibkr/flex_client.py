@@ -220,19 +220,17 @@ class IBKRFlexClient:
             status = IBKRFlexClient.get_flex_query_status(token, reference_code)
 
             if status == "success":
-                # Step 3: Download data
                 return IBKRFlexClient.download_flex_query(token, reference_code)
-
-            if status is None:
+            elif status is None:
                 logger.error("Error checking Flex Query status")
                 return None
-
-            if status == "pending":
+            elif status == "rate_limited":
+                logger.info("Rate limited by IBKR, waiting 10s before retry...")
+                time.sleep(10)
+            elif status == "pending":
                 logger.debug(f"Flex Query still processing, waiting {current_interval}s...")
                 time.sleep(current_interval)
-                # Exponential backoff, max 10 seconds
                 current_interval = min(current_interval * 1.5, 10)
-                continue
 
         logger.error(f"Flex Query timeout after {timeout} seconds")
         return None

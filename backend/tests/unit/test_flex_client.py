@@ -6,6 +6,7 @@ from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 
 FAKE_TOKEN = "test-token"
 FAKE_REF = "ref123"
+PATCH_PREFIX = "app.services.brokers.ibkr.flex_client"
 
 # -- XML fixtures ----------------------------------------------------------
 
@@ -41,10 +42,7 @@ FATAL_ERROR_XML = (
 )
 
 STATUS_ERROR_XML = (
-    "<Status>"
-    "<ErrorCode>1009</ErrorCode>"
-    "<ErrorMessage>Overloaded</ErrorMessage>"
-    "</Status>"
+    "<Status><ErrorCode>1009</ErrorCode><ErrorMessage>Overloaded</ErrorMessage></Status>"
 )
 
 FLEX_QUERY_RESPONSE_XML = (
@@ -73,14 +71,14 @@ def _mock_response(content: str, status_code: int = 200) -> MagicMock:
 
 def _get_status(xml: str) -> str | None:
     """Call get_flex_query_status with fake credentials and the given XML."""
-    with patch("app.services.brokers.ibkr.flex_client.requests.get") as mock_get:
+    with patch(f"{PATCH_PREFIX}.requests.get") as mock_get:
         mock_get.return_value = _mock_response(xml)
         return IBKRFlexClient.get_flex_query_status(FAKE_TOKEN, FAKE_REF)
 
 
 def _download(xml: str) -> bytes | None:
     """Call download_flex_query with fake credentials and the given XML."""
-    with patch("app.services.brokers.ibkr.flex_client.requests.get") as mock_get:
+    with patch(f"{PATCH_PREFIX}.requests.get") as mock_get:
         mock_get.return_value = _mock_response(xml)
         return IBKRFlexClient.download_flex_query(FAKE_TOKEN, FAKE_REF)
 
@@ -113,3 +111,59 @@ class TestDownloadFlexQuery:
 
     def test_rejects_status_error(self):
         assert _download(STATUS_ERROR_XML) is None
+
+
+class TestFetchFlexReportRateLimit:
+    @patch(f"{PATCH_PREFIX}.time.sleep")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.download_flex_query")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
+    def test_retries_on_rate_limit_then_succeeds(
+        self, mock_request, mock_status, mock_download, mock_sleep
+    ):
+        mock_request.return_value = "ref123"
+        mock_status.side_effect = ["rate_limited", "success"]
+        mock_download.return_value = FLEX_QUERY_RESPONSE_XML.encode()
+
+        result = IBKRFlexClient.fetch_flex_report("token", "query1")
+
+        assert result is not None
+        # Rate-limit backoff should be 10 seconds
+        mock_sleep.assert_called_with(10)
+        assert mock_status.call_count == 2
+
+    @patch(f"{PATCH_PREFIX}.time.time")
+    @patch(f"{PATCH_PREFIX}.time.sleep")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
+    def test_times_out_after_sustained_rate_limiting(
+        self, mock_request, mock_status, mock_sleep, mock_time
+    ):
+        mock_request.return_value = "ref123"
+        mock_status.return_value = "rate_limited"
+        # Simulate time progressing past the 60s timeout
+        mock_time.side_effect = [0, 0, 11, 22, 33, 44, 55, 66]
+
+        result = IBKRFlexClient.fetch_flex_report("token", "query1", timeout=60)
+
+        assert result is None
+
+    @patch(f"{PATCH_PREFIX}.time.sleep")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.download_flex_query")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
+    def test_rate_limit_backoff_independent_of_pending_backoff(
+        self, mock_request, mock_status, mock_download, mock_sleep
+    ):
+        mock_request.return_value = "ref123"
+        # pending (2s) -> rate_limited (10s) -> pending (3s) -> success
+        mock_status.side_effect = ["pending", "rate_limited", "pending", "success"]
+        mock_download.return_value = FLEX_QUERY_RESPONSE_XML.encode()
+
+        result = IBKRFlexClient.fetch_flex_report("token", "query1")
+
+        assert result is not None
+        sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
+        assert sleep_calls[0] == 2  # pending: initial interval
+        assert sleep_calls[1] == 10  # rate_limited: flat 10s
+        assert sleep_calls[2] == 3.0  # pending: backoff continued (2 * 1.5)
