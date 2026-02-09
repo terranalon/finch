@@ -10,9 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Account, HistoricalSnapshot, Portfolio
-from app.models.user import User
-from app.services.auth import AuthService
+from app.models import Account, Asset, HistoricalSnapshot, Holding, Transaction
 from app.services.portfolio.snapshot_service import SnapshotService
 
 
@@ -30,16 +28,24 @@ def test_db():
 
     yield engine
 
-    # Clean up test data
+    # Clean up test data in dependency order
     with engine.connect() as conn:
+        account_filter = "name LIKE 'Test Snap Gen%'"
+        holding_subquery = f"SELECT id FROM holdings WHERE account_id IN (SELECT id FROM accounts WHERE {account_filter})"
+
+        conn.execute(text(f"DELETE FROM transactions WHERE holding_id IN ({holding_subquery})"))
         conn.execute(
             text(
-                "DELETE FROM historical_snapshots WHERE account_id IN (SELECT id FROM accounts WHERE name LIKE 'Test Snap Gen%')"
+                f"DELETE FROM holdings WHERE account_id IN (SELECT id FROM accounts WHERE {account_filter})"
             )
         )
-        conn.execute(text("DELETE FROM accounts WHERE name LIKE 'Test Snap Gen%'"))
-        conn.execute(text("DELETE FROM portfolios WHERE name LIKE 'Test Snap Gen%'"))
-        conn.execute(text("DELETE FROM users WHERE email LIKE 'test_snap_gen%'"))
+        conn.execute(
+            text(
+                f"DELETE FROM historical_snapshots WHERE account_id IN (SELECT id FROM accounts WHERE {account_filter})"
+            )
+        )
+        conn.execute(text(f"DELETE FROM accounts WHERE {account_filter}"))
+        conn.execute(text("DELETE FROM assets WHERE symbol LIKE '%.JOINTEST'"))
         conn.commit()
 
 
@@ -56,28 +62,13 @@ def db_session(test_db):
 @pytest.fixture
 def test_account(db_session):
     """Create a test account."""
-    user = User(
-        email="test_snap_gen@example.com",
-        password_hash=AuthService.hash_password("test123"),
-        email_verified=True,
-    )
-    db_session.add(user)
-    db_session.flush()
-
-    portfolio = Portfolio(user_id=user.id, name="Test Snap Gen Portfolio")
-    db_session.add(portfolio)
-    db_session.flush()
-
     account = Account(
-        portfolio_id=portfolio.id,
         name="Test Snap Gen Account",
         account_type="brokerage",
         currency="USD",
     )
     db_session.add(account)
     db_session.commit()
-    db_session.refresh(account)
-
     return account
 
 
@@ -203,3 +194,70 @@ class TestGenerateAccountSnapshots:
         # Old snapshot unchanged
         db_session.refresh(old_snapshot)
         assert float(old_snapshot.total_value_usd) == 9999
+
+
+class TestAmbiguousJoinRegression:
+    """Regression test for GitHub issue #34.
+
+    Transaction has two FKs to Holding (holding_id and to_holding_id).
+    Implicit .join(Holding) is ambiguous and crashes with
+    AmbiguousForeignKeysError when to_holding_id is populated.
+    """
+
+    def test_transaction_join_with_forex_conversion(self, db_session, test_account):
+        """Query joining Transaction->Holding should work when to_holding_id is set."""
+        usd_asset = Asset(
+            symbol="USD.CASH.JOINTEST",
+            name="US Dollar Cash",
+            asset_class="Cash",
+            currency="USD",
+        )
+        ils_asset = Asset(
+            symbol="ILS.CASH.JOINTEST",
+            name="Israeli Shekel Cash",
+            asset_class="Cash",
+            currency="ILS",
+        )
+        db_session.add_all([usd_asset, ils_asset])
+        db_session.flush()
+
+        usd_holding = Holding(
+            account_id=test_account.id,
+            asset_id=usd_asset.id,
+            quantity=Decimal("1000"),
+            cost_basis=Decimal("1000"),
+        )
+        ils_holding = Holding(
+            account_id=test_account.id,
+            asset_id=ils_asset.id,
+            quantity=Decimal("3700"),
+            cost_basis=Decimal("3700"),
+        )
+        db_session.add_all([usd_holding, ils_holding])
+        db_session.flush()
+
+        forex_txn = Transaction(
+            holding_id=usd_holding.id,
+            to_holding_id=ils_holding.id,
+            date=date(2024, 6, 1),
+            type="Forex Conversion",
+            quantity=Decimal("1000"),
+            price_per_unit=Decimal("3.70"),
+            amount=Decimal("1000"),
+            to_amount=Decimal("3700"),
+            exchange_rate=Decimal("3.70"),
+            fees=Decimal("0"),
+        )
+        db_session.add(forex_txn)
+        db_session.flush()
+
+        # This is the exact query pattern from snapshot_service.py:61-67.
+        # Before the fix, this raises AmbiguousForeignKeysError.
+        result = (
+            db_session.query(Transaction)
+            .join(Transaction.holding)
+            .filter(Holding.account_id == test_account.id)
+            .first()
+        )
+        assert result is not None
+        assert result.id == forex_txn.id
