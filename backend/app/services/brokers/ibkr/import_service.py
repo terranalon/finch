@@ -11,6 +11,15 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.models import Asset, Holding, Transaction
+from app.services.brokers.ibkr.models import (
+    IBKRCashBalance,
+    IBKRDividend,
+    IBKRForexTransaction,
+    IBKROtherCashTransaction,
+    IBKRStatementOfFundsBalance,
+    IBKRTransaction,
+    IBKRTransfer,
+)
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.shared.asset_metadata_service import AssetMetadataService
 from app.services.shared.transaction_hash_service import (
@@ -26,7 +35,9 @@ class IBKRImportService:
     """Helper service for importing IBKR data components (transactions, dividends, cash)."""
 
     @staticmethod
-    def _import_cash_balances(db: Session, account_id: int, cash_balances: list[dict]) -> dict:
+    def _import_cash_balances(
+        db: Session, account_id: int, cash_balances: list[IBKRCashBalance]
+    ) -> dict:
         """
         Import cash balances as special holdings.
 
@@ -58,9 +69,9 @@ class IBKRImportService:
 
         for cash in cash_balances:
             try:
-                symbol = cash["symbol"]  # e.g., "USD", "CAD", "EUR"
-                currency = cash["currency"]
-                balance = cash["balance"]
+                symbol = cash.symbol  # e.g., "USD", "CAD", "EUR"
+                currency = cash.currency
+                balance = cash.balance
 
                 # Check for old-format cash asset (CASH-USD) and migrate
                 old_symbol = f"CASH-{currency}"
@@ -70,7 +81,7 @@ class IBKRImportService:
                     # Migrate old asset to new naming
                     logger.info(f"Migrating old cash asset {old_symbol} -> {symbol}")
                     old_asset.symbol = symbol
-                    old_asset.name = cash["description"]
+                    old_asset.name = cash.description
                     old_asset.last_fetched_price = Decimal("1")
                     old_asset.last_fetched_at = datetime.now()
                     asset = old_asset
@@ -83,8 +94,8 @@ class IBKRImportService:
                         # Create new cash asset
                         asset = Asset(
                             symbol=symbol,
-                            name=cash["description"],
-                            asset_class=cash["asset_class"],  # "Cash"
+                            name=cash.description,
+                            asset_class=cash.asset_class,  # "Cash"
                             currency=currency,
                             data_source="IBKR",
                             last_fetched_price=Decimal("1"),  # Cash always has price=1
@@ -100,8 +111,10 @@ class IBKRImportService:
                         asset.last_fetched_at = datetime.now()
 
             except Exception as e:
-                logger.error(f"Error importing cash balance {cash.get('symbol')}: {str(e)}")
-                stats["errors"].append(f"{cash.get('symbol')}: {str(e)}")
+                logger.error(
+                    f"Error importing cash balance {getattr(cash, 'symbol', None)}: {str(e)}"
+                )
+                stats["errors"].append(f"{getattr(cash, 'symbol', None)}: {str(e)}")
                 continue
 
         # Batch add new assets and flush to get IDs
@@ -112,8 +125,8 @@ class IBKRImportService:
         # Now process holdings (assets have IDs now)
         for cash in cash_balances:
             try:
-                symbol = cash["symbol"]
-                balance = cash["balance"]
+                symbol = cash.symbol
+                balance = cash.balance
 
                 # Find the asset (either existing or newly created)
                 asset = db.query(Asset).filter(Asset.symbol == symbol).first()
@@ -148,8 +161,10 @@ class IBKRImportService:
                     logger.debug(f"Created cash holding for {symbol}: {balance}")
 
             except Exception as e:
-                logger.error(f"Error creating holding for {cash.get('symbol')}: {str(e)}")
-                stats["errors"].append(f"{cash.get('symbol')}: {str(e)}")
+                logger.error(
+                    f"Error creating holding for {getattr(cash, 'symbol', None)}: {str(e)}"
+                )
+                stats["errors"].append(f"{getattr(cash, 'symbol', None)}: {str(e)}")
                 continue
 
         # Batch add all new holdings at once
@@ -280,7 +295,7 @@ class IBKRImportService:
 
     @staticmethod
     def _import_stmt_funds_balances(
-        db: Session, account_id: int, balances: list[dict], source_id: int
+        db: Session, account_id: int, balances: list[IBKRStatementOfFundsBalance], source_id: int
     ) -> dict:
         """
         Import daily cash balances from StmtFunds (Statement of Funds).
@@ -308,10 +323,10 @@ class IBKRImportService:
 
         for balance_record in balances:
             try:
-                date_val = balance_record["date"]
-                currency = balance_record["currency"]
-                balance = balance_record["balance"]
-                activity = balance_record.get("activity", "")
+                date_val = balance_record.date
+                currency = balance_record.currency
+                balance = balance_record.balance
+                activity = balance_record.activity
 
                 # Check if record exists
                 existing = (
@@ -360,7 +375,10 @@ class IBKRImportService:
 
     @staticmethod
     def _import_transactions(
-        db: Session, account_id: int, transactions: list[dict], source_id: int | None = None
+        db: Session,
+        account_id: int,
+        transactions: list[IBKRTransaction],
+        source_id: int | None = None,
     ) -> dict:
         """
         Import trades as transactions.
@@ -379,7 +397,7 @@ class IBKRImportService:
         Args:
             db: Database session
             account_id: Our account ID
-            transactions: List of transaction dicts from parser
+            transactions: List of transaction dataclasses from parser
             source_id: Optional broker source ID for tracking import lineage
 
         Returns:
@@ -419,7 +437,7 @@ class IBKRImportService:
         for txn in transactions:
             try:
                 # Skip forex pair assets (e.g., USD.CAD, USD.ILS)
-                symbol = txn["symbol"]
+                symbol = txn.symbol
                 if "." in symbol:
                     parts = symbol.split(".")
                     if (
@@ -429,22 +447,22 @@ class IBKRImportService:
                     ):
                         stats["forex_pairs_skipped"] += 1
                         logger.debug(
-                            f"Skipping forex pair transaction: {symbol} {txn['transaction_type']} {txn['quantity']}"
+                            f"Skipping forex pair transaction: {symbol} {txn.transaction_type} {txn.quantity}"
                         )
                         continue
 
                 # Find or create asset
                 asset, created = IBKRImportService._find_or_create_asset(
                     db,
-                    symbol=txn["symbol"],
-                    name=txn["description"],
-                    asset_class=txn["asset_class"],
-                    currency=txn.get("currency", "USD"),
-                    ibkr_symbol=txn["original_symbol"],
-                    cusip=txn.get("cusip"),
-                    isin=txn.get("isin"),
-                    conid=txn.get("conid"),
-                    figi=txn.get("figi"),
+                    symbol=txn.symbol,
+                    name=txn.description,
+                    asset_class=txn.asset_class,
+                    currency=txn.currency,
+                    ibkr_symbol=txn.original_symbol,
+                    cusip=txn.cusip,
+                    isin=txn.isin,
+                    conid=txn.conid,
+                    figi=txn.figi,
                 )
 
                 if created:
@@ -470,13 +488,13 @@ class IBKRImportService:
 
                 # Compute content hash for deduplication
                 content_hash = compute_transaction_hash(
-                    external_txn_id=txn.get("external_transaction_id"),
-                    txn_date=txn["trade_date"],
-                    symbol=txn["symbol"],
-                    txn_type=txn["transaction_type"],
-                    quantity=txn["quantity"],
-                    price=txn["price"],
-                    fees=txn["commission"],
+                    external_txn_id=txn.external_transaction_id,
+                    txn_date=txn.trade_date,
+                    symbol=txn.symbol,
+                    txn_type=txn.transaction_type,
+                    quantity=txn.quantity,
+                    price=txn.price,
+                    fees=txn.commission,
                 )
 
                 # Check for existing transaction and handle ownership transfer
@@ -489,25 +507,25 @@ class IBKRImportService:
                 transaction = Transaction(
                     holding_id=holding.id,
                     broker_source_id=source_id,
-                    date=txn["trade_date"],
-                    type=txn["transaction_type"],
-                    quantity=txn["quantity"],
-                    price_per_unit=txn["price"],
-                    fees=txn["commission"],
-                    notes=f"IBKR Import - {txn['description']}",
-                    external_transaction_id=txn.get("external_transaction_id"),
+                    date=txn.trade_date,
+                    type=txn.transaction_type,
+                    quantity=txn.quantity,
+                    price_per_unit=txn.price,
+                    fees=txn.commission,
+                    notes=f"IBKR Import - {txn.description}",
+                    external_transaction_id=txn.external_transaction_id,
                     content_hash=content_hash,
                 )
                 new_transactions.append(transaction)
                 stats["imported"] += 1
                 logger.debug(
-                    f"Created transaction for {txn['symbol']}: {txn['transaction_type']} {txn['quantity']} @ {txn['price']}"
+                    f"Created transaction for {txn.symbol}: {txn.transaction_type} {txn.quantity} @ {txn.price}"
                 )
 
                 # Create cash transaction for trade settlement (netCash)
-                net_cash = txn.get("net_cash")
+                net_cash = txn.net_cash
                 if net_cash and net_cash != 0:
-                    trade_currency = txn.get("currency", "USD")
+                    trade_currency = txn.currency
 
                     # Find or create cash asset
                     cash_asset, _ = IBKRImportService._find_or_create_asset(
@@ -541,7 +559,7 @@ class IBKRImportService:
                         db.query(Transaction)
                         .filter(
                             Transaction.holding_id == cash_holding.id,
-                            Transaction.date == txn["trade_date"],
+                            Transaction.date == txn.trade_date,
                             Transaction.type == "Trade Settlement",
                             Transaction.amount == net_cash,
                         )
@@ -553,19 +571,21 @@ class IBKRImportService:
                         cash_transaction = Transaction(
                             holding_id=cash_holding.id,
                             broker_source_id=source_id,
-                            date=txn["trade_date"],
+                            date=txn.trade_date,
                             type="Trade Settlement",
                             amount=net_cash,
-                            notes=f"Cash settlement for {txn['symbol']} {txn['transaction_type']}",
+                            notes=f"Cash settlement for {txn.symbol} {txn.transaction_type}",
                         )
                         new_transactions.append(cash_transaction)
                         logger.debug(
-                            f"Created cash settlement: {trade_currency} {net_cash} for {txn['symbol']}"
+                            f"Created cash settlement: {trade_currency} {net_cash} for {txn.symbol}"
                         )
 
             except Exception as e:
-                logger.error(f"Error importing transaction {txn.get('symbol')}: {str(e)}")
-                stats["errors"].append(f"{txn.get('symbol')}: {str(e)}")
+                logger.error(
+                    f"Error importing transaction {getattr(txn, 'symbol', None)}: {str(e)}"
+                )
+                stats["errors"].append(f"{getattr(txn, 'symbol', None)}: {str(e)}")
                 continue
 
         # Batch add all new transactions at once
@@ -577,7 +597,7 @@ class IBKRImportService:
 
     @staticmethod
     def _import_dividends(
-        db: Session, account_id: int, dividends: list[dict], source_id: int | None = None
+        db: Session, account_id: int, dividends: list[IBKRDividend], source_id: int | None = None
     ) -> dict:
         """
         Import dividends as transactions with hash-based deduplication.
@@ -587,7 +607,7 @@ class IBKRImportService:
         Args:
             db: Database session
             account_id: Our account ID
-            dividends: List of dividend dicts from parser
+            dividends: List of dividend dataclasses from parser
             source_id: Optional broker source ID for tracking import lineage
 
         Returns:
@@ -610,11 +630,11 @@ class IBKRImportService:
                 # Find or create asset
                 asset, created = IBKRImportService._find_or_create_asset(
                     db,
-                    symbol=div["symbol"],
-                    name=div["description"],
-                    asset_class=div["asset_class"],
-                    currency=div.get("currency", "USD"),
-                    ibkr_symbol=div["original_symbol"],
+                    symbol=div.symbol,
+                    name=div.description,
+                    asset_class=div.asset_class,
+                    currency=div.currency,
+                    ibkr_symbol=div.original_symbol,
                 )
 
                 if created:
@@ -641,10 +661,10 @@ class IBKRImportService:
                 # Compute content hash for deduplication
                 content_hash = compute_transaction_hash(
                     external_txn_id=None,  # Dividends don't have external IDs in IBKR
-                    txn_date=div["date"],
-                    symbol=div["symbol"],
+                    txn_date=div.date,
+                    symbol=div.symbol,
                     txn_type="Dividend",
-                    quantity=div["amount"],  # Use amount as quantity for dividends
+                    quantity=div.amount,  # Use amount as quantity for dividends
                     price=None,
                     fees=Decimal("0"),
                 )
@@ -661,40 +681,40 @@ class IBKRImportService:
                     db.query(Transaction)
                     .filter(
                         Transaction.holding_id == holding.id,
-                        Transaction.date == div["date"],
+                        Transaction.date == div.date,
                         Transaction.type == "Buy",
                     )
                     .first()
                 )
 
                 # Build dividend notes
-                dividend_notes = f"IBKR Import - Dividend ${div['amount']:.2f}"
+                dividend_notes = f"IBKR Import - Dividend ${div.amount:.2f}"
                 if same_day_buy:
                     dividend_notes += " [REINVESTED]"
                     logger.info(
-                        f"Detected DRIP for {div['symbol']} on {div['date']}: ${div['amount']:.2f} → {same_day_buy.quantity} shares"
+                        f"Detected DRIP for {div.symbol} on {div.date}: ${div.amount:.2f} → {same_day_buy.quantity} shares"
                     )
 
                 # Create dividend transaction with amount field - add to batch list
                 transaction = Transaction(
                     holding_id=holding.id,
                     broker_source_id=source_id,
-                    date=div["date"],
+                    date=div.date,
                     type="Dividend",
                     quantity=None,
                     price_per_unit=None,
-                    amount=div["amount"],  # Store in amount field
+                    amount=div.amount,  # Store in amount field
                     fees=Decimal("0"),
                     notes=dividend_notes,
                     content_hash=content_hash,
                 )
                 new_transactions.append(transaction)
                 stats["imported"] += 1
-                logger.debug(f"Created dividend for {div['symbol']}: ${div['amount']}")
+                logger.debug(f"Created dividend for {div.symbol}: ${div.amount}")
 
             except Exception as e:
-                logger.error(f"Error importing dividend {div.get('symbol')}: {str(e)}")
-                stats["errors"].append(f"{div.get('symbol')}: {str(e)}")
+                logger.error(f"Error importing dividend {getattr(div, 'symbol', None)}: {str(e)}")
+                stats["errors"].append(f"{getattr(div, 'symbol', None)}: {str(e)}")
                 continue
 
         # Batch add all new transactions at once
@@ -706,7 +726,7 @@ class IBKRImportService:
 
     @staticmethod
     def _import_transfers(
-        db: Session, account_id: int, transfers: list[dict], source_id: int | None = None
+        db: Session, account_id: int, transfers: list[IBKRTransfer], source_id: int | None = None
     ) -> dict:
         """
         Import deposit/withdrawal transfers as transactions.
@@ -719,7 +739,7 @@ class IBKRImportService:
         Args:
             db: Database session
             account_id: Our account ID
-            transfers: List of transfer dicts from parser
+            transfers: List of transfer dataclasses from parser
             source_id: Optional broker source ID for tracking import lineage
 
         Returns:
@@ -738,7 +758,7 @@ class IBKRImportService:
 
         for transfer in transfers:
             try:
-                currency = transfer["currency"]
+                currency = transfer.currency
 
                 # Find or create cash asset for this currency
                 asset, created = IBKRImportService._find_or_create_asset(
@@ -776,9 +796,9 @@ class IBKRImportService:
                     db.query(Transaction)
                     .filter(
                         Transaction.holding_id == holding.id,
-                        Transaction.date == transfer["date"],
-                        Transaction.type == transfer["type"],
-                        Transaction.amount == transfer["amount"],
+                        Transaction.date == transfer.date,
+                        Transaction.type == transfer.type,
+                        Transaction.amount == transfer.amount,
                     )
                     .first()
                 )
@@ -786,7 +806,7 @@ class IBKRImportService:
                 if existing:
                     stats["duplicates_skipped"] += 1
                     logger.debug(
-                        f"Skipping duplicate {transfer['type']} for {currency} on {transfer['date']}"
+                        f"Skipping duplicate {transfer.type} for {currency} on {transfer.date}"
                     )
                     continue
 
@@ -794,21 +814,23 @@ class IBKRImportService:
                 transaction = Transaction(
                     holding_id=holding.id,
                     broker_source_id=source_id,
-                    date=transfer["date"],
-                    type=transfer["type"],  # "Deposit" or "Withdrawal"
+                    date=transfer.date,
+                    type=transfer.type,  # "Deposit" or "Withdrawal"
                     quantity=None,  # Transfers don't have quantity
                     price_per_unit=None,
-                    amount=transfer["amount"],  # Use amount field for transfer value
+                    amount=transfer.amount,  # Use amount field for transfer value
                     fees=Decimal("0"),
-                    notes=f"IBKR Import - {transfer['description']}",
+                    notes=f"IBKR Import - {transfer.description}",
                 )
                 new_transactions.append(transaction)
                 stats["imported"] += 1
-                logger.debug(f"Created {transfer['type']} for {currency}: {transfer['amount']}")
+                logger.debug(f"Created {transfer.type} for {currency}: {transfer.amount}")
 
             except Exception as e:
-                logger.error(f"Error importing transfer {transfer.get('type')}: {str(e)}")
-                stats["errors"].append(f"{transfer.get('type')}: {str(e)}")
+                logger.error(
+                    f"Error importing transfer {getattr(transfer, 'type', None)}: {str(e)}"
+                )
+                stats["errors"].append(f"{getattr(transfer, 'type', None)}: {str(e)}")
                 continue
 
         # Batch add all new transactions at once
@@ -820,7 +842,10 @@ class IBKRImportService:
 
     @staticmethod
     def _import_forex_transactions(
-        db: Session, account_id: int, forex_txns: list[dict], source_id: int | None = None
+        db: Session,
+        account_id: int,
+        forex_txns: list[IBKRForexTransaction],
+        source_id: int | None = None,
     ) -> dict:
         """
         Import forex (currency conversion) transactions.
@@ -837,7 +862,7 @@ class IBKRImportService:
         Args:
             db: Database session
             account_id: Our account ID
-            forex_txns: List of forex transaction dicts from parser
+            forex_txns: List of forex transaction dataclasses from parser
             source_id: Optional broker source ID for tracking import lineage
 
         Returns:
@@ -856,11 +881,11 @@ class IBKRImportService:
 
         for forex in forex_txns:
             try:
-                from_currency = forex["from_currency"]
-                to_currency = forex["to_currency"]
-                from_amount = forex["from_amount"]
-                to_amount = forex["to_amount"]
-                realized_pl = forex["realized_pl"]
+                from_currency = forex.from_currency
+                to_currency = forex.to_currency
+                from_amount = forex.from_amount
+                to_amount = forex.to_amount
+                realized_pl = forex.realized_pl
                 exchange_rate = to_amount / from_amount if from_amount > 0 else Decimal("0")
 
                 # Find or create from_currency cash asset
@@ -931,7 +956,7 @@ class IBKRImportService:
                     .filter(
                         Transaction.holding_id == from_holding.id,
                         Transaction.to_holding_id == to_holding.id,
-                        Transaction.date == forex["date"],
+                        Transaction.date == forex.date,
                         Transaction.type == "Forex Conversion",
                         Transaction.amount == from_amount,
                     )
@@ -941,7 +966,7 @@ class IBKRImportService:
                 if existing:
                     stats["duplicates_skipped"] += 1
                     logger.debug(
-                        f"Skipping duplicate forex conversion {from_currency}→{to_currency} on {forex['date']}"
+                        f"Skipping duplicate forex conversion {from_currency}→{to_currency} on {forex.date}"
                     )
                     continue
 
@@ -950,7 +975,7 @@ class IBKRImportService:
                     holding_id=from_holding.id,
                     broker_source_id=source_id,
                     to_holding_id=to_holding.id,
-                    date=forex["date"],
+                    date=forex.date,
                     type="Forex Conversion",
                     quantity=None,
                     price_per_unit=None,
@@ -969,10 +994,10 @@ class IBKRImportService:
 
             except Exception as e:
                 logger.error(
-                    f"Error importing forex transaction {forex.get('from_currency')}→{forex.get('to_currency')}: {str(e)}"
+                    f"Error importing forex transaction {getattr(forex, 'from_currency', None)}→{getattr(forex, 'to_currency', None)}: {str(e)}"
                 )
                 stats["errors"].append(
-                    f"{forex.get('from_currency')}→{forex.get('to_currency')}: {str(e)}"
+                    f"{getattr(forex, 'from_currency', None)}→{getattr(forex, 'to_currency', None)}: {str(e)}"
                 )
                 continue
 
@@ -985,7 +1010,10 @@ class IBKRImportService:
 
     @staticmethod
     def _import_other_cash_transactions(
-        db: Session, account_id: int, cash_txns: list[dict], source_id: int | None = None
+        db: Session,
+        account_id: int,
+        cash_txns: list[IBKROtherCashTransaction],
+        source_id: int | None = None,
     ) -> dict:
         """
         Import other cash transactions (interest, tax, fees).
@@ -997,7 +1025,7 @@ class IBKRImportService:
         Args:
             db: Database session
             account_id: Our account ID
-            cash_txns: List of cash transaction dicts from parser
+            cash_txns: List of cash transaction dataclasses from parser
             source_id: Optional broker source ID for tracking import lineage
 
         Returns:
@@ -1016,11 +1044,11 @@ class IBKRImportService:
 
         for txn in cash_txns:
             try:
-                currency = txn["currency"]
-                txn_type = txn["type"]  # 'Interest', 'Tax', 'Fee'
-                amount = txn["amount"]  # Keeps sign (negative for tax/fees)
-                txn_date = txn["date"]
-                description = txn.get("description", "")
+                currency = txn.currency
+                txn_type = txn.type  # 'Interest', 'Tax', 'Fee'
+                amount = txn.amount  # Keeps sign (negative for tax/fees)
+                txn_date = txn.date
+                description = txn.description
 
                 # Find or create cash asset for this currency
                 asset, created = IBKRImportService._find_or_create_asset(
@@ -1087,8 +1115,8 @@ class IBKRImportService:
                 logger.debug(f"Created {txn_type} for {currency}: {amount}")
 
             except Exception as e:
-                logger.error(f"Error importing {txn.get('type')} transaction: {str(e)}")
-                stats["errors"].append(f"{txn.get('type')}: {str(e)}")
+                logger.error(f"Error importing {getattr(txn, 'type', None)} transaction: {str(e)}")
+                stats["errors"].append(f"{getattr(txn, 'type', None)}: {str(e)}")
                 continue
 
         # Batch add all new transactions at once
@@ -1100,7 +1128,7 @@ class IBKRImportService:
 
     @staticmethod
     def _import_dividend_cash(
-        db: Session, account_id: int, dividends: list[dict], source_id: int | None = None
+        db: Session, account_id: int, dividends: list[IBKRDividend], source_id: int | None = None
     ) -> dict:
         """
         Import dividend cash impact to the cash balance.
@@ -1132,10 +1160,10 @@ class IBKRImportService:
 
         for div in dividends:
             try:
-                currency = div.get("currency", "USD")
-                amount = div["amount"]
-                div_date = div["date"]
-                symbol = div.get("symbol", "unknown")
+                currency = div.currency
+                amount = div.amount
+                div_date = div.date
+                symbol = div.symbol
 
                 # Find or create cash asset for this currency
                 asset, created = IBKRImportService._find_or_create_asset(
