@@ -14,7 +14,7 @@ import os
 from datetime import date, datetime, timedelta
 
 import requests
-from airflow.sdk import dag, task
+from airflow.sdk import dag, get_current_context, task
 from auth_helper import get_auth_helper
 from dotenv import load_dotenv
 
@@ -36,8 +36,13 @@ default_args = {
 
 
 def _get_snapshot_date() -> date:
-    """Return yesterday's date as the snapshot target."""
-    return date.today() - timedelta(days=1)
+    """Derive the snapshot target date from the DAG run's logical date.
+
+    Uses Airflow's logical_date so that cleared/re-run DAG runs target
+    the correct historical date instead of today.
+    """
+    context = get_current_context()
+    return context["logical_date"].date() - timedelta(days=1)
 
 
 def _make_api_call(endpoint: str, params: dict | None = None) -> dict:
@@ -150,7 +155,7 @@ def daily_snapshot_pipeline():
         )
 
         logger.info("Snapshots created: %s", result.get("snapshots_created", 0))
-        total_value = result.get("total_value_usd", 0)
+        total_value = float(result.get("total_value_usd", 0))
         logger.info("Total value: $%s", f"{total_value:,.2f}")
 
         return result
