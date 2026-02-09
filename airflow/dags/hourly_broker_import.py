@@ -48,6 +48,7 @@ def _extract_error_message(response: requests.Response) -> str:
     schedule="5 * * * *",
     start_date=datetime(2026, 1, 1),
     catchup=False,
+    max_active_runs=1,
     tags=["broker", "import", "hourly"],
 )
 def hourly_broker_import():
