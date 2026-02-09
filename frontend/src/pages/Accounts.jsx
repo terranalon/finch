@@ -16,6 +16,8 @@ import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
 import { AccountWizard } from '../components/AccountWizard';
+import { BatchUploadModal } from '../components/BatchUploadModal';
+import { CoverageTimeline } from '../components/CoverageTimeline';
 
 // ============================================
 // ICONS
@@ -151,10 +153,6 @@ const formatLastSync = (dateStr) => {
   }
 };
 
-const formatDateShort = (dateStr) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-};
-
 const getStatusInfo = (lastSync) => {
   const date = new Date(lastSync);
   const now = new Date();
@@ -238,48 +236,21 @@ function DataCoverageBar({ coverage }) {
     );
   }
 
-  const startDate = new Date(coverage.start_date);
-  const endDate = new Date(coverage.end_date);
-  const totalDays = Math.max(1, (endDate - startDate) / (1000 * 60 * 60 * 24));
-
-  // Calculate gap positions (API returns start_date/end_date, not start/end)
-  const gaps = coverage.gaps || [];
-  const gapSegments = gaps.map((gap) => {
-    const gapStart = new Date(gap.start_date);
-    const gapEnd = new Date(gap.end_date);
-    const startPercent = ((gapStart - startDate) / (1000 * 60 * 60 * 24) / totalDays) * 100;
-    const widthPercent = Math.max(1, ((gapEnd - gapStart) / (1000 * 60 * 60 * 24) / totalDays) * 100);
-    return { startPercent, widthPercent, days: gap.days };
-  });
+  const files = [
+    {
+      fileName: 'All sources',
+      startDate: coverage.start_date,
+      endDate: coverage.end_date,
+      transactions: coverage.transactions || 0,
+    },
+  ];
 
   return (
     <div>
-      <div className="flex justify-between text-xs text-[var(--text-tertiary)] mb-2">
-        <span>{formatDateShort(coverage.start_date)}</span>
-        <span>{formatDateShort(coverage.end_date)}</span>
-      </div>
-      <div className="relative h-2 bg-emerald-100 dark:bg-emerald-950/40 rounded-full overflow-hidden">
-        {/* Filled bar */}
-        <div className="absolute inset-0 bg-emerald-500 dark:bg-emerald-400 rounded-full" />
-        {/* Gap overlays */}
-        {gapSegments.map((gap, i) => (
-          <div
-            key={i}
-            className="absolute top-0 bottom-0 bg-amber-400 dark:bg-amber-500"
-            style={{ left: `${gap.startPercent}%`, width: `${gap.widthPercent}%` }}
-            title={`${gap.days} day gap`}
-          />
-        ))}
-      </div>
+      <CoverageTimeline files={files} gaps={coverage.gaps || []} />
       <div className="flex items-center gap-4 mt-2 text-xs text-[var(--text-secondary)]">
-        <span>{(coverage.transactions || 0).toLocaleString()} transactions</span>
         {coverage.sources > 0 && (
           <span>{coverage.sources} source{coverage.sources > 1 ? 's' : ''}</span>
-        )}
-        {gaps.length > 0 && (
-          <span className="text-amber-600 dark:text-amber-400">
-            {gaps.length} gap{gaps.length > 1 ? 's' : ''} detected
-          </span>
         )}
       </div>
     </div>
@@ -296,11 +267,11 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
   const [editName, setEditName] = useState(account.name);
   const [showApiModal, setShowApiModal] = useState(false);
   const [hasApiCredentials, setHasApiCredentials] = useState(false);
+  const [showBatchUpload, setShowBatchUpload] = useState(false);
   const navigate = useNavigate();
   const { selectedPortfolioId } = usePortfolio();
   const statusInfo = getStatusInfo(account.last_sync);
   const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Determine if this is a shared account (in multiple portfolios)
   const isSharedAccount = account.portfolio_ids && account.portfolio_ids.length > 1;
@@ -310,7 +281,6 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
   const supportsApi = brokerConfig?.has_api ?? false;
   const supportedFormats = brokerConfig?.supported_formats || [];
   const formatDisplay = supportedFormats.map(f => f.replace('.', '').toUpperCase()).join(', ') || 'Files';
-  const acceptFormats = supportedFormats.join(',') || '*';
 
   // Check if API credentials exist
   useEffect(() => {
@@ -366,61 +336,7 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
 
   const handleUploadFile = (e) => {
     e.stopPropagation();
-    // Trigger file input click
-    fileInputRef.current?.click();
-  };
-
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file extension
-    const fileName = file.name.toLowerCase();
-    const fileExt = '.' + fileName.split('.').pop();
-    const isValidFormat = supportedFormats.length === 0 || supportedFormats.some(ext => fileExt === ext.toLowerCase());
-
-    if (!isValidFormat) {
-      alert(`Invalid file format. ${account.institution} only supports: ${formatDisplay}`);
-      e.target.value = ''; // Reset file input
-      return;
-    }
-
-    // Upload the file to the API
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('broker_type', account.broker_type);
-
-      const res = await api(`/broker-data/upload/${account.id}`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        alert(`Successfully imported ${result.stats?.total_records || 0} records from ${file.name}`);
-        // Refresh the page to show updated coverage
-        window.location.reload();
-      } else {
-        const error = await res.json();
-        // Handle both string and object error details
-        const detail = error.detail;
-        const errorMessage =
-          typeof detail === 'string'
-            ? detail
-            : detail?.message || detail?.error || JSON.stringify(detail);
-        alert(`Import failed: ${errorMessage}`);
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert(`Upload failed: ${err.message}`);
-    } finally {
-      setIsUploading(false);
-      e.target.value = ''; // Reset file input
-    }
+    setShowBatchUpload(true);
   };
 
   const handleConnectApi = (e) => {
@@ -573,40 +489,14 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
 
               <button
                 onClick={handleUploadFile}
-                disabled={isUploading}
-                className={cn(
-                  'flex items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed',
-                  'border-[var(--border-secondary)] hover:border-accent hover:bg-accent/5',
-                  'transition-colors group',
-                  isUploading ? 'opacity-50 cursor-wait' : 'cursor-pointer'
-                )}
+                className="flex items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed border-[var(--border-secondary)] hover:border-accent hover:bg-accent/5 transition-colors cursor-pointer group"
               >
-                {isUploading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-[var(--text-primary)]">Importing...</p>
-                      <p className="text-xs text-[var(--text-tertiary)]">Please wait</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <DocumentArrowUpIcon className="w-5 h-5 text-[var(--text-tertiary)] group-hover:text-accent" />
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-accent">Upload File</p>
-                      <p className="text-xs text-[var(--text-tertiary)]">{formatDisplay || 'Supported formats'}</p>
-                    </div>
-                  </>
-                )}
+                <DocumentArrowUpIcon className="w-5 h-5 text-[var(--text-tertiary)] group-hover:text-accent" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-accent">Upload File</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">{formatDisplay || 'Supported formats'}</p>
+                </div>
               </button>
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={acceptFormats}
-                onChange={handleFileChange}
-                className="hidden"
-              />
             </div>
           </div>
 
@@ -658,6 +548,16 @@ function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRe
           setHasApiCredentials(true);
           onRefresh?.();
         }}
+      />
+
+      {/* Batch Upload Modal */}
+      <BatchUploadModal
+        isOpen={showBatchUpload}
+        onClose={() => setShowBatchUpload(false)}
+        accountId={account.id}
+        brokerType={account.broker_type}
+        supportedFormats={supportedFormats}
+        onComplete={() => onRefresh?.()}
       />
     </div>
   );

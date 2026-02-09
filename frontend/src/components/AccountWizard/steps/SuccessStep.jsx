@@ -1,7 +1,20 @@
-import { CheckIcon, SparklesIcon } from '../icons.jsx';
+import { useState } from 'react';
 
-export function SuccessStep({ broker, accountDetails, skippedData, onViewAccount, onAddAnother, onDone }) {
+import { CheckIcon, SparklesIcon, UploadIcon } from '../icons.jsx';
+import { BatchUploadModal } from '../../BatchUploadModal.jsx';
+
+export function SuccessStep({
+  broker,
+  accountDetails,
+  skippedData,
+  hasSnapshotData,
+  createdAccountId,
+  onViewAccount,
+  onAddAnother,
+  onDone,
+}) {
   const isManual = !broker;
+  const [showBatchUpload, setShowBatchUpload] = useState(false);
 
   return (
     <div className="max-w-lg mx-auto text-center">
@@ -40,6 +53,38 @@ export function SuccessStep({ broker, accountDetails, skippedData, onViewAccount
         )}
       </div>
 
+      {/* Upload History section -- only for snapshot-onboarded accounts */}
+      {hasSnapshotData && (
+        <div className="p-5 rounded-2xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-left mb-8">
+          <div className="flex items-start gap-3">
+            <UploadIcon className="size-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Your current positions have been imported.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Your account doesn't include historical transactions yet. To track
+                performance over time, upload your transaction history files from{' '}
+                {broker?.name || 'your broker'}.
+              </p>
+              <div className="mt-4 flex items-center gap-4">
+                <button
+                  type="button"
+                  aria-label="Upload History"
+                  onClick={() => setShowBatchUpload(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+                >
+                  Upload History
+                </button>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  You can also do this later from Account Settings
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="space-y-3">
         <button
@@ -66,6 +111,17 @@ export function SuccessStep({ broker, accountDetails, skippedData, onViewAccount
           </button>
         </div>
       </div>
+
+      {/* Batch Upload Modal */}
+      {hasSnapshotData && createdAccountId && (
+        <BatchUploadModal
+          isOpen={showBatchUpload}
+          onClose={() => setShowBatchUpload(false)}
+          accountId={createdAccountId}
+          brokerType={broker?.type}
+          supportedFormats={broker?.supportedFormats || []}
+        />
+      )}
     </div>
   );
 }
