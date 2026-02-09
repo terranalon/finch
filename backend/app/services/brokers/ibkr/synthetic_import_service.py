@@ -37,12 +37,11 @@ def _build_initial_stats(account_id: int) -> dict:
 
 def _fail_stats(stats: dict, error: str) -> dict:
     """Mark stats as failed with the given error message and return them."""
-    return {
-        **stats,
-        "status": "failed",
-        "errors": [*stats["errors"], error],
-        "end_time": datetime.now().isoformat(),
-    }
+    stats_copy = stats.copy()
+    stats_copy["status"] = "failed"
+    stats_copy["errors"] = [*stats["errors"], error]
+    stats_copy["end_time"] = datetime.now().isoformat()
+    return stats_copy
 
 
 def _find_or_create_holding(db: Session, account_id: int, asset_id: int) -> Holding:

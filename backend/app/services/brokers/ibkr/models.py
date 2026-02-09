@@ -13,7 +13,7 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class IBKRSymbolInfo:
-    """Result of IBKRParser.normalize_symbol()."""
+    """Symbol normalization result from IBKRParser.normalize_symbol()."""
 
     yf_symbol: str
     original_symbol: str
@@ -125,10 +125,10 @@ class IBKRForexTransaction:
 
 @dataclass(frozen=True)
 class IBKRCashBalance:
-    """A cash balance by currency from extract_cash_balances().
+    """Cash balance by currency from extract_cash_balances().
 
-    Note: symbol, description, and asset_class are enriched by the
-    parser so that consumers don't need to derive them from currency.
+    The parser enriches symbol, description, and asset_class so consumers
+    don't need to derive them from the currency code.
     """
 
     symbol: str
@@ -141,7 +141,7 @@ class IBKRCashBalance:
 
 @dataclass(frozen=True)
 class IBKRStatementOfFundsBalance:
-    """A daily cash balance record from extract_statement_of_funds_balances()."""
+    """Daily cash balance record from extract_statement_of_funds_balances()."""
 
     date: date
     currency: str

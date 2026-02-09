@@ -120,8 +120,7 @@ class TestExtractOtherCashReturnsDataclass:
 class TestExtractCashBalancesReturnsDataclass:
     def test_single_balance(self):
         root = _build_xml(
-            '<CashReport><CashReport currency="USD" endingCash="10000" />'
-            "</CashReport>"
+            '<CashReport><CashReport currency="USD" endingCash="10000" /></CashReport>'
         )
         balances = IBKRParser.extract_cash_balances(root)
         assert len(balances) == 1

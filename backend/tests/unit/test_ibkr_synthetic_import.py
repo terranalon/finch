@@ -53,7 +53,7 @@ USD_CASH_BALANCE = IBKRCashBalance(
 )
 
 
-def _find_added_synthetic_source(mock_db: MagicMock):
+def _find_added_synthetic_source(mock_db: MagicMock) -> object | None:
     """Find the BrokerDataSource with source_type='synthetic' from db.add calls."""
     for call in mock_db.add.call_args_list:
         obj = call[0][0]
@@ -136,9 +136,7 @@ class TestSyntheticImportService:
         """Snapshot data should be stored in import_stats for later validation."""
         mock_client.fetch_flex_report.return_value = b"<xml>data</xml>"
         mock_parser.parse_xml.return_value = MagicMock()
-        mock_parser.extract_positions.return_value = [
-            replace(AAPL_POSITION, isin=None, conid=None)
-        ]
+        mock_parser.extract_positions.return_value = [replace(AAPL_POSITION, isin=None, conid=None)]
         mock_parser.extract_cash_balances.return_value = []
 
         mock_import_service._import_cash_balances.return_value = {}

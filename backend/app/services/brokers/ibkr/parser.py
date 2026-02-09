@@ -2,7 +2,7 @@
 
 import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from app.services.brokers.ibkr.models import (
@@ -19,6 +19,15 @@ from app.services.brokers.ibkr.models import (
 from app.services.shared.asset_type_detector import map_ibkr_asset_class
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_ibkr_date(date_str: str) -> date:
+    """Parse IBKR date string (YYYYMMDD or YYYYMMDD;HHMMSS format)."""
+    if ";" in date_str:
+        date_part = date_str.split(";")[0]
+        return datetime.strptime(date_part, "%Y%m%d").date()
+    return datetime.strptime(date_str[:8], "%Y%m%d").date()
+
 
 CURRENCY_NAMES: dict[str, str] = {
     "USD": "US Dollar",
@@ -49,15 +58,7 @@ class IBKRParser:
 
     @staticmethod
     def parse_xml(xml_data: bytes) -> ET.Element | None:
-        """
-        Parse XML bytes into ElementTree Element.
-
-        Args:
-            xml_data: XML data as bytes
-
-        Returns:
-            ElementTree Element root, or None if parsing failed
-        """
+        """Parse XML bytes into ElementTree Element."""
         try:
             root = ET.fromstring(xml_data)
             logger.info(f"Successfully parsed XML, root tag: {root.tag}")
@@ -68,18 +69,10 @@ class IBKRParser:
 
     @staticmethod
     def merge_xml_documents(xml_data_list: list[bytes]) -> ET.Element | None:
-        """
-        Merge multiple Flex Query XML responses into a single ElementTree.
+        """Merge multiple Flex Query XML responses into a single ElementTree.
 
-        This is used when fetching data in multiple 365-day chunks.
-        Strategy: Parse first document as base, then append FlexStatement children
-        from subsequent documents.
-
-        Args:
-            xml_data_list: List of XML data bytes to merge
-
-        Returns:
-            Merged ElementTree root, or None if parsing failed
+        Used when fetching data in multiple 365-day chunks. Strategy: Parse first
+        document as base, then append FlexStatement children from subsequent documents.
         """
         if not xml_data_list:
             logger.error("No XML data provided for merging")
@@ -129,15 +122,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_positions(root: ET.Element) -> list[IBKRPosition]:
-        """
-        Extract open positions from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of position dictionaries
-        """
+        """Extract open positions from FlexQueryResponse."""
         positions = []
 
         try:
@@ -204,15 +189,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_transactions(root: ET.Element) -> list[IBKRTransaction]:
-        """
-        Extract trades from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of transaction dictionaries
-        """
+        """Extract trades from FlexQueryResponse."""
         transactions = []
 
         try:
@@ -243,8 +220,7 @@ class IBKRParser:
                             logger.warning("Skipping trade without symbol or date")
                             continue
 
-                        # Parse trade date
-                        trade_date = datetime.strptime(trade_date_str, "%Y%m%d").date()
+                        trade_date = _parse_ibkr_date(trade_date_str)
 
                         # Normalize symbol
                         symbol_info = IBKRParser.normalize_symbol(
@@ -294,15 +270,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_dividends(root: ET.Element) -> list[IBKRDividend]:
-        """
-        Extract dividend transactions from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of dividend dictionaries (deduplicated)
-        """
+        """Extract dividend transactions from FlexQueryResponse (deduplicated)."""
         dividends = []
         seen_keys: set[tuple] = set()  # For deduplication
 
@@ -329,12 +297,7 @@ class IBKRParser:
                             logger.warning("Skipping dividend without symbol or date")
                             continue
 
-                        # Parse date (format: YYYYMMDD;HHMMSS or YYYYMMDD)
-                        if ";" in date_str:
-                            date_part = date_str.split(";")[0]
-                            txn_date = datetime.strptime(date_part, "%Y%m%d").date()
-                        else:
-                            txn_date = datetime.strptime(date_str[:8], "%Y%m%d").date()
+                        txn_date = _parse_ibkr_date(date_str)
 
                         # Normalize symbol
                         symbol_info = IBKRParser.normalize_symbol(
@@ -379,15 +342,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_transfers(root: ET.Element) -> list[IBKRTransfer]:
-        """
-        Extract deposit/withdrawal transfers from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of transfer dictionaries (deduplicated)
-        """
+        """Extract deposit/withdrawal transfers from FlexQueryResponse (deduplicated)."""
         transfers = []
         seen_keys: set[tuple] = set()  # For deduplication
 
@@ -417,12 +372,7 @@ class IBKRParser:
                             logger.warning("Skipping transfer without date")
                             continue
 
-                        # Parse date (format: YYYYMMDD;HHMMSS or YYYYMMDD)
-                        if ";" in date_str:
-                            date_part = date_str.split(";")[0]
-                            txn_date = datetime.strptime(date_part, "%Y%m%d").date()
-                        else:
-                            txn_date = datetime.strptime(date_str[:8], "%Y%m%d").date()
+                        txn_date = _parse_ibkr_date(date_str)
 
                         amount_decimal = Decimal(str(amount))
 
@@ -463,24 +413,19 @@ class IBKRParser:
                         if not date_str:
                             continue
 
-                        # Parse date
-                        if ";" in date_str:
-                            date_part = date_str.split(";")[0]
-                            txn_date = datetime.strptime(date_part, "%Y-%m-%d").date()
-                        else:
-                            txn_date = datetime.strptime(date_str[:8], "%Y%m%d").date()
+                        txn_date = _parse_ibkr_date(date_str)
 
                         amount_decimal = Decimal(str(amount))
 
-                        # Use direction if available, otherwise use amount sign
-                        if direction:
-                            transfer_type = (
-                                "Deposit"
-                                if direction.lower() in ["in", "incoming"]
-                                else "Withdrawal"
-                            )
+                        # Determine transfer type from direction or amount sign
+                        if direction and direction.lower() in ["in", "incoming"]:
+                            transfer_type = "Deposit"
+                        elif direction:
+                            transfer_type = "Withdrawal"
+                        elif amount_decimal > 0:
+                            transfer_type = "Deposit"
                         else:
-                            transfer_type = "Deposit" if amount_decimal > 0 else "Withdrawal"
+                            transfer_type = "Withdrawal"
 
                         # Deduplicate
                         dedup_key = (txn_date, transfer_type, currency, str(abs(amount_decimal)))
@@ -512,19 +457,11 @@ class IBKRParser:
 
     @staticmethod
     def extract_other_cash_transactions(root: ET.Element) -> list[IBKROtherCashTransaction]:
-        """
-        Extract other cash transactions (interest, taxes, fees) from FlexQueryResponse.
+        """Extract other cash transactions (interest, taxes, fees) from FlexQueryResponse.
 
         These affect cash balances but aren't captured by other parsers:
-        - Broker Interest Received/Paid
-        - Withholding Tax
-        - Other Fees (e.g., ADR custody fees)
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of cash transaction dictionaries (deduplicated)
+        broker interest, withholding tax, and other fees (e.g., ADR custody fees).
+        Returns deduplicated results.
         """
         transactions = []
         seen_keys: set[tuple] = set()  # For deduplication
@@ -580,12 +517,7 @@ class IBKRParser:
                             logger.warning(f"Skipping {ibkr_type} without date")
                             continue
 
-                        # Parse date (format: YYYYMMDD;HHMMSS or YYYYMMDD)
-                        if ";" in date_str:
-                            date_part = date_str.split(";")[0]
-                            txn_date = datetime.strptime(date_part, "%Y%m%d").date()
-                        else:
-                            txn_date = datetime.strptime(date_str[:8], "%Y%m%d").date()
+                        txn_date = _parse_ibkr_date(date_str)
 
                         amount_decimal = Decimal(str(amount))
 
@@ -895,8 +827,7 @@ class IBKRParser:
                         if not date_str or not currency:
                             continue
 
-                        # Parse date (YYYYMMDD format)
-                        date_obj = datetime.strptime(date_str, "%Y%m%d").date()
+                        date_obj = _parse_ibkr_date(date_str)
                         balance = Decimal(str(balance_str))
 
                         # Deduplication: Use (date, currency) as key
@@ -967,15 +898,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_forex_transactions(root: ET.Element) -> list[IBKRForexTransaction]:
-        """
-        Extract forex (currency conversion) transactions from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of forex transaction dictionaries
-        """
+        """Extract forex (currency conversion) transactions from FlexQueryResponse."""
         forex_txns = []
         seen_keys = set()  # For deduplication
 
@@ -997,12 +920,7 @@ class IBKRParser:
                             logger.warning("Skipping forex transaction without date or currency")
                             continue
 
-                        # Parse date (format: YYYYMMDD or YYYYMMDD;HHMMSS)
-                        if ";" in date_str:
-                            date_part = date_str.split(";")[0]
-                            txn_date = datetime.strptime(date_part, "%Y%m%d").date()
-                        else:
-                            txn_date = datetime.strptime(date_str[:8], "%Y%m%d").date()
+                        txn_date = _parse_ibkr_date(date_str)
 
                         quantity_decimal = Decimal(str(quantity))
                         proceeds_decimal = Decimal(str(proceeds))
@@ -1025,16 +943,16 @@ class IBKRParser:
 
                         # Deduplication check using (date, from_currency, to_currency, from_amount, to_amount)
                         from_amt = abs(quantity_decimal)
-                        to_amt = (
-                            abs(proceeds_decimal) if quantity_decimal < 0 else abs(quantity_decimal)
-                        )
-                        dedup_key = (
-                            txn_date,
-                            from_currency if quantity_decimal < 0 else to_currency,
-                            to_currency if quantity_decimal < 0 else from_currency,
-                            from_amt,
-                            to_amt,
-                        )
+                        if quantity_decimal < 0:
+                            to_amt = abs(proceeds_decimal)
+                            dedup_from_curr = from_currency
+                            dedup_to_curr = to_currency
+                        else:
+                            to_amt = abs(quantity_decimal)
+                            dedup_from_curr = to_currency
+                            dedup_to_curr = from_currency
+
+                        dedup_key = (txn_date, dedup_from_curr, dedup_to_curr, from_amt, to_amt)
 
                         if dedup_key in seen_keys:
                             logger.debug(f"Skipping duplicate forex transaction: {dedup_key}")
@@ -1088,15 +1006,7 @@ class IBKRParser:
 
     @staticmethod
     def extract_cash_balances(root: ET.Element) -> list[IBKRCashBalance]:
-        """
-        Extract cash balances by currency from FlexQueryResponse.
-
-        Args:
-            root: XML root element
-
-        Returns:
-            List of cash balance dictionaries
-        """
+        """Extract cash balances by currency from FlexQueryResponse."""
         balances = []
 
         try:
@@ -1137,17 +1047,7 @@ class IBKRParser:
     def normalize_symbol(
         ibkr_symbol: str, asset_category: str, listing_exchange: str = ""
     ) -> IBKRSymbolInfo:
-        """
-        Convert IBKR symbols to Yahoo Finance format.
-
-        Args:
-            ibkr_symbol: IBKR ticker symbol
-            asset_category: IBKR asset category (STK, OPT, FUT, etc.)
-            listing_exchange: Exchange code (NYSE, NASDAQ, LSE, etc.)
-
-        Returns:
-            IBKRSymbolInfo with yf_symbol, original_symbol, and needs_validation flag
-        """
+        """Convert IBKR symbols to Yahoo Finance format."""
         # US Stocks (NYSE, NASDAQ, ARCA): usually identical
         if asset_category == "STK" and listing_exchange in [
             "NYSE",
