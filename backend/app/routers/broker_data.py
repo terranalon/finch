@@ -35,7 +35,6 @@ from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services.brokers.base_import_service import extract_unique_symbols
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 from app.services.brokers.ibkr.synthetic_import_service import delete_synthetic_sources
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
@@ -472,7 +471,12 @@ async def upload_broker_file(
                     logger.warning("IBKR validation: %s", warning)
 
             # Collect unique assets for UI display
-            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
+            all_symbols = {
+                item.symbol
+                for data_list in [positions_data, transactions_data, dividends_data]
+                for item in data_list
+                if item.symbol
+            }
 
             source.import_stats = {
                 "fx_cash": fx_cash_stats,

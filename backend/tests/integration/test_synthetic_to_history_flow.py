@@ -16,6 +16,7 @@ import pytest
 
 from app.models import Account, Asset, BrokerDataSource, Holding, Portfolio, Transaction, User
 from app.services.auth.auth_service import AuthService
+from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.snapshot_validation_service import validate_against_snapshot
 from app.services.brokers.ibkr.synthetic_import_service import (
     IBKRSyntheticImportService,
@@ -77,32 +78,38 @@ def test_account(db, test_portfolio):
 def mock_positions_data():
     """IBKR positions data as returned by IBKRParser.extract_positions."""
     return [
-        {
-            "symbol": "AAPL",
-            "original_symbol": "AAPL",
-            "description": "Apple Inc.",
-            "asset_class": "Equity",
-            "currency": "USD",
-            "quantity": Decimal("100"),
-            "cost_basis": Decimal("15000"),
-            "cusip": "037833100",
-            "isin": "US0378331005",
-            "conid": "265598",
-            "figi": None,
-        },
-        {
-            "symbol": "MSFT",
-            "original_symbol": "MSFT",
-            "description": "Microsoft Corp",
-            "asset_class": "Equity",
-            "currency": "USD",
-            "quantity": Decimal("50"),
-            "cost_basis": Decimal("20000"),
-            "cusip": "594918104",
-            "isin": "US5949181045",
-            "conid": "272093",
-            "figi": None,
-        },
+        IBKRPosition(
+            symbol="AAPL",
+            original_symbol="AAPL",
+            description="Apple Inc.",
+            asset_category="STK",
+            asset_class="Equity",
+            listing_exchange="NASDAQ",
+            quantity=Decimal("100"),
+            cost_basis=Decimal("15000"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+            cusip="037833100",
+            isin="US0378331005",
+            conid="265598",
+        ),
+        IBKRPosition(
+            symbol="MSFT",
+            original_symbol="MSFT",
+            description="Microsoft Corp",
+            asset_category="STK",
+            asset_class="Equity",
+            listing_exchange="NASDAQ",
+            quantity=Decimal("50"),
+            cost_basis=Decimal("20000"),
+            currency="USD",
+            account_id="U12345",
+            needs_validation=False,
+            cusip="594918104",
+            isin="US5949181045",
+            conid="272093",
+        ),
     ]
 
 
@@ -110,13 +117,14 @@ def mock_positions_data():
 def mock_cash_data():
     """IBKR cash balances as returned by IBKRParser.extract_cash_balances."""
     return [
-        {
-            "symbol": "USD",
-            "currency": "USD",
-            "balance": Decimal("5000.00"),
-            "description": "United States Dollar",
-            "asset_class": "Cash",
-        },
+        IBKRCashBalance(
+            symbol="USD",
+            currency="USD",
+            balance=Decimal("5000.00"),
+            description="United States Dollar",
+            asset_class="Cash",
+            account_id="U12345",
+        ),
     ]
 
 

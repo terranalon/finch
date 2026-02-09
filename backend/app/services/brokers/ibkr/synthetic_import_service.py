@@ -14,6 +14,7 @@ from app.models import Account, BrokerDataSource, Holding, Transaction
 from app.models.daily_cash_balance import DailyCashBalance
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
+from app.services.brokers.ibkr.models import IBKRPosition
 from app.services.brokers.ibkr.parser import IBKRParser
 from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 
@@ -36,12 +37,11 @@ def _build_initial_stats(account_id: int) -> dict:
 
 def _fail_stats(stats: dict, error: str) -> dict:
     """Mark stats as failed with the given error message and return them."""
-    return {
-        **stats,
-        "status": "failed",
-        "errors": [*stats["errors"], error],
-        "end_time": datetime.now().isoformat(),
-    }
+    stats_copy = stats.copy()
+    stats_copy["status"] = "failed"
+    stats_copy["errors"] = [*stats["errors"], error]
+    stats_copy["end_time"] = datetime.now().isoformat()
+    return stats_copy
 
 
 def _find_or_create_holding(db: Session, account_id: int, asset_id: int) -> Holding:
@@ -69,17 +69,17 @@ def _find_or_create_holding(db: Session, account_id: int, asset_id: int) -> Hold
     return holding
 
 
-def _build_snapshot_positions(positions_data: list[dict]) -> list[dict]:
+def _build_snapshot_positions(positions_data: list[IBKRPosition]) -> list[dict]:
     """Extract non-zero positions into the serializable snapshot format."""
     return [
         {
-            "symbol": p["symbol"],
-            "quantity": str(p["quantity"]),
-            "cost_basis": str(p["cost_basis"]),
-            "currency": p.get("currency", "USD"),
+            "symbol": p.symbol,
+            "quantity": str(p.quantity),
+            "cost_basis": str(p.cost_basis),
+            "currency": p.currency,
         }
         for p in positions_data
-        if p["quantity"] != 0
+        if p.quantity != 0
     ]
 
 
@@ -204,23 +204,23 @@ class IBKRSyntheticImportService:
             stats["cash_balances"] = cash_stats
 
             for position in positions_data:
-                quantity = position["quantity"]
-                cost_basis = position["cost_basis"]
+                quantity = position.quantity
+                cost_basis = position.cost_basis
 
                 if quantity == 0:
                     continue
 
                 asset, created = IBKRImportService._find_or_create_asset(
                     db,
-                    symbol=position["symbol"],
-                    name=position["description"],
-                    asset_class=position["asset_class"],
-                    currency=position.get("currency", "USD"),
-                    ibkr_symbol=position["original_symbol"],
-                    cusip=position.get("cusip"),
-                    isin=position.get("isin"),
-                    conid=position.get("conid"),
-                    figi=position.get("figi"),
+                    symbol=position.symbol,
+                    name=position.description,
+                    asset_class=position.asset_class,
+                    currency=position.currency,
+                    ibkr_symbol=position.original_symbol,
+                    cusip=position.cusip,
+                    isin=position.isin,
+                    conid=position.conid,
+                    figi=position.figi,
                 )
                 if created:
                     stats["assets_created"] += 1

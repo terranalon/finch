@@ -6,10 +6,7 @@ from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 from app.models import Account
-from app.services.brokers.base_import_service import (
-    extract_date_range_serializable,
-    extract_unique_symbols,
-)
+from app.services.brokers.base_import_service import extract_date_range_serializable
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
 from app.services.brokers.ibkr.parser import IBKRParser
@@ -154,7 +151,12 @@ class IBKRFlexImportService:
 
             # Step 10: Update asset prices
             logger.info("Updating asset prices...")
-            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
+            all_symbols = {
+                item.symbol
+                for data_list in [positions_data, transactions_data, dividends_data]
+                for item in data_list
+                if item.symbol
+            }
 
             price_stats = IBKRImportService._update_asset_prices(db, list(all_symbols))
             stats["price_updates"] = price_stats
@@ -165,10 +167,10 @@ class IBKRFlexImportService:
 
             # Calculate date range from imported data for snapshot generation
             all_dates = (
-                [txn.get("date") for txn in transactions_data]
-                + [div.get("date") for div in dividends_data]
-                + [transfer.get("date") for transfer in transfers_data]
-                + [fx.get("date") for fx in forex_data]
+                [txn.trade_date for txn in transactions_data]
+                + [div.date for div in dividends_data]
+                + [transfer.date for transfer in transfers_data]
+                + [fx.date for fx in forex_data]
             )
             date_range = extract_date_range_serializable(all_dates)
             if date_range:
@@ -353,7 +355,12 @@ class IBKRFlexImportService:
 
             # Step 11: Update asset prices
             logger.info("Updating asset prices...")
-            all_symbols = extract_unique_symbols(positions_data, transactions_data, dividends_data)
+            all_symbols = {
+                item.symbol
+                for data_list in [positions_data, transactions_data, dividends_data]
+                for item in data_list
+                if item.symbol
+            }
 
             price_stats = IBKRImportService._update_asset_prices(db, list(all_symbols))
             stats["price_updates"] = price_stats

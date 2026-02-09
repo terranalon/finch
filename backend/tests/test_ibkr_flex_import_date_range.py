@@ -1,7 +1,16 @@
 """Tests for IBKRFlexImportService date_range in stats."""
 
 from datetime import date
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
+
+from app.services.brokers.ibkr.models import (
+    IBKRDividend,
+    IBKRForexTransaction,
+    IBKRPosition,
+    IBKRTransaction,
+    IBKRTransfer,
+)
 
 
 class TestImportAllReturnsDateRange:
@@ -40,11 +49,30 @@ class TestImportAllReturnsDateRange:
 
         # Transactions with known dates
         mock_parser.extract_transactions.return_value = [
-            {"symbol": "AAPL", "date": date(2024, 2, 1), "type": "Buy"},
-            {"symbol": "MSFT", "date": date(2024, 4, 15), "type": "Buy"},
+            IBKRTransaction(
+                symbol="AAPL", original_symbol="AAPL", description="APPLE INC",
+                asset_category="STK", asset_class="Stock", listing_exchange="NASDAQ",
+                trade_date=date(2024, 2, 1), transaction_type="Buy",
+                quantity=Decimal("100"), price=Decimal("150"), commission=Decimal("1"),
+                net_cash=Decimal("-15001"), currency="USD", account_id="U12345",
+                needs_validation=False,
+            ),
+            IBKRTransaction(
+                symbol="MSFT", original_symbol="MSFT", description="MICROSOFT CORP",
+                asset_category="STK", asset_class="Stock", listing_exchange="NASDAQ",
+                trade_date=date(2024, 4, 15), transaction_type="Buy",
+                quantity=Decimal("50"), price=Decimal("400"), commission=Decimal("1"),
+                net_cash=Decimal("-20001"), currency="USD", account_id="U12345",
+                needs_validation=False,
+            ),
         ]
         mock_parser.extract_dividends.return_value = [
-            {"symbol": "AAPL", "date": date(2024, 3, 10)},
+            IBKRDividend(
+                symbol="AAPL", original_symbol="AAPL", description="APPLE INC",
+                asset_category="STK", asset_class="Stock",
+                date=date(2024, 3, 10), amount=Decimal("25"), currency="USD",
+                account_id="U12345", needs_validation=False,
+            ),
         ]
         mock_parser.extract_transfers.return_value = []
         mock_parser.extract_forex_transactions.return_value = []
@@ -99,16 +127,36 @@ class TestImportAllReturnsDateRange:
 
         # Different data types with varying dates
         mock_parser.extract_transactions.return_value = [
-            {"symbol": "AAPL", "date": date(2024, 3, 1)},
+            IBKRTransaction(
+                symbol="AAPL", original_symbol="AAPL", description="APPLE INC",
+                asset_category="STK", asset_class="Stock", listing_exchange="NASDAQ",
+                trade_date=date(2024, 3, 1), transaction_type="Buy",
+                quantity=Decimal("100"), price=Decimal("150"), commission=Decimal("1"),
+                net_cash=Decimal("-15001"), currency="USD", account_id="U12345",
+                needs_validation=False,
+            ),
         ]
         mock_parser.extract_dividends.return_value = [
-            {"symbol": "AAPL", "date": date(2024, 1, 15)},  # Earliest
+            IBKRDividend(
+                symbol="AAPL", original_symbol="AAPL", description="APPLE INC",
+                asset_category="STK", asset_class="Stock",
+                date=date(2024, 1, 15), amount=Decimal("25"), currency="USD",
+                account_id="U12345", needs_validation=False,
+            ),
         ]
         mock_parser.extract_transfers.return_value = [
-            {"date": date(2024, 5, 20)},  # Latest
+            IBKRTransfer(
+                date=date(2024, 5, 20), type="Deposit", amount=Decimal("5000"),
+                currency="USD", description="Wire", account_id="U12345",
+            ),
         ]
         mock_parser.extract_forex_transactions.return_value = [
-            {"date": date(2024, 2, 10)},
+            IBKRForexTransaction(
+                date=date(2024, 2, 10), from_currency="ILS", to_currency="USD",
+                from_amount=Decimal("1000"), to_amount=Decimal("270"),
+                realized_pl=Decimal("0"), description="CASH: convert",
+                account_id="U12345",
+            ),
         ]
 
         mock_import_service._import_cash_balances.return_value = {}
@@ -154,7 +202,14 @@ class TestImportAllReturnsDateRange:
         mock_parser.get_all_section_types.return_value = []
         mock_parser.get_cash_transaction_types.return_value = []
         mock_parser.analyze_fx_transactions.return_value = []
-        mock_parser.extract_positions.return_value = [{"symbol": "AAPL"}]  # No date
+        mock_parser.extract_positions.return_value = [
+            IBKRPosition(
+                symbol="AAPL", original_symbol="AAPL", description="APPLE INC",
+                asset_category="STK", asset_class="Stock", listing_exchange="NASDAQ",
+                quantity=Decimal("100"), cost_basis=Decimal("15000"), currency="USD",
+                account_id="U12345", needs_validation=False,
+            ),
+        ]
         mock_parser.extract_cash_balances.return_value = []
         mock_parser.extract_transactions.return_value = []
         mock_parser.extract_dividends.return_value = []
