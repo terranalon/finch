@@ -1006,7 +1006,11 @@ class IBKRParser:
 
     @staticmethod
     def extract_cash_balances(root: ET.Element) -> list[IBKRCashBalance]:
-        """Extract cash balances by currency from FlexQueryResponse."""
+        """Extract cash balances by currency from FlexQueryResponse.
+
+        Tries CashReport first; falls back to FxPositions if no CashReport
+        section is present (depends on the Flex Query configuration).
+        """
         balances = []
 
         try:
@@ -1035,6 +1039,32 @@ class IBKRParser:
                     except Exception as e:
                         logger.error(f"Error parsing cash balance: {str(e)}")
                         continue
+
+            # Fall back to FxPositions when CashReport is not in the query
+            if not balances:
+                account_id = ""
+                for stmt in root.findall(".//FlexStatement"):
+                    account_id = stmt.get("accountId", "")
+                    break
+
+                fx_positions = IBKRParser.extract_fx_positions(root)
+                for currency, quantity in fx_positions.items():
+                    if quantity != 0:
+                        balances.append(
+                            IBKRCashBalance(
+                                symbol=currency,
+                                currency=currency,
+                                balance=quantity,
+                                description=CURRENCY_NAMES.get(currency, currency),
+                                asset_class="Cash",
+                                account_id=account_id,
+                            )
+                        )
+                if balances:
+                    logger.info(
+                        f"No CashReport section found, used FxPositions fallback "
+                        f"({len(balances)} cash balances)"
+                    )
 
             logger.info(f"Extracted {len(balances)} cash balances")
             return balances
