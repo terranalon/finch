@@ -15,8 +15,6 @@ describe('ManualDataStep', () => {
     expect(screen.getByText('date')).toBeInTheDocument();
     expect(screen.getByText('type')).toBeInTheDocument();
     expect(screen.getByText('symbol')).toBeInTheDocument();
-    expect(screen.getByText('quantity')).toBeInTheDocument();
-    expect(screen.getByText('price')).toBeInTheDocument();
     expect(screen.getByText('currency')).toBeInTheDocument();
   });
 
@@ -29,6 +27,9 @@ describe('ManualDataStep', () => {
       />
     );
 
+    expect(screen.getByText('quantity')).toBeInTheDocument();
+    expect(screen.getByText('price')).toBeInTheDocument();
+    expect(screen.getByText('amount')).toBeInTheDocument();
     expect(screen.getByText('fees')).toBeInTheDocument();
     expect(screen.getByText('notes')).toBeInTheDocument();
   });
@@ -44,6 +45,21 @@ describe('ManualDataStep', () => {
 
     expect(screen.getByText('Download CSV Template')).toBeInTheDocument();
     expect(screen.getByText('Download Excel Template')).toBeInTheDocument();
+  });
+
+  it('has download links pointing to template files', () => {
+    render(
+      <ManualDataStep
+        onComplete={() => {}}
+        onSkip={() => {}}
+        onBack={() => {}}
+      />
+    );
+
+    const csvLink = screen.getByText('Download CSV Template').closest('a');
+    const xlsxLink = screen.getByText('Download Excel Template').closest('a');
+    expect(csvLink).toHaveAttribute('href', '/templates/manual_import_example.csv');
+    expect(xlsxLink).toHaveAttribute('href', '/templates/manual_import_example.xlsx');
   });
 
   it('has accessible file drop zone', () => {
