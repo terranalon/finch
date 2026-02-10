@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.constants import AssetClass
+from app.models import Asset
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.portfolio.types import HoldingValue
 from app.services.shared.currency_service import CurrencyService
@@ -120,6 +121,14 @@ class HoldingValuationService:
         # Current valuation -- use the last fetched price
         if last_fetched_price is not None and last_fetched_price > 0:
             return last_fetched_price
+
+        # Fallback: look up from the asset record in the database.
+        # This handles callers (e.g. portfolio reconstruction) that don't
+        # include last_fetched_price in their holding dicts.
+        asset = self._db.get(Asset, asset_id)
+        if asset and asset.last_fetched_price is not None and asset.last_fetched_price > 0:
+            return asset.last_fetched_price
+
         return None
 
     def _to_usd(
