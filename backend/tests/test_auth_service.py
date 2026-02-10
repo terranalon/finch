@@ -55,9 +55,7 @@ def test_decode_expired_token():
     """Test that expired tokens fail."""
     user_id = "user-123"
     # Create token that expired 1 hour ago
-    token = AuthService.create_access_token(
-        user_id, expires_delta=timedelta(hours=-1)
-    )
+    token = AuthService.create_access_token(user_id, expires_delta=timedelta(hours=-1))
     decoded = AuthService.decode_access_token(token)
 
     assert decoded is None

@@ -28,6 +28,7 @@ def test_create_user_with_password(db_session: Session):
     """Test creating a user with email and password."""
     user = User(
         email="test@example.com",
+        username="test_user_model",
         password_hash="hashed_password_here",
     )
     db_session.add(user)
@@ -45,6 +46,7 @@ def test_create_user_with_google(db_session: Session):
     """Test creating a user with Google OAuth."""
     user = User(
         email="google@example.com",
+        username="google_oauth",
         google_id="google_123456",
     )
     db_session.add(user)
@@ -59,11 +61,11 @@ def test_create_user_with_google(db_session: Session):
 
 def test_user_email_unique(db_session: Session):
     """Test that user emails are unique."""
-    user1 = User(email="same@example.com", password_hash="hash1")
+    user1 = User(email="same@example.com", username="same_user_1", password_hash="hash1")
     db_session.add(user1)
     db_session.commit()
 
-    user2 = User(email="same@example.com", password_hash="hash2")
+    user2 = User(email="same@example.com", username="same_user_2", password_hash="hash2")
     db_session.add(user2)
 
     with pytest.raises(Exception):  # IntegrityError

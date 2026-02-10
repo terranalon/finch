@@ -67,6 +67,7 @@ def account_with_transactions(db_session):
     # Create user
     user = User(
         email="test_recon_stream@example.com",
+        username="test_recon",
         password_hash=AuthService.hash_password("test123"),
         email_verified=True,
     )

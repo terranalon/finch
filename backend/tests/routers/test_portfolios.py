@@ -53,6 +53,7 @@ def test_user(db_session):
     """Create a test user."""
     user = User(
         email="test_portfolios_router@example.com",
+        username="test_port_router",
         password_hash=AuthService.hash_password("test123"),
         email_verified=True,
     )
@@ -85,7 +86,7 @@ def auth_headers(client, test_user):
     """Get authentication headers for test user."""
     response = client.post(
         "/api/auth/login",
-        json={"email": "test_portfolios_router@example.com", "password": "test123"},
+        json={"identifier": "test_portfolios_router@example.com", "password": "test123"},
     )
     tokens = response.json()
     return {"Authorization": f"Bearer {tokens['access_token']}"}

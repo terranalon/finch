@@ -13,13 +13,18 @@ from app.services.auth import MfaService
 
 
 def _create_verified_user(
-    test_client, db_session_maker, email: str, password: str, is_admin: bool = False
+    test_client,
+    db_session_maker,
+    email: str,
+    password: str,
+    is_admin: bool = False,
+    username: str = "admin_user",
 ) -> tuple[str, str]:
     """Create and verify a user, returning (user_id, access_token)."""
     with patch("app.routers.auth.EmailService.send_verification_email"):
         test_client.post(
             "/api/auth/register",
-            json={"email": email, "password": password},
+            json={"email": email, "username": username, "password": password},
         )
 
     db = db_session_maker()
@@ -33,7 +38,7 @@ def _create_verified_user(
 
     response = test_client.post(
         "/api/auth/login",
-        json={"email": email, "password": password},
+        json={"identifier": email, "password": password},
     )
     access_token = response.json()["access_token"]
 
@@ -70,7 +75,11 @@ class TestAdminDisableMfa:
             test_client, db_session_maker, "admin@example.com", "AdminPass123", is_admin=True
         )
         target_user_id, _ = _create_verified_user(
-            test_client, db_session_maker, "target@example.com", "TargetPass123"
+            test_client,
+            db_session_maker,
+            "target@example.com",
+            "TargetPass123",
+            username="target_user",
         )
         _enable_mfa_for_user(db_session_maker, target_user_id)
 
@@ -146,7 +155,11 @@ class TestAdminDisableMfa:
             test_client, db_session_maker, "admin@example.com", "AdminPass123", is_admin=True
         )
         target_user_id, _ = _create_verified_user(
-            test_client, db_session_maker, "target@example.com", "TargetPass123"
+            test_client,
+            db_session_maker,
+            "target@example.com",
+            "TargetPass123",
+            username="target_user",
         )
         _enable_mfa_for_user(db_session_maker, target_user_id)
 
@@ -169,7 +182,11 @@ class TestAdminDisableMfa:
             test_client, db_session_maker, "admin@example.com", "AdminPass123", is_admin=True
         )
         target_user_id, _ = _create_verified_user(
-            test_client, db_session_maker, "target@example.com", "TargetPass123"
+            test_client,
+            db_session_maker,
+            "target@example.com",
+            "TargetPass123",
+            username="target_user",
         )
         _enable_mfa_for_user(db_session_maker, target_user_id)
 

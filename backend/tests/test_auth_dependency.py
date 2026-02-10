@@ -45,7 +45,7 @@ def test_app():
 
     # Create test user
     db = TestingSessionLocal()
-    user = User(email="test@example.com", password_hash="hash")
+    user = User(email="test@example.com", username="test_auth_dep", password_hash="hash")
     db.add(user)
     db.commit()
     user_id = user.id

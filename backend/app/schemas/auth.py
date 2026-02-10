@@ -20,11 +20,26 @@ def _validate_password_strength(v: str) -> str:
     return v
 
 
+def _validate_username(v: str) -> str:
+    """Validate username: 3-30 chars, alphanumeric + underscores, stored lowercase."""
+    if not re.fullmatch(r"[A-Za-z0-9_]{3,30}", v):
+        raise ValueError(
+            "Username must be 3-30 characters and contain only letters, numbers, and underscores"
+        )
+    return v.lower()
+
+
 class UserRegister(BaseModel):
     """Schema for user registration."""
 
     email: EmailStr
+    username: str = Field(min_length=3, max_length=30)
     password: str = Field(min_length=8, max_length=100)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        return _validate_username(v)
 
     @field_validator("password")
     @classmethod
@@ -35,7 +50,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     """Schema for user login."""
 
-    email: str  # Allow any string for login (supports migrated accounts with .local domains)
+    identifier: str  # Email or username
     password: str
 
 
@@ -44,7 +59,7 @@ class UserInfo(BaseModel):
 
     id: str
     email: str
-    name: str | None = None
+    username: str | None = None
     show_combined_view: bool = True
 
     model_config = {"from_attributes": True}
@@ -75,7 +90,14 @@ class UserPreferencesUpdate(BaseModel):
     """Schema for updating user preferences."""
 
     show_combined_view: bool | None = None
-    name: str | None = Field(None, max_length=100)
+    username: str | None = Field(None, min_length=3, max_length=30)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        if v is not None:
+            return _validate_username(v)
+        return v
 
 
 class VerifyEmailRequest(BaseModel):

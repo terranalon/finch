@@ -53,6 +53,7 @@ def test_user(db_session):
     """Create a test user."""
     user = User(
         email="test_accounts_router@example.com",
+        username="test_acct_router",
         password_hash=AuthService.hash_password("test123"),
         email_verified=True,
     )
@@ -85,7 +86,7 @@ def auth_headers(client, test_user):
     """Get authentication headers for test user."""
     response = client.post(
         "/api/auth/login",
-        json={"email": "test_accounts_router@example.com", "password": "test123"},
+        json={"identifier": "test_accounts_router@example.com", "password": "test123"},
     )
     tokens = response.json()
     return {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -315,6 +316,7 @@ def test_different_users_can_have_same_account_name(client, db_session, test_use
     # Create second user
     other_user = User(
         email="test_accounts_other@example.com",
+        username="test_acct_other",
         password_hash=AuthService.hash_password("test123"),
         email_verified=True,
     )

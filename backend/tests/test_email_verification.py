@@ -18,7 +18,7 @@ class TestRegistrationEmailVerification:
 
         response = test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
         assert response.status_code == 201
         mock_send.assert_called_once()
@@ -33,7 +33,7 @@ class TestRegistrationEmailVerification:
 
         response = test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
         data = response.json()
         assert "access_token" not in data
@@ -47,7 +47,7 @@ class TestRegistrationEmailVerification:
 
         response = test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
         assert response.status_code == 201
 
@@ -71,13 +71,17 @@ class TestLoginEmailVerification:
         # Register (creates unverified user)
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "unverified@example.com", "password": "Secure123"},
+            json={
+                "email": "unverified@example.com",
+                "username": "verify_unverified",
+                "password": "Secure123",
+            },
         )
 
         # Try to login
         response = test_auth_client.post(
             "/api/auth/login",
-            json={"email": "unverified@example.com", "password": "Secure123"},
+            json={"identifier": "unverified@example.com", "password": "Secure123"},
         )
         assert response.status_code == 403
         assert response.json()["detail"] == "email_not_verified"
@@ -91,7 +95,11 @@ class TestLoginEmailVerification:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "verified@example.com", "password": "Secure123"},
+            json={
+                "email": "verified@example.com",
+                "username": "verify_verified",
+                "password": "Secure123",
+            },
         )
 
         # Manually verify user
@@ -104,7 +112,7 @@ class TestLoginEmailVerification:
         # Login should now work
         response = test_auth_client.post(
             "/api/auth/login",
-            json={"email": "verified@example.com", "password": "Secure123"},
+            json={"identifier": "verified@example.com", "password": "Secure123"},
         )
         assert response.status_code == 200
         assert "access_token" in response.json()
@@ -124,7 +132,7 @@ class TestVerifyEmail:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
 
         # Get the verification token from the mock call
@@ -166,7 +174,7 @@ class TestVerifyEmail:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
 
         # Manually expire the token
@@ -197,7 +205,7 @@ class TestVerifyEmail:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
 
         # Get the token
@@ -242,7 +250,7 @@ class TestServiceAccountLogin:
         # Login should succeed despite email_verified=False
         response = test_auth_client.post(
             "/api/auth/login",
-            json={"email": "test-service@system.internal", "password": "ServicePass123"},
+            json={"identifier": "test-service@system.internal", "password": "ServicePass123"},
         )
         assert response.status_code == 200
         assert "access_token" in response.json()
@@ -260,7 +268,7 @@ class TestResendVerification:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
 
         # Verify original token exists
@@ -302,7 +310,7 @@ class TestResendVerification:
         # Register
         test_auth_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Secure123"},
+            json={"email": "test@example.com", "username": "verify_user", "password": "Secure123"},
         )
 
         # Manually verify user

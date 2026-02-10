@@ -63,6 +63,7 @@ def test_user(db):
     user = User(
         id="user-123",
         email="test@example.com",
+        username="test_acct_repo",
         password_hash="hashed",
         email_verified=True,
     )

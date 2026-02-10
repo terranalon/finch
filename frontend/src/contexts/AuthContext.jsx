@@ -38,8 +38,8 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const data = await apiLogin(email, password);
+  const login = useCallback(async (identifier, password) => {
+    const data = await apiLogin(identifier, password);
     // Only set user if we got full tokens (not MFA required)
     if (data.user && !data.mfa_required) {
       setUser(data.user);
@@ -47,11 +47,8 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
-  const register = useCallback(async (email, password) => {
-    // Registration now requires email verification
-    // So we don't get tokens back - just a success message
-    const data = await apiRegister(email, password);
-    return data;
+  const register = useCallback(async (email, password, username) => {
+    return apiRegister(email, password, username);
   }, []);
 
   const setUserFromMfa = useCallback((userData) => {

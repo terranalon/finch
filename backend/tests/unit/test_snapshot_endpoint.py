@@ -81,7 +81,11 @@ def client_with_user(test_db):
 
     # Create test user and portfolio
     db = testing_session_local()
-    user = User(email="test@example.com", password_hash=AuthService.hash_password("test123"))
+    user = User(
+        email="test@example.com",
+        username="test_snapshot",
+        password_hash=AuthService.hash_password("test123"),
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -232,9 +236,7 @@ class TestSnapshotEndpoint:
             patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service,
             patch("app.routers.brokers._update_last_import") as mock_update,
         ):
-            mock_service.import_snapshot.return_value = _make_completed_stats(
-                positions_imported=1
-            )
+            mock_service.import_snapshot.return_value = _make_completed_stats(positions_imported=1)
 
             client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -245,9 +247,7 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
 
         with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = _make_completed_stats(
-                positions_imported=5
-            )
+            mock_service.import_snapshot.return_value = _make_completed_stats(positions_imported=5)
 
             response = client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -268,6 +268,7 @@ class TestSnapshotEndpointWithoutCredentials:
         db = testing_session_local()
         user = User(
             email="nocreds@example.com",
+            username="test_nocreds",
             password_hash=AuthService.hash_password("test123"),
         )
         db.add(user)

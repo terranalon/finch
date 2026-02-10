@@ -24,6 +24,10 @@ class UserRepository:
         """Find user by email (case-insensitive)."""
         return self._db.query(User).filter(User.email.ilike(email)).first()
 
+    def find_by_username(self, username: str) -> User | None:
+        """Find user by username (case-insensitive)."""
+        return self._db.query(User).filter(User.username.ilike(username)).first()
+
     def find_active_by_id(self, user_id: str) -> User | None:
         """Find active user by ID."""
         return self._db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()

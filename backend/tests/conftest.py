@@ -24,13 +24,17 @@ from app.rate_limiter import limiter
 
 
 def register_and_verify_user(
-    test_client: TestClient, db_session_maker, email: str, password: str
+    test_client: TestClient,
+    db_session_maker,
+    email: str,
+    password: str,
+    username: str = "testuser",
 ) -> dict:
     """Helper to register and verify a user, then login to get tokens."""
     with patch("app.routers.auth.EmailService.send_verification_email"):
         test_client.post(
             "/api/auth/register",
-            json={"email": email, "password": password},
+            json={"email": email, "username": username, "password": password},
         )
 
     db = db_session_maker()
@@ -41,7 +45,7 @@ def register_and_verify_user(
 
     response = test_client.post(
         "/api/auth/login",
-        json={"email": email, "password": password},
+        json={"identifier": email, "password": password},
     )
     return response.json()
 

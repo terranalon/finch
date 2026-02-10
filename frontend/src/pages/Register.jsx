@@ -12,6 +12,7 @@ import { register } from '../lib/api';
 
 export default function Register() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -37,7 +38,7 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await register(email, password);
+      await register(email, password, username);
       // Redirect to verification pending page with email
       navigate('/verification-pending', { state: { email } });
     } catch (err) {
@@ -96,6 +97,29 @@ export default function Register() {
                 className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
                 placeholder="you@example.com"
               />
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-[var(--text-primary)]">
+                Username
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                minLength={3}
+                maxLength={30}
+                pattern="[A-Za-z0-9_]+"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
+                placeholder="your_username"
+              />
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                3-30 characters: letters, numbers, and underscores
+              </p>
             </div>
 
             <div>

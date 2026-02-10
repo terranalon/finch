@@ -51,6 +51,7 @@ def test_user(db_session):
     """Create a test user with portfolios."""
     user = User(
         email="test_user_scope@example.com",
+        username="test_scope",
         password_hash=AuthService.hash_password("test123"),
         email_verified=True,
     )

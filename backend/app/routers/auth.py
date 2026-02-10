@@ -81,9 +81,18 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
             detail="Email already registered",
         )
 
+    # Check if username already taken (case-insensitive)
+    existing_username = db.query(User).filter(User.username.ilike(data.username)).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken",
+        )
+
     # Create user with email_verified=False
     user = User(
         email=data.email,
+        username=data.username,
         password_hash=AuthService.hash_password(data.password),
         email_verified=False,
     )
@@ -138,7 +147,7 @@ def _check_account_lockout(user: User, db: Session, ip_address: str | None, user
             # Return same error as invalid credentials to prevent email enumeration
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
+                detail="Invalid credentials",
             )
 
 
@@ -182,22 +191,26 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
     """Login and get access/refresh tokens."""
     ip_address, user_agent = SecurityAuditService.get_request_info(request)
 
-    # Find user
-    user = db.query(User).filter(User.email == data.email).first()
+    # Find user by email or username
+    if "@" in data.identifier:
+        user = db.query(User).filter(User.email.ilike(data.identifier)).first()
+    else:
+        user = db.query(User).filter(User.username.ilike(data.identifier)).first()
+
     if not user or not user.password_hash:
-        # Perform dummy password verification to prevent timing-based email enumeration
+        # Perform dummy password verification to prevent timing-based enumeration
         AuthService.verify_password(data.password, AuthService.get_dummy_hash())
         SecurityAuditService.log_event(
             db,
             SecurityEventType.LOGIN_FAILED,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={"email": data.email, "reason": "user_not_found"},
+            details={"identifier": data.identifier, "reason": "user_not_found"},
         )
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Invalid credentials",
         )
 
     # Check if account is locked
@@ -208,7 +221,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> d
         _record_failed_login(user, db, ip_address, user_agent, "invalid_password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Invalid credentials",
         )
 
     # Password correct - clear any failed login attempts
@@ -561,6 +574,22 @@ def update_me(
 ) -> User:
     """Update the current user's preferences."""
     update_data = preferences.model_dump(exclude_unset=True)
+
+    # Check username uniqueness if being updated
+    if "username" in update_data and update_data["username"] != current_user.username:
+        existing = (
+            db.query(User)
+            .filter(
+                User.username.ilike(update_data["username"]),
+                User.id != current_user.id,
+            )
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken",
+            )
 
     for field, value in update_data.items():
         setattr(current_user, field, value)

@@ -19,7 +19,11 @@ class TestAccountLockout:
         # Register and verify user
         test_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={
+                "email": "test@example.com",
+                "username": "lockout_user",
+                "password": "Password123",
+            },
         )
 
         db = db_session_maker()
@@ -32,7 +36,7 @@ class TestAccountLockout:
         for i in range(5):
             response = test_client.post(
                 "/api/auth/login",
-                json={"email": "test@example.com", "password": "WrongPassword"},
+                json={"identifier": "test@example.com", "password": "WrongPassword"},
             )
             assert response.status_code == 401
 
@@ -43,10 +47,10 @@ class TestAccountLockout:
         # Returns 401 (same as invalid credentials) to prevent email enumeration
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "WrongPassword"},
+            json={"identifier": "test@example.com", "password": "WrongPassword"},
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid email or password"
+        assert response.json()["detail"] == "Invalid credentials"
 
     @patch("app.routers.auth.EmailService.send_verification_email")
     def test_correct_password_blocked_when_locked(self, mock_send, auth_client):
@@ -57,7 +61,11 @@ class TestAccountLockout:
         # Register and verify user
         test_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={
+                "email": "test@example.com",
+                "username": "lockout_user",
+                "password": "Password123",
+            },
         )
 
         db = db_session_maker()
@@ -70,7 +78,7 @@ class TestAccountLockout:
         for _ in range(5):
             test_client.post(
                 "/api/auth/login",
-                json={"email": "test@example.com", "password": "WrongPassword"},
+                json={"identifier": "test@example.com", "password": "WrongPassword"},
             )
 
         # Reset rate limiter so we can test lockout specifically
@@ -80,7 +88,7 @@ class TestAccountLockout:
         # Returns 401 (same as invalid credentials) to prevent email enumeration
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         assert response.status_code == 401
 
@@ -93,7 +101,11 @@ class TestAccountLockout:
         # Register and verify user
         test_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={
+                "email": "test@example.com",
+                "username": "lockout_user",
+                "password": "Password123",
+            },
         )
 
         db = db_session_maker()
@@ -106,13 +118,13 @@ class TestAccountLockout:
         for _ in range(3):
             test_client.post(
                 "/api/auth/login",
-                json={"email": "test@example.com", "password": "WrongPassword"},
+                json={"identifier": "test@example.com", "password": "WrongPassword"},
             )
 
         # Successful login
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         assert response.status_code == 200
 
@@ -131,7 +143,11 @@ class TestAccountLockout:
         # Register and verify user
         test_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={
+                "email": "test@example.com",
+                "username": "lockout_user",
+                "password": "Password123",
+            },
         )
 
         db = db_session_maker()
@@ -146,7 +162,7 @@ class TestAccountLockout:
         # Login should work now (lockout expired)
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         assert response.status_code == 200
 
@@ -159,7 +175,11 @@ class TestAccountLockout:
         # Register and verify user
         test_client.post(
             "/api/auth/register",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={
+                "email": "test@example.com",
+                "username": "lockout_user",
+                "password": "Password123",
+            },
         )
 
         db = db_session_maker()
@@ -172,7 +192,7 @@ class TestAccountLockout:
         for _ in range(2):
             test_client.post(
                 "/api/auth/login",
-                json={"email": "test@example.com", "password": "WrongPassword"},
+                json={"identifier": "test@example.com", "password": "WrongPassword"},
             )
 
         # Verify counter
@@ -197,10 +217,10 @@ class TestTimingAttackPrevention:
 
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "nonexistent@example.com", "password": "AnyPassword123"},
+            json={"identifier": "nonexistent@example.com", "password": "AnyPassword123"},
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid email or password"
+        assert response.json()["detail"] == "Invalid credentials"
         mock_get_dummy.assert_called_once()
         mock_verify.assert_called_once_with("AnyPassword123", "dummy_hash")

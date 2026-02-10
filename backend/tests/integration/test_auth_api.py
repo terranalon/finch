@@ -11,7 +11,7 @@ class TestAuthAPI:
         """Login returns tokens with valid credentials."""
         response = client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "testpassword123"},
+            json={"identifier": "test@example.com", "password": "testpassword123"},
         )
         assert response.status_code == 200
 
@@ -25,7 +25,7 @@ class TestAuthAPI:
         """Login fails with invalid password."""
         response = client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "wrongpassword"},
+            json={"identifier": "test@example.com", "password": "wrongpassword"},
         )
         assert response.status_code == 401
 
@@ -33,7 +33,7 @@ class TestAuthAPI:
         """Login fails with nonexistent user."""
         response = client.post(
             "/api/auth/login",
-            json={"email": "nonexistent@example.com", "password": "password"},
+            json={"identifier": "nonexistent@example.com", "password": "password"},
         )
         assert response.status_code == 401
 
@@ -42,7 +42,7 @@ class TestAuthAPI:
         # Login
         login_response = client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "testpassword123"},
+            json={"identifier": "test@example.com", "password": "testpassword123"},
         )
         token = login_response.json()["access_token"]
 
@@ -58,7 +58,7 @@ class TestAuthAPI:
         # Login
         login_response = client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "testpassword123"},
+            json={"identifier": "test@example.com", "password": "testpassword123"},
         )
         refresh_token = login_response.json()["refresh_token"]
 
