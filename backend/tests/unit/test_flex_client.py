@@ -72,77 +72,80 @@ def _mock_response(content: str, status_code: int = 200) -> MagicMock:
     return resp
 
 
-def _get_status(xml: str) -> str | None:
-    """Call get_flex_query_status with fake credentials and the given XML."""
+def _poll_once(xml: str) -> tuple[str, bytes | None]:
+    """Call _poll_once with fake credentials and the given XML."""
     with patch(f"{PATCH_PREFIX}.requests.get") as mock_get:
         mock_get.return_value = _mock_response(xml)
-        return IBKRFlexClient.get_flex_query_status(FAKE_TOKEN, FAKE_REF)
+        return IBKRFlexClient._poll_once(FAKE_TOKEN, FAKE_REF)
 
 
-def _download(xml: str) -> bytes | None:
-    """Call download_flex_query with fake credentials and the given XML."""
-    with patch(f"{PATCH_PREFIX}.requests.get") as mock_get:
-        mock_get.return_value = _mock_response(xml)
-        return IBKRFlexClient.download_flex_query(FAKE_TOKEN, FAKE_REF)
-
-
-class TestGetFlexQueryStatus:
+class TestPollOnce:
     def test_rate_limit_returns_rate_limited(self):
-        assert _get_status(RATE_LIMIT_XML) == "rate_limited"
+        status, data = _poll_once(RATE_LIMIT_XML)
+        assert status == "rate_limited"
+        assert data is None
 
     def test_1019_in_flex_statement_response_returns_pending(self):
-        assert _get_status(PENDING_1019_FLEX_STMT_XML) == "pending"
+        status, data = _poll_once(PENDING_1019_FLEX_STMT_XML)
+        assert status == "pending"
+        assert data is None
 
     def test_1019_in_status_tag_returns_pending(self):
-        assert _get_status(PENDING_1019_STATUS_XML) == "pending"
+        status, data = _poll_once(PENDING_1019_STATUS_XML)
+        assert status == "pending"
+        assert data is None
 
-    def test_fatal_error_returns_none(self):
-        assert _get_status(FATAL_ERROR_XML) is None
+    def test_fatal_error_returns_error(self):
+        status, data = _poll_once(FATAL_ERROR_XML)
+        assert status == "error"
+        assert data is None
 
-    def test_flex_query_response_returns_success(self):
-        assert _get_status(FLEX_QUERY_RESPONSE_XML) == "success"
+    def test_status_error_returns_error(self):
+        status, data = _poll_once(STATUS_ERROR_XML)
+        assert status == "error"
+        assert data is None
 
+    def test_flex_query_response_returns_success_with_data(self):
+        status, data = _poll_once(FLEX_QUERY_RESPONSE_XML)
+        assert status == "success"
+        assert data is not None
+        assert b"FlexQueryResponse" in data
 
-class TestDownloadFlexQuery:
-    def test_returns_data_for_flex_query_response(self):
-        result = _download(FLEX_QUERY_RESPONSE_XML)
-        assert result is not None
-        assert b"FlexQueryResponse" in result
-
-    def test_rejects_rate_limit_error(self):
-        assert _download(RATE_LIMIT_XML) is None
-
-    def test_rejects_status_error(self):
-        assert _download(STATUS_ERROR_XML) is None
+    def test_makes_single_http_request(self):
+        with patch(f"{PATCH_PREFIX}.requests.get") as mock_get:
+            mock_get.return_value = _mock_response(FLEX_QUERY_RESPONSE_XML)
+            IBKRFlexClient._poll_once(FAKE_TOKEN, FAKE_REF)
+            assert mock_get.call_count == 1
 
 
 class TestFetchFlexReportRateLimit:
     @patch(f"{PATCH_PREFIX}.time.sleep")
-    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.download_flex_query")
-    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
     def test_retries_on_rate_limit_then_succeeds(
-        self, mock_request, mock_status, mock_download, mock_sleep
+        self, mock_request, mock_poll, mock_sleep
     ):
         mock_request.return_value = "ref123"
-        mock_status.side_effect = ["rate_limited", "success"]
-        mock_download.return_value = FLEX_QUERY_RESPONSE_XML.encode()
+        mock_poll.side_effect = [
+            ("rate_limited", None),
+            ("success", FLEX_QUERY_RESPONSE_XML.encode()),
+        ]
 
         result = IBKRFlexClient.fetch_flex_report("token", "query1")
 
         assert result is not None
         mock_sleep.assert_called_with(RATE_LIMIT_SLEEP_SECONDS)
-        assert mock_status.call_count == 2
+        assert mock_poll.call_count == 2
 
     @patch(f"{PATCH_PREFIX}.time.time")
     @patch(f"{PATCH_PREFIX}.time.sleep")
-    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
     def test_times_out_after_sustained_rate_limiting(
-        self, mock_request, mock_status, mock_sleep, mock_time
+        self, mock_request, mock_poll, mock_sleep, mock_time
     ):
         mock_request.return_value = "ref123"
-        mock_status.return_value = "rate_limited"
+        mock_poll.return_value = ("rate_limited", None)
         # Simulate time progressing past the 60s timeout
         mock_time.side_effect = [0, 0, 11, 22, 33, 44, 55, 66]
 
@@ -151,16 +154,19 @@ class TestFetchFlexReportRateLimit:
         assert result is None
 
     @patch(f"{PATCH_PREFIX}.time.sleep")
-    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.download_flex_query")
-    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.get_flex_query_status")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
     def test_rate_limit_backoff_independent_of_pending_backoff(
-        self, mock_request, mock_status, mock_download, mock_sleep
+        self, mock_request, mock_poll, mock_sleep
     ):
         mock_request.return_value = "ref123"
         # pending (2s) -> rate_limited (10s) -> pending (3s) -> success
-        mock_status.side_effect = ["pending", "rate_limited", "pending", "success"]
-        mock_download.return_value = FLEX_QUERY_RESPONSE_XML.encode()
+        mock_poll.side_effect = [
+            ("pending", None),
+            ("rate_limited", None),
+            ("pending", None),
+            ("success", FLEX_QUERY_RESPONSE_XML.encode()),
+        ]
 
         result = IBKRFlexClient.fetch_flex_report("token", "query1")
 
@@ -169,3 +175,19 @@ class TestFetchFlexReportRateLimit:
         assert sleep_calls[0] == 2  # pending: initial interval
         assert sleep_calls[1] == RATE_LIMIT_SLEEP_SECONDS  # rate_limited: flat backoff
         assert sleep_calls[2] == 3.0  # pending: backoff continued (2 * 1.5)
+
+    @patch(f"{PATCH_PREFIX}.time.sleep")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
+    @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
+    def test_no_separate_download_after_success(
+        self, mock_request, mock_poll, mock_sleep
+    ):
+        """Verify success returns data directly from poll without extra HTTP call."""
+        mock_request.return_value = "ref123"
+        expected_data = FLEX_QUERY_RESPONSE_XML.encode()
+        mock_poll.return_value = ("success", expected_data)
+
+        result = IBKRFlexClient.fetch_flex_report("token", "query1")
+
+        assert result is expected_data
+        assert mock_poll.call_count == 1
