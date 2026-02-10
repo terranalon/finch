@@ -883,6 +883,7 @@ export default function Accounts() {
         }}
         portfolioId={selectedPortfolioId}
         linkableAccounts={linkableAccounts}
+        existingAccountNames={accounts.map((a) => a.name)}
       />
 
       {/* Delete/Unlink Confirmation Dialog */}

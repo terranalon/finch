@@ -39,7 +39,7 @@ function formatDateForDisplay(dateStr, fallback = 'N/A') {
   }
 }
 
-export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts = [] }) {
+export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts = [], existingAccountNames = [] }) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [maxReachedStep, setMaxReachedStep] = useState(1);
@@ -476,6 +476,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
       <AccountDetailsStep
         broker={brokerConfig}
         category={category}
+        existingAccountNames={existingAccountNames}
         onSubmit={handleDetailsSubmit}
         onBack={() => goToStep(isManualFlow ? 1 : 2)}
       />

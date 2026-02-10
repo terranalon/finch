@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Account, Portfolio
@@ -75,6 +76,23 @@ class AccountRepository:
             .filter(Account.id.in_(account_ids), Account.is_active.is_(True))
             .all()
         )
+
+    def find_by_name_in_portfolio(
+        self,
+        name: str,
+        portfolio_id: str,
+        *,
+        exclude_account_id: int | None = None,
+    ) -> Account | None:
+        """Find an account with a given name in a portfolio (case-insensitive)."""
+        query = (
+            self._db.query(Account)
+            .join(Account.portfolios)
+            .filter(Portfolio.id == portfolio_id, func.lower(Account.name) == name.lower())
+        )
+        if exclude_account_id is not None:
+            query = query.filter(Account.id != exclude_account_id)
+        return query.first()
 
     def find_all_active_ids(self) -> list[int]:
         """Find all active account IDs (for service accounts)."""

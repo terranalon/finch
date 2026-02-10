@@ -12,8 +12,21 @@ from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
 from app.schemas.common import PaginatedResponse
+from app.services.repositories import AccountRepository
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+
+def raise_duplicate_account_name(account_name: str, portfolio_name: str) -> None:
+    """Raise HTTP 409 when an account name already exists in a portfolio."""
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"An account named '{account_name}' already exists in portfolio "
+            f"'{portfolio_name}'. Rename one of the accounts if you want both "
+            f"in the same portfolio."
+        ),
+    )
 
 
 @router.get("", response_model=PaginatedResponse[AccountSchema])
@@ -95,12 +108,18 @@ async def create_account(
             detail=f"Portfolio {next(iter(invalid_ids))} not found or doesn't belong to you",
         )
 
+    # Fetch target portfolios (reused for both duplicate check and linking)
+    portfolios = db.query(Portfolio).filter(Portfolio.id.in_(account.portfolio_ids)).all()
+
+    # Check for duplicate account name in each target portfolio
+    repo = AccountRepository(db)
+    for portfolio in portfolios:
+        if repo.find_by_name_in_portfolio(account.name, portfolio.id):
+            raise_duplicate_account_name(account.name, portfolio.name)
+
     # Create account
     account_data = account.model_dump(exclude={"portfolio_ids"})
     db_account = Account(**account_data)
-
-    # Link to portfolios
-    portfolios = db.query(Portfolio).filter(Portfolio.id.in_(account.portfolio_ids)).all()
     db_account.portfolios = portfolios
 
     db.add(db_account)
@@ -128,6 +147,14 @@ async def update_account(
     db_account = db.query(Account).filter(Account.id == account_id).first()
 
     update_data = account_update.model_dump(exclude_unset=True)
+    if "name" in update_data:
+        repo = AccountRepository(db)
+        for portfolio in db_account.portfolios:
+            if repo.find_by_name_in_portfolio(
+                update_data["name"], portfolio.id, exclude_account_id=account_id
+            ):
+                raise_duplicate_account_name(update_data["name"], portfolio.name)
+
     for field, value in update_data.items():
         setattr(db_account, field, value)
 
