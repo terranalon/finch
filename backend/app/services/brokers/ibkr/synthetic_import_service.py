@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Account, BrokerDataSource, Holding, Transaction
+from app.models import Account, Asset, BrokerDataSource, Holding, Transaction
 from app.models.daily_cash_balance import DailyCashBalance
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
@@ -202,6 +202,30 @@ class IBKRSyntheticImportService:
 
             cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
             stats["cash_balances"] = cash_stats
+
+            # Create synthetic Deposit transactions for cash balances so that
+            # portfolio reconstruction (which replays transactions) includes cash.
+            # _import_cash_balances already created the Holding + Asset records;
+            # reconstruct_and_update_holdings will overwrite the holding quantities
+            # from these transactions, so there is no double-counting.
+            for cash in cash_data:
+                if cash.balance == 0:
+                    continue
+                cash_asset = db.query(Asset).filter(Asset.symbol == cash.symbol).first()
+                if not cash_asset:
+                    continue
+                cash_holding = _find_or_create_holding(db, account_id, cash_asset.id)
+                cash_txn = Transaction(
+                    holding_id=cash_holding.id,
+                    broker_source_id=source.id,
+                    date=today,
+                    type="Deposit",
+                    quantity=cash.balance,
+                    amount=cash.balance,
+                    fees=Decimal("0"),
+                    notes=f"Synthetic cash balance from IBKR snapshot ({cash.currency})",
+                )
+                db.add(cash_txn)
 
             for position in positions_data:
                 quantity = position.quantity
