@@ -16,6 +16,7 @@ from app.services.brokers.ibkr.models import (
     IBKRDividend,
     IBKRForexTransaction,
     IBKROtherCashTransaction,
+    IBKRPosition,
     IBKRStatementOfFundsBalance,
     IBKRTransaction,
     IBKRTransfer,
@@ -32,7 +33,120 @@ logger = logging.getLogger(__name__)
 
 
 class IBKRImportService:
-    """Helper service for importing IBKR data components (transactions, dividends, cash)."""
+    """Helper service for importing IBKR data components (positions, cash, transactions)."""
+
+    @staticmethod
+    def _import_positions(db: Session, account_id: int, positions: list[IBKRPosition]) -> dict:
+        """Import open positions directly as holdings.
+
+        For each position:
+        1. Find or auto-create asset
+        2. Find or create holding
+        3. Set quantity and cost_basis from IBKR's authoritative data
+
+        This is the primary import path for API-based imports.
+        Transactions are only imported from manual XML file uploads.
+
+        Args:
+            db: Database session
+            account_id: Our account ID
+            positions: List of position dataclasses from parser
+
+        Returns:
+            Statistics dictionary
+        """
+        stats = {
+            "total": len(positions),
+            "assets_created": 0,
+            "holdings_created": 0,
+            "holdings_updated": 0,
+            "errors": [],
+        }
+
+        currency_codes = {
+            "USD",
+            "CAD",
+            "ILS",
+            "EUR",
+            "GBP",
+            "JPY",
+            "CHF",
+            "AUD",
+            "NZD",
+            "SEK",
+            "NOK",
+            "DKK",
+        }
+
+        new_holdings = []
+
+        for pos in positions:
+            try:
+                # Skip forex pair positions (e.g., USD.CAD)
+                symbol = pos.symbol
+                if "." in symbol:
+                    parts = symbol.split(".")
+                    if (
+                        len(parts) == 2
+                        and parts[0] in currency_codes
+                        and parts[1] in currency_codes
+                    ):
+                        continue
+
+                # Find or create asset
+                asset, created = IBKRImportService._find_or_create_asset(
+                    db,
+                    symbol=pos.symbol,
+                    name=pos.description,
+                    asset_class=pos.asset_class,
+                    currency=pos.currency,
+                    ibkr_symbol=pos.original_symbol,
+                    cusip=pos.cusip,
+                    isin=pos.isin,
+                    conid=pos.conid,
+                    figi=pos.figi,
+                )
+
+                if created:
+                    stats["assets_created"] += 1
+
+                # Find or create holding
+                holding = (
+                    db.query(Holding)
+                    .filter(Holding.account_id == account_id, Holding.asset_id == asset.id)
+                    .first()
+                )
+
+                if holding:
+                    holding.quantity = pos.quantity
+                    holding.cost_basis = pos.cost_basis
+                    holding.is_active = pos.quantity != 0
+                    stats["holdings_updated"] += 1
+                else:
+                    holding = Holding(
+                        account_id=account_id,
+                        asset_id=asset.id,
+                        quantity=pos.quantity,
+                        cost_basis=pos.cost_basis,
+                        is_active=(pos.quantity != 0),
+                    )
+                    new_holdings.append(holding)
+                    stats["holdings_created"] += 1
+
+                logger.debug(
+                    f"Imported position {pos.symbol}: {pos.quantity} @ cost {pos.cost_basis}"
+                )
+
+            except Exception as e:
+                logger.error(f"Error importing position {getattr(pos, 'symbol', None)}: {str(e)}")
+                stats["errors"].append(f"{getattr(pos, 'symbol', None)}: {str(e)}")
+                continue
+
+        if new_holdings:
+            db.add_all(new_holdings)
+            db.flush()
+
+        return stats
 
     @staticmethod
     def _import_cash_balances(
