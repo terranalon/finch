@@ -19,6 +19,7 @@ from app.models.holding import Holding
 from app.models.portfolio import Portfolio
 from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
+from app.routers.accounts import raise_duplicate_account_name
 from app.schemas.account import Account as AccountSchema
 from app.schemas.portfolio import (
     DeletionPreview,
@@ -30,6 +31,7 @@ from app.schemas.portfolio import (
 from app.schemas.portfolio import (
     Portfolio as PortfolioSchema,
 )
+from app.services.repositories import AccountRepository
 from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
@@ -336,6 +338,11 @@ async def link_account_to_portfolio(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Account already linked to this portfolio",
         )
+
+    # Check for duplicate account name in target portfolio
+    repo = AccountRepository(db)
+    if repo.find_by_name_in_portfolio(account.name, portfolio_id):
+        raise_duplicate_account_name(account.name, portfolio.name)
 
     db.execute(portfolio_accounts.insert().values(portfolio_id=portfolio_id, account_id=account_id))
     db.commit()

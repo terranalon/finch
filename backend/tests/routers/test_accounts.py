@@ -91,6 +91,27 @@ def auth_headers(client, test_user):
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def make_account(
+    name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+):
+    """Create an Account instance with sensible defaults."""
+    return Account(name=name, institution=institution, account_type=account_type, currency=currency)
+
+
+@pytest.fixture
+def portfolio_with_account(db_session, test_user):
+    """Create a portfolio with one 'Kraken' account."""
+    portfolio = Portfolio(name="Main", user_id=test_user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = make_account()
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.commit()
+    return portfolio, account
+
+
 def test_list_accounts_returns_accounts_from_all_portfolios(
     client, auth_headers, test_user, db_session
 ):
@@ -100,13 +121,11 @@ def test_list_accounts_returns_accounts_from_all_portfolios(
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account1 = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account1 = make_account()
     account1.portfolios = [portfolio1]
 
-    account2 = Account(
-        name="IBKR", institution="Interactive Brokers", account_type="Brokerage", currency="USD"
+    account2 = make_account(
+        name="IBKR", institution="Interactive Brokers", account_type="Brokerage"
     )
     account2.portfolios = [portfolio2]
 
@@ -133,13 +152,11 @@ def test_list_accounts_filtered_by_portfolio(client, auth_headers, test_user, db
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account1 = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account1 = make_account()
     account1.portfolios = [portfolio1]
 
-    account2 = Account(
-        name="IBKR", institution="Interactive Brokers", account_type="Brokerage", currency="USD"
+    account2 = make_account(
+        name="IBKR", institution="Interactive Brokers", account_type="Brokerage"
     )
     account2.portfolios = [portfolio2]
 
@@ -180,3 +197,143 @@ def test_create_account_with_multiple_portfolios(client, auth_headers, test_user
     assert "portfolio_ids" in data
     assert portfolio1.id in data["portfolio_ids"]
     assert portfolio2.id in data["portfolio_ids"]
+
+
+def test_create_account_duplicate_name_rejected(client, auth_headers, portfolio_with_account):
+    """POST /accounts rejects duplicate account name for the same user."""
+    portfolio, _ = portfolio_with_account
+
+    response = client.post(
+        "/api/accounts",
+        headers=auth_headers,
+        json={
+            "name": "Kraken",
+            "institution": "Kraken",
+            "account_type": "CryptoExchange",
+            "currency": "USD",
+            "portfolio_ids": [portfolio.id],
+        },
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "already exists" in detail.lower()
+    assert "rename" in detail.lower()
+
+
+def test_create_account_duplicate_name_case_insensitive(
+    client, auth_headers, portfolio_with_account
+):
+    """POST /accounts rejects duplicate names regardless of case."""
+    portfolio, _ = portfolio_with_account
+
+    response = client.post(
+        "/api/accounts",
+        headers=auth_headers,
+        json={
+            "name": "kraken",
+            "institution": "Kraken",
+            "account_type": "CryptoExchange",
+            "currency": "USD",
+            "portfolio_ids": [portfolio.id],
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_update_account_duplicate_name_rejected(
+    client, auth_headers, db_session, portfolio_with_account
+):
+    """PUT /accounts/:id rejects rename to an existing account name."""
+    portfolio, _ = portfolio_with_account
+
+    account2 = make_account(
+        name="IBKR", institution="Interactive Brokers", account_type="Brokerage"
+    )
+    account2.portfolios = [portfolio]
+    db_session.add(account2)
+    db_session.commit()
+
+    response = client.put(
+        f"/api/accounts/{account2.id}",
+        headers=auth_headers,
+        json={"name": "Kraken"},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "already exists" in detail.lower()
+    assert "rename" in detail.lower()
+
+
+def test_update_account_same_name_allowed(client, auth_headers, portfolio_with_account):
+    """PUT /accounts/:id allows keeping the same name (no-op rename)."""
+    _, account = portfolio_with_account
+
+    response = client.put(
+        f"/api/accounts/{account.id}",
+        headers=auth_headers,
+        json={"name": "Kraken"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_create_account_same_name_in_different_portfolios_allowed(
+    client, auth_headers, test_user, db_session
+):
+    """POST /accounts allows same name in different portfolios for the same user."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="Stocks", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account = make_account()
+    account.portfolios = [portfolio1]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.post(
+        "/api/accounts",
+        headers=auth_headers,
+        json={
+            "name": "Kraken",
+            "institution": "Kraken",
+            "account_type": "CryptoExchange",
+            "currency": "EUR",
+            "portfolio_ids": [portfolio2.id],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["name"] == "Kraken"
+
+
+def test_different_users_can_have_same_account_name(client, db_session, test_user):
+    """Different users can have accounts with the same name."""
+    # Create second user
+    other_user = User(
+        email="test_accounts_other@example.com",
+        password_hash=AuthService.hash_password("test123"),
+        email_verified=True,
+    )
+    db_session.add(other_user)
+    db_session.commit()
+
+    # Both users get a "Kraken" account
+    portfolio1 = Portfolio(name="Main", user_id=test_user.id)
+    portfolio2 = Portfolio(name="Main", user_id=other_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    acct1 = make_account()
+    acct1.portfolios = [portfolio1]
+    acct2 = make_account()
+    acct2.portfolios = [portfolio2]
+    db_session.add_all([acct1, acct2])
+    db_session.commit()
+
+    # Both should exist without error
+    assert acct1.id != acct2.id
+    assert acct1.name == acct2.name

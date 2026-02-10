@@ -18,10 +18,18 @@ const ACCOUNT_TYPES = [
   { value: 'Savings', label: 'Savings' },
 ];
 
-export function AccountDetailsStep({ broker, category, onSubmit, onBack }) {
-  const defaultName = broker
-    ? `My ${broker.name} Account`
-    : 'My Account';
+function generateUniqueName(baseName, existingNames) {
+  const lowerNames = new Set(existingNames.map((n) => n.toLowerCase()));
+  if (!lowerNames.has(baseName.toLowerCase())) return baseName;
+  for (let i = 2; ; i++) {
+    const candidate = `${baseName} #${i}`;
+    if (!lowerNames.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
+export function AccountDetailsStep({ broker, category, existingAccountNames = [], onSubmit, onBack }) {
+  const baseName = broker ? `My ${broker.name} Account` : 'My Account';
+  const defaultName = generateUniqueName(baseName, existingAccountNames);
 
   const [name, setName] = useState(defaultName);
   const [description, setDescription] = useState('');

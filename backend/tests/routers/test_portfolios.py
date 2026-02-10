@@ -91,15 +91,20 @@ def auth_headers(client, test_user):
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
+def make_account(
+    name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
+):
+    """Create an Account instance with sensible defaults."""
+    return Account(name=name, institution=institution, account_type=account_type, currency=currency)
+
+
 def test_list_portfolios_shows_account_count(client, auth_headers, test_user, db_session):
     """GET /portfolios shows correct account count using relationship."""
     portfolio = Portfolio(name="Crypto", user_id=test_user.id)
     db_session.add(portfolio)
     db_session.flush()
 
-    account = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account = make_account()
     account.portfolios = [portfolio]
     db_session.add(account)
     db_session.commit()
@@ -119,9 +124,7 @@ def test_link_account_to_portfolio(client, auth_headers, test_user, db_session):
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account = make_account()
     account.portfolios = [portfolio1]
     db_session.add(account)
     db_session.commit()
@@ -145,9 +148,7 @@ def test_link_account_already_linked(client, auth_headers, test_user, db_session
     db_session.add(portfolio)
     db_session.flush()
 
-    account = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account = make_account()
     account.portfolios = [portfolio]
     db_session.add(account)
     db_session.commit()
@@ -167,9 +168,7 @@ def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_sessi
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account = make_account()
     account.portfolios = [portfolio1, portfolio2]
     db_session.add(account)
     db_session.commit()
@@ -193,9 +192,7 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
     db_session.add(portfolio)
     db_session.flush()
 
-    account = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account = make_account()
     account.portfolios = [portfolio]
     db_session.add(account)
     db_session.commit()
@@ -208,6 +205,33 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
     assert "only portfolio" in response.json()["detail"].lower()
 
 
+def test_link_account_duplicate_name_rejected(client, auth_headers, test_user, db_session):
+    """POST /portfolios/{id}/accounts/{account_id}/link rejects if name already in portfolio."""
+    portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
+    portfolio2 = Portfolio(name="Stocks", user_id=test_user.id)
+    db_session.add_all([portfolio1, portfolio2])
+    db_session.flush()
+
+    account1 = make_account()
+    account1.portfolios = [portfolio1]
+
+    account2 = make_account(currency="EUR")
+    account2.portfolios = [portfolio2]
+
+    db_session.add_all([account1, account2])
+    db_session.commit()
+
+    # Try to link account2 ("Kraken") into portfolio1 which already has a "Kraken"
+    response = client.post(
+        f"/api/portfolios/{portfolio1.id}/accounts/{account2.id}/link", headers=auth_headers
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "already exists" in detail.lower()
+    assert "rename" in detail.lower()
+
+
 def test_get_linkable_accounts(client, auth_headers, test_user, db_session):
     """GET /portfolios/{id}/linkable-accounts returns accounts not in this portfolio."""
     portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
@@ -215,13 +239,11 @@ def test_get_linkable_accounts(client, auth_headers, test_user, db_session):
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account1 = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account1 = make_account()
     account1.portfolios = [portfolio1]
 
-    account2 = Account(
-        name="IBKR", institution="Interactive Brokers", account_type="Brokerage", currency="USD"
+    account2 = make_account(
+        name="IBKR", institution="Interactive Brokers", account_type="Brokerage"
     )
     account2.portfolios = [portfolio2]
 
@@ -248,15 +270,11 @@ def test_deletion_preview_shows_exclusive_and_shared(client, auth_headers, test_
     db_session.flush()
 
     # Exclusive to Crypto
-    account1 = Account(
-        name="Bit2C", institution="Bit2C", account_type="CryptoExchange", currency="ILS"
-    )
+    account1 = make_account(name="Bit2C", institution="Bit2C", currency="ILS")
     account1.portfolios = [portfolio1]
 
     # Shared between both
-    account2 = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account2 = make_account()
     account2.portfolios = [portfolio1, portfolio2]
 
     db_session.add_all([account1, account2])
@@ -283,14 +301,10 @@ def test_delete_portfolio_removes_exclusive_keeps_shared(
     db_session.add_all([portfolio1, portfolio2])
     db_session.flush()
 
-    account1 = Account(
-        name="Bit2C", institution="Bit2C", account_type="CryptoExchange", currency="ILS"
-    )
+    account1 = make_account(name="Bit2C", institution="Bit2C", currency="ILS")
     account1.portfolios = [portfolio1]
 
-    account2 = Account(
-        name="Kraken", institution="Kraken", account_type="CryptoExchange", currency="USD"
-    )
+    account2 = make_account()
     account2.portfolios = [portfolio1, portfolio2]
 
     db_session.add_all([account1, account2])
