@@ -34,6 +34,7 @@ def test_user(db):
     """Create a test user for the integration test."""
     user = User(
         email="synthetic-test@example.com",
+        username="synthetic_test",
         password_hash=AuthService.hash_password("testpassword123"),
         is_active=True,
         email_verified=True,

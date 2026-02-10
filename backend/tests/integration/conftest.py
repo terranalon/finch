@@ -68,6 +68,7 @@ def test_user(db):
     """Create a test user."""
     user = User(
         email="test@example.com",
+        username="test_user",
         password_hash=AuthService.hash_password("testpassword123"),
         is_active=True,
         email_verified=True,

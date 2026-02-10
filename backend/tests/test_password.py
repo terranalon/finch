@@ -35,7 +35,7 @@ class TestChangePassword:
         # Verify can login with new password
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "NewPassword456"},
+            json={"identifier": "test@example.com", "password": "NewPassword456"},
         )
         assert response.status_code == 200
 
@@ -69,7 +69,7 @@ class TestChangePassword:
         # Create a second session by logging in again
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "OldPassword123"},
+            json={"identifier": "test@example.com", "password": "OldPassword123"},
         )
         second_tokens = login_response.json()
 
@@ -230,7 +230,7 @@ class TestResetPassword:
         # Verify can login with new password
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "NewPassword456"},
+            json={"identifier": "test@example.com", "password": "NewPassword456"},
         )
         assert response.status_code == 200
 

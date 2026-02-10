@@ -1,4 +1,5 @@
 """Check holdings after import."""
+
 import sys
 
 sys.path.insert(0, "/Users/alonsamocha/PycharmProjects/portofolio_tracker/backend")
@@ -17,7 +18,9 @@ try:
     # Get API balances for comparison
     account = db.query(Account).filter(Account.id == KRAKEN_ACCOUNT_ID).first()
     creds = account.meta_data["kraken"]
-    client = KrakenClient(KrakenCredentials(api_key=creds["api_key"], api_secret=creds["api_secret"]))
+    client = KrakenClient(
+        KrakenCredentials(api_key=creds["api_key"], api_secret=creds["api_secret"])
+    )
     api_balances = client.get_balance()
 
     print("=== Holdings comparison ===")
@@ -34,7 +37,9 @@ try:
 
         if db_qty != 0 or api_qty != 0:
             status = "✓" if abs(diff) < Decimal("0.0001") else "✗"
-            print(f"{symbol:<10} {db_qty:>15.8f} {api_qty:>15.8f} {diff:>12.8f} {txn_count:>10} {status}")
+            print(
+                f"{symbol:<10} {db_qty:>15.8f} {api_qty:>15.8f} {diff:>12.8f} {txn_count:>10} {status}"
+            )
 
     # Check transaction types for USD
     print("\n=== USD Transaction Types ===")

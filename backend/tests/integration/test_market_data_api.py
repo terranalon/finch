@@ -14,6 +14,7 @@ def service_account(db):
     """Create a service account user."""
     user = User(
         email="test-service@system.internal",
+        username="svc_market",
         password_hash=AuthService.hash_password("test-password"),
         is_active=True,
         email_verified=True,

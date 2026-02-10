@@ -1,6 +1,5 @@
 """Tests for position schemas."""
 
-
 from app.schemas.position import PositionAccountDetail, PositionResponse
 
 

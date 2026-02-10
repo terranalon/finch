@@ -50,7 +50,9 @@ class BrokerDataSource(Base):
     broker_type: Mapped[str] = mapped_column(String(50))  # 'ibkr', 'binance', 'ibi', etc.
 
     # Source type and identifier
-    source_type: Mapped[str] = mapped_column(String(20))  # 'file_upload', 'api_fetch', 'synthetic', 'legacy'
+    source_type: Mapped[str] = mapped_column(
+        String(20)
+    )  # 'file_upload', 'api_fetch', 'synthetic', 'legacy'
     source_identifier: Mapped[str] = mapped_column(
         String(255)
     )  # Filename or "Daily Auto-Fetch YYYY-MM-DD"

@@ -154,25 +154,20 @@ async function handleResponse(response, defaultError) {
 }
 
 /**
- * Login with email and password
+ * Login with email/username and password
  *
- * @param {string} email
+ * @param {string} identifier - Email or username
  * @param {string} password
  * @returns {Promise<object>} Auth response with tokens and user
  */
-export async function login(email, password) {
+export async function login(identifier, password) {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ identifier, password }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Login failed');
-  }
-
-  const data = await response.json();
+  const data = await handleResponse(response, 'Login failed');
   setToken(data.access_token);
   setRefreshToken(data.refresh_token);
   return data;
@@ -183,25 +178,17 @@ export async function login(email, password) {
  *
  * @param {string} email
  * @param {string} password
- * @param {string} name
- * @returns {Promise<object>} Auth response with tokens and user
+ * @param {string} username
+ * @returns {Promise<object>} Registration message (no tokens until email verified)
  */
-export async function register(email, password, name) {
+export async function register(email, password, username) {
   const response = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, username }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Registration failed');
-  }
-
-  const data = await response.json();
-  setToken(data.access_token);
-  setRefreshToken(data.refresh_token);
-  return data;
+  return handleResponse(response, 'Registration failed');
 }
 
 /**

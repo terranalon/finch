@@ -961,9 +961,7 @@ class PortfolioReconstructionService:
         }
 
     @staticmethod
-    def _accumulate_holding(
-        merged_holdings: dict[int, dict], asset_id: int, holding: dict
-    ) -> None:
+    def _accumulate_holding(merged_holdings: dict[int, dict], asset_id: int, holding: dict) -> None:
         """Add holding to merged_holdings, accumulating if already present (immutable)."""
         if asset_id in merged_holdings:
             existing = merged_holdings[asset_id]

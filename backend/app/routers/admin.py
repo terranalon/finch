@@ -70,7 +70,5 @@ def admin_disable_mfa(
     # Send notification to user
     EmailService.send_mfa_disabled_notification(target_user.email)
 
-    logger.info(
-        "Admin %s disabled MFA for user %s", admin.email, target_user.email
-    )
+    logger.info("Admin %s disabled MFA for user %s", admin.email, target_user.email)
     return {"message": "MFA has been disabled for the user"}

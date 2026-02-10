@@ -284,7 +284,7 @@ class TestMfaLoginFlow:
         # Now login again - should require MFA
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
 
         assert response.status_code == 200
@@ -321,7 +321,7 @@ class TestMfaLoginFlow:
         # Login to get temp token
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token = login_response.json()["temp_token"]
 
@@ -355,7 +355,7 @@ class TestMfaLoginFlow:
         # Login to get temp token
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token = login_response.json()["temp_token"]
 
@@ -375,7 +375,7 @@ class TestMfaLoginFlow:
         # Same recovery code should not work again
         login_response2 = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token2 = login_response2.json()["temp_token"]
 
@@ -406,7 +406,7 @@ class TestMfaLoginFlow:
         # Login to get temp token
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token = login_response.json()["temp_token"]
 
@@ -643,7 +643,7 @@ class TestLoginMfaResponse:
         # Login should return MFA required with primary_method
         response = test_client.post(
             "/api/auth/login",
-            json={"email": "mfa_login@example.com", "password": "Password123"},
+            json={"identifier": "mfa_login@example.com", "password": "Password123"},
         )
 
         assert response.status_code == 200
@@ -971,7 +971,7 @@ class TestEmailOtpSend:
         # Login to get temp token
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token = login_response.json()["temp_token"]
 
@@ -1005,7 +1005,7 @@ class TestEmailOtpSend:
         # Login to get temp token
         login_response = test_client.post(
             "/api/auth/login",
-            json={"email": "test@example.com", "password": "Password123"},
+            json={"identifier": "test@example.com", "password": "Password123"},
         )
         temp_token = login_response.json()["temp_token"]
 

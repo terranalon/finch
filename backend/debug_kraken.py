@@ -17,6 +17,7 @@ KRAKEN_ACCOUNT_ID = 23
 
 def get_kraken_credentials(db):
     from app.models import Account
+
     account = db.query(Account).filter(Account.id == KRAKEN_ACCOUNT_ID).first()
     if account and account.meta_data and "kraken" in account.meta_data:
         creds = account.meta_data["kraken"]

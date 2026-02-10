@@ -56,7 +56,11 @@ def client_with_user():
 
     # Create test user and portfolio
     db = testing_session_local()
-    user = User(email="test@example.com", password_hash=AuthService.hash_password("test123"))
+    user = User(
+        email="test@example.com",
+        username="test_protected",
+        password_hash=AuthService.hash_password("test123"),
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

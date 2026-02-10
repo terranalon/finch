@@ -140,7 +140,7 @@ function SettingsDropdown() {
             <>
               <div className="px-4 py-2">
                 <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                  {user.name || 'User'}
+                  {user.username || user.email}
                 </p>
                 <p className="text-xs text-[var(--text-tertiary)] truncate">
                   {user.email}

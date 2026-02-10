@@ -37,6 +37,7 @@ def seed_data(db: Session):
     user = User(
         id=str(uuid4()),
         email="john.doe@example.com",
+        username="john_doe",
         password_hash=AuthService.hash_password("Password123!"),
         is_active=True,
     )

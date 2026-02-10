@@ -55,9 +55,7 @@ class SecurityAuditService:
         # Note: Caller is responsible for committing the transaction
 
         # Also log to application logger for monitoring
-        logger.info(
-            f"Security event: {event_type} | user_id={user_id} | ip={ip_address}"
-        )
+        logger.info(f"Security event: {event_type} | user_id={user_id} | ip={ip_address}")
 
     @staticmethod
     def get_request_info(request) -> tuple[str | None, str | None]:

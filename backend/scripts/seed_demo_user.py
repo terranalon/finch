@@ -28,23 +28,23 @@ DEMO_PASSWORD = "Demo1234"  # Password for demo account (meets complexity requir
 US_HOLDINGS_DATA = [
     # symbol, quantity, cost_basis_per_share, buy_date_offset_days
     ("MSFT", Decimal("25"), Decimal("380.50"), 180),  # Microsoft
-    ("INTC", Decimal("100"), Decimal("32.25"), 90),   # Intel
+    ("INTC", Decimal("100"), Decimal("32.25"), 90),  # Intel
     ("PANW", Decimal("15"), Decimal("175.00"), 120),  # Palo Alto Networks
-    ("RIO", Decimal("50"), Decimal("65.40"), 60),     # Rio Tinto
-    ("SLV", Decimal("200"), Decimal("22.15"), 150),   # iShares Silver Trust
-    ("MARA", Decimal("75"), Decimal("18.50"), 45),    # MARA Holdings
-    ("NU", Decimal("150"), Decimal("11.80"), 30),     # Nu Holdings
-    ("FVRR", Decimal("30"), Decimal("28.50"), 75),    # Fiverr
+    ("RIO", Decimal("50"), Decimal("65.40"), 60),  # Rio Tinto
+    ("SLV", Decimal("200"), Decimal("22.15"), 150),  # iShares Silver Trust
+    ("MARA", Decimal("75"), Decimal("18.50"), 45),  # MARA Holdings
+    ("NU", Decimal("150"), Decimal("11.80"), 30),  # Nu Holdings
+    ("FVRR", Decimal("30"), Decimal("28.50"), 75),  # Fiverr
 ]
 
 # Israeli portfolio data - TASE stocks (Israel Stock Exchange)
 # Note: These are common Israeli stocks - may need to be added to assets table
 ISRAELI_HOLDINGS_DATA = [
     # symbol, quantity, cost_basis_per_share (ILS), buy_date_offset_days
-    ("TEVA.TA", Decimal("500"), Decimal("58.50"), 120),   # Teva Pharmaceutical
-    ("NICE.TA", Decimal("30"), Decimal("850.00"), 90),    # NICE Ltd
-    ("LUMI.TA", Decimal("200"), Decimal("62.30"), 60),    # Bank Leumi
-    ("POLI.TA", Decimal("150"), Decimal("45.20"), 45),    # Bank Hapoalim
+    ("TEVA.TA", Decimal("500"), Decimal("58.50"), 120),  # Teva Pharmaceutical
+    ("NICE.TA", Decimal("30"), Decimal("850.00"), 90),  # NICE Ltd
+    ("LUMI.TA", Decimal("200"), Decimal("62.30"), 60),  # Bank Leumi
+    ("POLI.TA", Decimal("150"), Decimal("45.20"), 45),  # Bank Hapoalim
 ]
 
 # Keep backward compatibility alias
@@ -66,7 +66,10 @@ def create_demo_user(db: DBSession) -> tuple[User, Portfolio, Portfolio | None]:
     if user:
         logger.info(f"Demo user already exists: {user.id}")
         portfolios = db.query(Portfolio).filter(Portfolio.user_id == user.id).all()
-        us_portfolio = next((p for p in portfolios if "US" in p.name or "Demo" in p.name), portfolios[0] if portfolios else None)
+        us_portfolio = next(
+            (p for p in portfolios if "US" in p.name or "Demo" in p.name),
+            portfolios[0] if portfolios else None,
+        )
         il_portfolio = next((p for p in portfolios if "Israeli" in p.name), None)
         return user, us_portfolio, il_portfolio
 
@@ -101,7 +104,9 @@ def create_demo_user(db: DBSession) -> tuple[User, Portfolio, Portfolio | None]:
     db.add(il_portfolio)
     db.flush()
 
-    logger.info(f"Created demo user: {user.email} with portfolios: {us_portfolio.name}, {il_portfolio.name}")
+    logger.info(
+        f"Created demo user: {user.email} with portfolios: {us_portfolio.name}, {il_portfolio.name}"
+    )
     return user, us_portfolio, il_portfolio
 
 
@@ -362,12 +367,11 @@ def seed_historical_snapshots(
         # Calculate value for this historical date
         # More days ago = lower value (reverse the growth)
         trading_days_from_end = sum(
-            1 for d in range(days_ago)
-            if (today - timedelta(days=d)).weekday() < 5
+            1 for d in range(days_ago) if (today - timedelta(days=d)).weekday() < 5
         )
 
         # Base value with growth trend (earlier = lower)
-        growth_factor = daily_growth ** trading_days_from_end
+        growth_factor = daily_growth**trading_days_from_end
         brokerage_base = brokerage_current / growth_factor
         retirement_base = retirement_current / growth_factor
 
@@ -449,12 +453,11 @@ def seed_historical_snapshots_ils(
 
         # Calculate value for this historical date
         trading_days_from_end = sum(
-            1 for d in range(days_ago)
-            if (today - timedelta(days=d)).weekday() < 5
+            1 for d in range(days_ago) if (today - timedelta(days=d)).weekday() < 5
         )
 
         # Base value with growth trend (earlier = lower)
-        growth_factor = daily_growth ** trading_days_from_end
+        growth_factor = daily_growth**trading_days_from_end
         leumi_base = leumi_current / growth_factor
         pension_base = pension_current / growth_factor
 
@@ -505,10 +508,11 @@ def add_israeli_portfolio_to_existing_demo(db: DBSession) -> dict:
         return {"status": "error", "message": "Demo user not found"}
 
     # Check if Israeli portfolio already exists
-    il_portfolio = db.query(Portfolio).filter(
-        Portfolio.user_id == user.id,
-        Portfolio.name == "Israeli Savings"
-    ).first()
+    il_portfolio = (
+        db.query(Portfolio)
+        .filter(Portfolio.user_id == user.id, Portfolio.name == "Israeli Savings")
+        .first()
+    )
 
     if il_portfolio:
         logger.info("Israeli portfolio already exists")
@@ -649,9 +653,7 @@ def seed_historical_for_existing_demo(db: DBSession) -> int:
 
     # Clear existing snapshots for demo accounts
     for account in accounts:
-        db.query(HistoricalSnapshot).filter(
-            HistoricalSnapshot.account_id == account.id
-        ).delete()
+        db.query(HistoricalSnapshot).filter(HistoricalSnapshot.account_id == account.id).delete()
     db.commit()
 
     # Find brokerage and retirement accounts
@@ -673,10 +675,11 @@ def seed_historical_for_israeli_portfolio(db: DBSession) -> int:
         return 0
 
     # Find Israeli portfolio
-    il_portfolio = db.query(Portfolio).filter(
-        Portfolio.user_id == user.id,
-        Portfolio.name == "Israeli Savings"
-    ).first()
+    il_portfolio = (
+        db.query(Portfolio)
+        .filter(Portfolio.user_id == user.id, Portfolio.name == "Israeli Savings")
+        .first()
+    )
 
     if not il_portfolio:
         logger.error("Israeli Savings portfolio not found")
@@ -690,9 +693,7 @@ def seed_historical_for_israeli_portfolio(db: DBSession) -> int:
 
     # Clear existing snapshots for Israeli accounts
     for account in accounts:
-        db.query(HistoricalSnapshot).filter(
-            HistoricalSnapshot.account_id == account.id
-        ).delete()
+        db.query(HistoricalSnapshot).filter(HistoricalSnapshot.account_id == account.id).delete()
     db.commit()
 
     # Find Leumi and pension accounts
@@ -733,7 +734,7 @@ if __name__ == "__main__":
             print("\nDemo data seeding complete:")
             print(f"  User: {result['user'].email}")
             print(f"  US Portfolio: {result['us_portfolio'].name}")
-            if result.get('il_portfolio'):
+            if result.get("il_portfolio"):
                 print(f"  Israeli Portfolio: {result['il_portfolio'].name}")
             print(f"  Status: {result['status']}")
             if result["status"] == "created":

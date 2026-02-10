@@ -1,7 +1,7 @@
 /**
  * Login Page - Finch Portfolio Tracker
  *
- * Handles user authentication with email/password.
+ * Handles user authentication with email or username.
  * Includes "Try Demo" button for quick access.
  */
 
@@ -11,7 +11,7 @@ import { useAuth, useTheme } from '../contexts';
 import { FinchIcon, ThemeToggle } from '../components/ui';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +26,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(identifier, password);
 
       // Check if MFA is required
       if (result.mfa_required) {
@@ -34,7 +34,7 @@ export default function Login() {
           state: {
             tempToken: result.temp_token,
             methods: result.methods,
-            email,
+            identifier,
             primaryMethod: result.primary_method,
           },
         });
@@ -45,7 +45,7 @@ export default function Login() {
     } catch (err) {
       // Handle email not verified
       if (err.code === 'email_not_verified') {
-        navigate('/verification-pending', { state: { email: err.email || email } });
+        navigate('/verification-pending', { state: { email: err.email || identifier } });
         return;
       }
       setError(err.message || 'Login failed');
@@ -107,19 +107,19 @@ export default function Login() {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[var(--text-primary)]">
-                Email address
+              <label htmlFor="identifier" className="block text-sm font-medium text-[var(--text-primary)]">
+                Email or username
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="identifier"
+                name="identifier"
+                type="text"
+                autoComplete="username"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="you@example.com"
+                placeholder="Email or username"
               />
             </div>
 
