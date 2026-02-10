@@ -10,6 +10,15 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+_RETRYABLE_ERROR_CODES: dict[str, str] = {
+    "1018": "rate_limited",  # Too many requests
+    "1019": "pending",  # Statement generation in progress
+}
+
+RATE_LIMIT_SLEEP_SECONDS = 10
+MAX_POLL_INTERVAL_SECONDS = 10
+
+
 class IBKRFlexClient:
     """Client for IBKR Flex Web Service API."""
 
@@ -101,7 +110,8 @@ class IBKRFlexClient:
             reference_code: Reference code from request_flex_query
 
         Returns:
-            'success' if ready, 'pending' if still processing, or None if error
+            'success' if ready, 'pending' if still generating,
+            'rate_limited' if IBKR throttled the request, or None if fatal error
         """
         try:
             url = f"{IBKRFlexClient.BASE_URL}/FlexStatementService.GetStatement"
@@ -113,22 +123,19 @@ class IBKRFlexClient:
             # Parse XML response
             root = ET.fromstring(response.content)
 
-            if root.tag == "Status":
-                error_code = root.findtext("ErrorCode")
-                if error_code == "1019":
-                    # Statement generation in progress
-                    return "pending"
-                else:
-                    error_message = root.findtext("ErrorMessage")
-                    logger.error(f"IBKR Flex Query status error: {error_code} - {error_message}")
-                    return None
+            # Errors can arrive as <Status> or <FlexStatementResponse> wrappers
+            error_code = root.findtext("ErrorCode")
+            error_message = root.findtext("ErrorMessage")
 
-            if root.tag == "FlexStatementResponse":
-                # Successfully generated, data is ready
-                return "success"
+            if error_code:
+                retryable_status = _RETRYABLE_ERROR_CODES.get(error_code)
+                if retryable_status:
+                    logger.info(f"Flex Query {retryable_status}: {error_code} - {error_message}")
+                    return retryable_status
+                logger.error(f"IBKR Flex Query status error: {error_code} - {error_message}")
+                return None
 
             if root.tag == "FlexQueryResponse":
-                # Full statement is ready
                 return "success"
 
             logger.warning(f"Unknown status response: {response.text[:200]}")
@@ -157,25 +164,30 @@ class IBKRFlexClient:
             logger.info(f"Downloading IBKR Flex Query data for reference {reference_code}")
             response = requests.get(url, params=params, timeout=60)
             response.raise_for_status()
-
-            # Check if response is XML error or data
-            try:
-                root = ET.fromstring(response.content)
-                if root.tag == "Status":
-                    error_code = root.findtext("ErrorCode")
-                    error_message = root.findtext("ErrorMessage")
-                    logger.error(f"Download error: {error_code} - {error_message}")
-                    return None
-            except ET.ParseError:
-                # Not parseable as Status, might be full data
-                pass
-
-            logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
-            return response.content
-
         except Exception as e:
             logger.error(f"Error downloading Flex Query: {str(e)}")
             return None
+
+        # Validate response is actual data, not an error wrapper
+        try:
+            root = ET.fromstring(response.content)
+        except ET.ParseError:
+            # Not parseable as XML -- treat as raw data
+            logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
+            return response.content
+
+        error_code = root.findtext("ErrorCode")
+        if error_code:
+            error_message = root.findtext("ErrorMessage")
+            logger.error(f"Download error: {error_code} - {error_message}")
+            return None
+
+        if root.tag != "FlexQueryResponse":
+            logger.error(f"Unexpected download response tag: {root.tag}")
+            return None
+
+        logger.info(f"Successfully downloaded Flex Query data ({len(response.content)} bytes)")
+        return response.content
 
     @staticmethod
     def fetch_flex_report(
@@ -216,19 +228,19 @@ class IBKRFlexClient:
             status = IBKRFlexClient.get_flex_query_status(token, reference_code)
 
             if status == "success":
-                # Step 3: Download data
                 return IBKRFlexClient.download_flex_query(token, reference_code)
-
-            if status is None:
+            elif status is None:
                 logger.error("Error checking Flex Query status")
                 return None
-
-            if status == "pending":
+            elif status == "rate_limited":
+                logger.info(
+                    f"Rate limited by IBKR, waiting {RATE_LIMIT_SLEEP_SECONDS}s before retry..."
+                )
+                time.sleep(RATE_LIMIT_SLEEP_SECONDS)
+            elif status == "pending":
                 logger.debug(f"Flex Query still processing, waiting {current_interval}s...")
                 time.sleep(current_interval)
-                # Exponential backoff, max 10 seconds
-                current_interval = min(current_interval * 1.5, 10)
-                continue
+                current_interval = min(current_interval * 1.5, MAX_POLL_INTERVAL_SECONDS)
 
         logger.error(f"Flex Query timeout after {timeout} seconds")
         return None
