@@ -50,12 +50,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("security_id"),
     )
-    op.create_index(
-        "idx_tase_securities_symbol", "tase_securities", ["symbol"], unique=False
-    )
-    op.create_index(
-        "idx_tase_securities_isin", "tase_securities", ["isin"], unique=False
-    )
+    op.create_index("idx_tase_securities_symbol", "tase_securities", ["symbol"], unique=False)
+    op.create_index("idx_tase_securities_isin", "tase_securities", ["isin"], unique=False)
     op.create_index(
         "idx_tase_securities_type_code",
         "tase_securities",
@@ -64,9 +60,7 @@ def upgrade() -> None:
     )
 
     # Add tase_security_number to assets table
-    op.add_column(
-        "assets", sa.Column("tase_security_number", sa.String(length=20), nullable=True)
-    )
+    op.add_column("assets", sa.Column("tase_security_number", sa.String(length=20), nullable=True))
     op.create_index(
         "idx_assets_tase_security_number",
         "assets",

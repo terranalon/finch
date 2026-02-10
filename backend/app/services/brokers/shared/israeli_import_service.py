@@ -132,7 +132,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
             self.db.commit()
 
             # Reconstruct holdings from transactions and update the Holding table
-            if not skip_reconstruction and (data.transactions or data.dividends or data.cash_transactions):
+            if not skip_reconstruction and (
+                data.transactions or data.dividends or data.cash_transactions
+            ):
                 stats["holdings_reconstruction"] = self._reconstruct_and_update_holdings(account_id)
                 self.db.commit()
 

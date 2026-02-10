@@ -47,7 +47,11 @@ async def list_transactions(
         return []
 
     # Always join with Holding to filter by user's accounts
-    query = db.query(Transaction).join(Transaction.holding).filter(Holding.account_id.in_(allowed_account_ids))
+    query = (
+        db.query(Transaction)
+        .join(Transaction.holding)
+        .filter(Holding.account_id.in_(allowed_account_ids))
+    )
 
     if holding_id:
         query = query.filter(Transaction.holding_id == holding_id)

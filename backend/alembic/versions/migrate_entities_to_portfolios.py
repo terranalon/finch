@@ -151,8 +151,6 @@ def downgrade() -> None:
     )
 
     # Delete migrated users
-    conn.execute(
-        text("DELETE FROM users WHERE email LIKE '%@migrated.local'")
-    )
+    conn.execute(text("DELETE FROM users WHERE email LIKE '%@migrated.local'"))
 
     print("Downgrade complete: Removed migrated users and portfolios")

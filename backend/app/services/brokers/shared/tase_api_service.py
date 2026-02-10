@@ -37,6 +37,7 @@ def _get_settings():
             _settings = None
     return _settings
 
+
 logger = logging.getLogger(__name__)
 
 

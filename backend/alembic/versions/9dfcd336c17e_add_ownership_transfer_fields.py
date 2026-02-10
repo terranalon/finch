@@ -5,6 +5,7 @@ Revises: 2c6f06592138
 Create Date: 2026-01-24 06:28:41.080233
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '9dfcd336c17e'
-down_revision: str | None = '2c6f06592138'
+revision: str = "9dfcd336c17e"
+down_revision: str | None = "2c6f06592138"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -28,9 +29,7 @@ def upgrade() -> None:
         "transactions",
         sa.Column("content_hash", sa.String(64), nullable=True),
     )
-    op.create_index(
-        "idx_transactions_content_hash", "transactions", ["content_hash"]
-    )
+    op.create_index("idx_transactions_content_hash", "transactions", ["content_hash"])
 
     # Add date_ranges to broker_data_sources
     op.add_column(
