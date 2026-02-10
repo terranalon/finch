@@ -312,8 +312,9 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
     stats["assets_updated"] += result.rowcount
 
     # Step 2: Merge holdings
-    # First, create mapping from staging asset symbols to production asset IDs
-    # (needed for holdings that reference newly created assets)
+    # For new holdings, always resolve asset_id via symbol lookup into production.
+    # sh.asset_id may contain a staging ID for newly created assets, so we must
+    # use pa.id (looked up by symbol) to get the correct production asset ID.
     result = db.execute(
         text("""
         INSERT INTO public.holdings (
@@ -322,7 +323,7 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
         )
         SELECT
             sh.account_id,
-            COALESCE(sh.asset_id, pa.id),  -- Use original asset_id or find by symbol
+            pa.id,
             sh.quantity,
             sh.cost_basis,
             sh.strategy_horizon,
@@ -332,8 +333,8 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
             sh.created_at,
             sh.updated_at
         FROM staging.holdings sh
-        LEFT JOIN staging.assets sa ON sa.id = sh.staging_asset_id
-        LEFT JOIN public.assets pa ON pa.symbol = sa.symbol
+        JOIN staging.assets sa ON sa.id = sh.staging_asset_id
+        JOIN public.assets pa ON pa.symbol = sa.symbol
         WHERE sh.original_id IS NULL
         AND sh.account_id = :account_id
         ON CONFLICT (account_id, asset_id) DO UPDATE SET
@@ -375,6 +376,8 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
     stats["holdings_updated"] += result.rowcount
 
     # Step 3: Merge transactions (only new ones - transactions are immutable)
+    # st.holding_id contains a staging ID for new transactions, so we must
+    # resolve through symbol lookup to find the correct production holding.
     result = db.execute(
         text("""
         INSERT INTO public.transactions (
@@ -384,7 +387,7 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
             to_holding_id, to_amount, exchange_rate
         )
         SELECT
-            COALESCE(st.holding_id, ph.id),  -- Map to production holding
+            ph.id,
             st.broker_source_id,
             st.date,
             st.type,
@@ -395,26 +398,22 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
             st.currency_rate_to_usd_at_date,
             st.notes,
             st.created_at,
-            COALESCE(st.to_holding_id, ph_to.id),  -- Map to_holding to production
+            ph_to.id,
             st.to_amount,
             st.exchange_rate
         FROM staging.transactions st
-        -- Join to get production holding_id via staging holding
-        LEFT JOIN staging.holdings sh ON sh.id = st.staging_holding_id
-        LEFT JOIN public.holdings ph ON ph.account_id = sh.account_id
-            AND ph.asset_id = (
-                SELECT pa.id FROM public.assets pa
-                JOIN staging.assets sa ON sa.symbol = pa.symbol
-                WHERE sa.id = sh.staging_asset_id
-            )
-        -- Same for to_holding (forex)
+        -- Join to get production holding_id via staging holding -> asset symbol
+        JOIN staging.holdings sh ON sh.id = st.staging_holding_id
+        JOIN staging.assets sa ON sa.id = sh.staging_asset_id
+        JOIN public.assets pa ON pa.symbol = sa.symbol
+        JOIN public.holdings ph ON ph.account_id = sh.account_id
+            AND ph.asset_id = pa.id
+        -- Same for to_holding (forex) - LEFT JOIN since most transactions have no to_holding
         LEFT JOIN staging.holdings sh_to ON sh_to.id = st.staging_to_holding_id
+        LEFT JOIN staging.assets sa_to ON sa_to.id = sh_to.staging_asset_id
+        LEFT JOIN public.assets pa_to ON pa_to.symbol = sa_to.symbol
         LEFT JOIN public.holdings ph_to ON ph_to.account_id = sh_to.account_id
-            AND ph_to.asset_id = (
-                SELECT pa.id FROM public.assets pa
-                JOIN staging.assets sa ON sa.symbol = pa.symbol
-                WHERE sa.id = sh_to.staging_asset_id
-            )
+            AND ph_to.asset_id = pa_to.id
         WHERE st.original_id IS NULL
     """)
     )
