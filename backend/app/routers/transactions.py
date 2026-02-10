@@ -1,7 +1,6 @@
 """Transactions API router - CRUD operations with business logic."""
 
 from datetime import date
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc
@@ -10,10 +9,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
-from app.models import Asset, Holding, HoldingLot, Transaction
+from app.models import Asset, Holding, Transaction
 from app.models.user import User
 from app.schemas.transaction import Transaction as TransactionSchema
-from app.schemas.transaction import TransactionCreate, TransactionCreateRequest, TransactionUpdate
+from app.schemas.transaction import TransactionCreateRequest, TransactionUpdate
+from app.services.portfolio.transaction_service import TransactionService
+from app.services.portfolio.transaction_types import TransactionError
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -120,7 +121,6 @@ async def create_transaction(
     - Sell: Updates holding, reduces lots using FIFO
     - Dividend: Records transaction only
     """
-    # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if transaction.account_id not in allowed_account_ids:
         raise HTTPException(
@@ -128,7 +128,6 @@ async def create_transaction(
             detail=f"Account with id {transaction.account_id} not found",
         )
 
-    # Validate asset exists
     asset = db.query(Asset).filter(Asset.id == transaction.asset_id).first()
     if not asset:
         raise HTTPException(
@@ -136,55 +135,38 @@ async def create_transaction(
             detail=f"Asset with id {transaction.asset_id} not found",
         )
 
-    # Validate transaction type
-    valid_types = ["Buy", "Sell", "Dividend", "Split", "Merger", "Transfer"]
-    if transaction.type not in valid_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid transaction type. Must be one of: {', '.join(valid_types)}",
+    svc = TransactionService(db)
+    try:
+        svc.validate_transaction_type(transaction.type)
+        holding, _ = svc.find_or_create_holding(
+            transaction.account_id, transaction.asset_id
         )
 
-    # Find or create holding for this account + asset combination
-    holding = (
-        db.query(Holding)
-        .filter(
-            Holding.account_id == transaction.account_id, Holding.asset_id == transaction.asset_id
-        )
-        .first()
-    )
+        transaction_data = transaction.model_dump()
+        transaction_data["holding_id"] = holding.id
+        transaction_data.pop("account_id")
+        transaction_data.pop("asset_id")
 
-    if not holding:
-        # Create new holding
-        holding = Holding(
-            account_id=transaction.account_id,
-            asset_id=transaction.asset_id,
-            quantity=Decimal("0"),
-            cost_basis=Decimal("0"),
-            is_active=False,
-        )
-        db.add(holding)
-        db.flush()  # Get the holding ID
+        db_transaction = Transaction(**transaction_data)
+        db.add(db_transaction)
 
-    # Create the transaction record with the holding_id
-    transaction_data = transaction.model_dump()
-    transaction_data["holding_id"] = holding.id
-    transaction_data.pop("account_id")
-    transaction_data.pop("asset_id")
+        if transaction.type == "Buy":
+            svc.process_buy(
+                holding,
+                transaction.quantity,
+                transaction.price_per_unit,
+                transaction.fees,
+                transaction.date,
+            )
+        elif transaction.type == "Sell":
+            svc.process_sell(holding, transaction.quantity)
 
-    db_transaction = Transaction(**transaction_data)
-    db.add(db_transaction)
+        db.commit()
+        db.refresh(db_transaction)
+        return db_transaction
 
-    # Apply business logic based on transaction type
-    if transaction.type == "Buy":
-        await _process_buy_transaction(db, holding, transaction)
-    elif transaction.type == "Sell":
-        await _process_sell_transaction(db, holding, transaction)
-    # Dividend and other types just record the transaction
-
-    db.commit()
-    db.refresh(db_transaction)
-
-    return db_transaction
+    except TransactionError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{transaction_id}", response_model=TransactionSchema)
@@ -262,113 +244,3 @@ async def delete_transaction(
     db.commit()
 
     return None
-
-
-# Business Logic Helper Functions
-
-
-async def _process_buy_transaction(db: Session, holding: Holding, transaction: TransactionCreate):
-    """Process a Buy transaction - update holding and create lot."""
-    if not transaction.quantity or not transaction.price_per_unit:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Buy transactions require quantity and price_per_unit",
-        )
-
-    # Calculate cost including fees
-    cost = (transaction.quantity * transaction.price_per_unit) + transaction.fees
-
-    # Update holding
-    holding.quantity += transaction.quantity
-    holding.cost_basis += cost
-    holding.is_active = True
-    holding.closed_at = None
-
-    # Create new holding lot
-    new_lot = HoldingLot(
-        holding_id=holding.id,
-        quantity=transaction.quantity,
-        remaining_quantity=transaction.quantity,
-        cost_per_unit=transaction.price_per_unit,
-        purchase_date=transaction.date,
-        purchase_price_original=transaction.price_per_unit,
-        fees=transaction.fees,
-        is_closed=False,
-    )
-    db.add(new_lot)
-
-
-async def _process_sell_transaction(db: Session, holding: Holding, transaction: TransactionCreate):
-    """Process a Sell transaction - update holding and reduce lots using FIFO."""
-    if not transaction.quantity:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Sell transactions require quantity"
-        )
-
-    # Validate sufficient quantity
-    if holding.quantity < transaction.quantity:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Insufficient quantity. Holding has {holding.quantity}, trying to sell {transaction.quantity}",
-        )
-
-    # Get lots in FIFO order (oldest first)
-    lots = (
-        db.query(HoldingLot)
-        .filter(
-            HoldingLot.holding_id == holding.id,
-            HoldingLot.is_closed.is_(False),
-            HoldingLot.remaining_quantity > 0,
-        )
-        .order_by(HoldingLot.purchase_date, HoldingLot.id)
-        .all()
-    )
-
-    if not lots:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="No open lots found for this holding"
-        )
-
-    # Apply FIFO to reduce lots
-    remaining_to_sell = transaction.quantity
-    total_cost_basis_sold = Decimal("0")
-
-    for lot in lots:
-        if remaining_to_sell <= 0:
-            break
-
-        if lot.remaining_quantity <= remaining_to_sell:
-            # Sell entire lot
-            quantity_from_lot = lot.remaining_quantity
-            lot.remaining_quantity = Decimal("0")
-            lot.is_closed = True
-        else:
-            # Partially sell from lot
-            quantity_from_lot = remaining_to_sell
-            lot.remaining_quantity -= quantity_from_lot
-
-        # Calculate cost basis for this portion
-        cost_basis_from_lot = quantity_from_lot * lot.cost_per_unit
-        total_cost_basis_sold += cost_basis_from_lot
-        remaining_to_sell -= quantity_from_lot
-
-    if remaining_to_sell > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not allocate all shares to lots. {remaining_to_sell} shares remaining.",
-        )
-
-    # Update holding
-    holding.quantity -= transaction.quantity
-    holding.cost_basis -= total_cost_basis_sold
-
-    # If quantity reaches zero, mark holding as inactive
-    if holding.quantity == 0:
-        holding.is_active = False
-        holding.closed_at = (
-            db.query(Transaction)
-            .filter(Transaction.holding_id == holding.id)
-            .order_by(desc(Transaction.date))
-            .first()
-            .date
-        )
