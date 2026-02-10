@@ -11,8 +11,8 @@ import {
   UploadIcon,
 } from '../icons.jsx';
 
-const REQUIRED_COLUMNS = ['date', 'type', 'symbol', 'quantity', 'price', 'currency'];
-const OPTIONAL_COLUMNS = ['fees', 'notes', 'broker', 'account_id'];
+const REQUIRED_COLUMNS = ['date', 'type', 'symbol', 'currency'];
+const OPTIONAL_COLUMNS = ['quantity', 'price', 'amount', 'fees', 'notes'];
 const ACCEPTED_FORMATS = ['.csv', '.xlsx'];
 
 export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
@@ -69,20 +69,22 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
               Download our template and fill in your transactions. The file must include the required columns.
             </p>
             <div className="flex flex-wrap gap-3 mt-4">
-              <button
-                type="button"
+              <a
+                href="/templates/manual_import_example.csv"
+                download="manual_import_example.csv"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
               >
                 <DownloadIcon className="size-4" />
                 Download CSV Template
-              </button>
-              <button
-                type="button"
+              </a>
+              <a
+                href="/templates/manual_import_example.xlsx"
+                download="manual_import_example.xlsx"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors cursor-pointer"
               >
                 <DownloadIcon className="size-4" />
                 Download Excel Template
-              </button>
+              </a>
             </div>
           </div>
         </div>
