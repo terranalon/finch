@@ -115,31 +115,26 @@ class StagedImportService:
                 cleanup_staging(db)
                 return stats
 
-            # Extract all data sections
+            # Extract positions and cash only.
+            # Transactions are imported separately via manual XML file upload.
             positions_data = IBKRParser.extract_positions(root)
-            transactions_data = IBKRParser.extract_transactions(root)
-            dividends_data = IBKRParser.extract_dividends(root)
-            transfers_data = IBKRParser.extract_transfers(root)
-            forex_data = IBKRParser.extract_forex_transactions(root)
             cash_data = IBKRParser.extract_cash_balances(root)
 
             logger.info(
-                f"Extracted {len(positions_data)} positions, "
-                f"{len(transactions_data)} transactions, "
-                f"{len(dividends_data)} dividends"
+                f"Extracted {len(positions_data)} positions, {len(cash_data)} cash balances"
             )
 
-            # Phase 3: Import to staging tables
+            # Phase 3: Import to staging tables (positions + cash only)
             logger.info("Phase 3: Importing to staging tables...")
             import_stats = StagedImportService._import_to_staging(
                 db,
                 account_id,
                 positions_data,
-                transactions_data,
-                dividends_data,
-                transfers_data,
-                forex_data,
-                cash_data,
+                transactions_data=[],
+                dividends_data=[],
+                transfers_data=[],
+                forex_data=[],
+                cash_data=cash_data,
             )
 
             stats["positions"] = import_stats.get("positions", {})
