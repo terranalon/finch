@@ -1,0 +1,16 @@
+date,type,symbol,quantity,price,amount,currency,fees,notes
+2025-01-15,Buy,AAPL,10,175.50,,USD,4.99,Initial Apple purchase
+2025-01-15,Buy,MSFT,5,380.25,,USD,4.99,
+2025-02-01,Deposit,USD,,,10000.00,USD,,Cash deposit
+2025-02-10,Buy,SPY,20,450.80,,USD,0,Monthly DCA
+2025-03-01,Buy,BTC,0.05,62000.00,,USD,12.50,Bitcoin position
+2025-03-15,Buy,ETH,1.5,3200.00,,USD,8.00,
+2025-04-01,Dividend,AAPL,,,9.50,USD,,Q1 2025 dividend
+2025-04-15,Sell,SPY,5,465.20,,USD,4.99,Partial profit taking
+2025-05-01,Buy,TEVA.TA,100,38.50,,ILS,15.00,Tel Aviv exchange
+2025-06-01,Dividend,MSFT,,,15.00,USD,,Q2 2025 dividend
+2025-06-15,Staking,ETH,0.012,,,USD,,ETH staking reward
+2025-07-01,Interest,USD,,,45.00,USD,,Monthly interest
+2025-07-10,Sell,AAPL,3,195.00,,USD,4.99,Taking some profits
+2025-08-05,Buy,ETH,2.0,2800.00,,USD,10.00,Bought the dip
+2025-09-01,Withdrawal,USD,,,2000.00,USD,,
