@@ -2,7 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
-from app.services.brokers.ibkr.flex_client import IBKRFlexClient
+from app.services.brokers.ibkr.flex_client import (
+    RATE_LIMIT_SLEEP_SECONDS,
+    IBKRFlexClient,
+)
 
 FAKE_TOKEN = "test-token"
 FAKE_REF = "ref123"
@@ -128,8 +131,7 @@ class TestFetchFlexReportRateLimit:
         result = IBKRFlexClient.fetch_flex_report("token", "query1")
 
         assert result is not None
-        # Rate-limit backoff should be 10 seconds
-        mock_sleep.assert_called_with(10)
+        mock_sleep.assert_called_with(RATE_LIMIT_SLEEP_SECONDS)
         assert mock_status.call_count == 2
 
     @patch(f"{PATCH_PREFIX}.time.time")
@@ -165,5 +167,5 @@ class TestFetchFlexReportRateLimit:
         assert result is not None
         sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
         assert sleep_calls[0] == 2  # pending: initial interval
-        assert sleep_calls[1] == 10  # rate_limited: flat 10s
+        assert sleep_calls[1] == RATE_LIMIT_SLEEP_SECONDS  # rate_limited: flat backoff
         assert sleep_calls[2] == 3.0  # pending: backoff continued (2 * 1.5)

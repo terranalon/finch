@@ -10,6 +10,15 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+_RETRYABLE_ERROR_CODES: dict[str, str] = {
+    "1018": "rate_limited",  # Too many requests
+    "1019": "pending",  # Statement generation in progress
+}
+
+RATE_LIMIT_SLEEP_SECONDS = 10
+MAX_POLL_INTERVAL_SECONDS = 10
+
+
 class IBKRFlexClient:
     """Client for IBKR Flex Web Service API."""
 
@@ -119,11 +128,10 @@ class IBKRFlexClient:
             error_message = root.findtext("ErrorMessage")
 
             if error_code:
-                if error_code in ("1018", "1019"):
-                    # 1018 = rate limited, 1019 = still generating
-                    status = "rate_limited" if error_code == "1018" else "pending"
-                    logger.info(f"Flex Query {status}: {error_code} - {error_message}")
-                    return status
+                retryable_status = _RETRYABLE_ERROR_CODES.get(error_code)
+                if retryable_status:
+                    logger.info(f"Flex Query {retryable_status}: {error_code} - {error_message}")
+                    return retryable_status
                 logger.error(f"IBKR Flex Query status error: {error_code} - {error_message}")
                 return None
 
@@ -225,12 +233,14 @@ class IBKRFlexClient:
                 logger.error("Error checking Flex Query status")
                 return None
             elif status == "rate_limited":
-                logger.info("Rate limited by IBKR, waiting 10s before retry...")
-                time.sleep(10)
+                logger.info(
+                    f"Rate limited by IBKR, waiting {RATE_LIMIT_SLEEP_SECONDS}s before retry..."
+                )
+                time.sleep(RATE_LIMIT_SLEEP_SECONDS)
             elif status == "pending":
                 logger.debug(f"Flex Query still processing, waiting {current_interval}s...")
                 time.sleep(current_interval)
-                current_interval = min(current_interval * 1.5, 10)
+                current_interval = min(current_interval * 1.5, MAX_POLL_INTERVAL_SECONDS)
 
         logger.error(f"Flex Query timeout after {timeout} seconds")
         return None
