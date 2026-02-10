@@ -11,9 +11,35 @@ import {
   UploadIcon,
 } from '../icons.jsx';
 
-const REQUIRED_COLUMNS = ['date', 'type', 'symbol', 'quantity', 'price', 'currency'];
-const OPTIONAL_COLUMNS = ['fees', 'notes', 'broker', 'account_id'];
+const REQUIRED_COLUMNS = ['date', 'type', 'symbol', 'currency'];
+const OPTIONAL_COLUMNS = ['quantity', 'price', 'amount', 'fees', 'notes'];
 const ACCEPTED_FORMATS = ['.csv', '.xlsx'];
+
+const TEMPLATE_DOWNLOADS = [
+  {
+    href: '/templates/manual_import_example.csv',
+    filename: 'manual_import_example.csv',
+    label: 'Download CSV Template',
+    className: 'bg-indigo-600 text-white hover:bg-indigo-700',
+  },
+  {
+    href: '/templates/manual_import_example.xlsx',
+    filename: 'manual_import_example.xlsx',
+    label: 'Download Excel Template',
+    className:
+      'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30',
+  },
+];
+
+function getDropZoneStyle(selectedFile, fileError) {
+  if (selectedFile) {
+    return 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20';
+  }
+  if (fileError) {
+    return 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20';
+  }
+  return 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20';
+}
 
 export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
   const [fileError, setFileError] = useState(null);
@@ -69,20 +95,20 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
               Download our template and fill in your transactions. The file must include the required columns.
             </p>
             <div className="flex flex-wrap gap-3 mt-4">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
-              >
-                <DownloadIcon className="size-4" />
-                Download CSV Template
-              </button>
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors cursor-pointer"
-              >
-                <DownloadIcon className="size-4" />
-                Download Excel Template
-              </button>
+              {TEMPLATE_DOWNLOADS.map((tmpl) => (
+                <a
+                  key={tmpl.href}
+                  href={tmpl.href}
+                  download={tmpl.filename}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer',
+                    tmpl.className,
+                  )}
+                >
+                  <DownloadIcon className="size-4" />
+                  {tmpl.label}
+                </a>
+              ))}
             </div>
           </div>
         </div>
@@ -123,11 +149,7 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
         className={cn(
           'border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-6',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
-          selectedFile
-            ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20'
-            : fileError
-              ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20'
-              : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+          getDropZoneStyle(selectedFile, fileError),
         )}
       >
         {selectedFile ? (
