@@ -11,7 +11,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -21,6 +21,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_broker_credentials, get_user_account
 from app.models.account import Account
 from app.models.user import User
+from app.rate_limiter import limiter
 
 # Import broker clients and services at module level for testability
 from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
@@ -553,6 +554,59 @@ async def import_ibkr_snapshot(
         "account_id": account_id,
         "stats": stats,
     }
+
+
+@router.post("/{broker_type}/test-credentials", response_model=dict[str, Any])
+@limiter.limit("10/minute")
+async def test_credentials_stateless(
+    request: Request,
+    broker_type: BrokerType,
+    credentials: ApiKeyCredentials | FlexQueryCredentials = Body(...),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Test broker API credentials without requiring an account.
+
+    Accepts credentials directly in the request body and validates them
+    against the broker API. Used during account creation wizard before
+    the account is persisted.
+    """
+    config = _get_broker_config(broker_type)
+
+    try:
+        if config.credential_type == CredentialType.FLEX_QUERY:
+            reference_code = IBKRFlexClient.request_flex_query(
+                credentials.flex_token, credentials.flex_query_id
+            )
+            if reference_code:
+                return {
+                    "status": "success",
+                    "message": f"{config.name} credentials are valid",
+                    "reference_code": reference_code,
+                }
+            return {
+                "status": "failed",
+                "message": f"{config.name} credential test failed: invalid token or query ID",
+            }
+
+        client = _create_crypto_client(config, credentials.api_key, credentials.api_secret)
+        balance_method = getattr(client, config.balance_method)
+        balances = balance_method()
+
+        return {
+            "status": "success",
+            "message": f"{config.name} credentials are valid",
+            "balances": {k: str(v) for k, v in balances.items()},
+            "assets_count": len(balances),
+        }
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(f"{config.name} stateless credential test failed")
+        return {
+            "status": "failed",
+            "message": f"{config.name} credential test failed. Check your credentials and try again.",
+        }
 
 
 @router.post("/{broker_type}/test-credentials/{account_id}", response_model=dict[str, Any])
