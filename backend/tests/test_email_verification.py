@@ -238,6 +238,7 @@ class TestServiceAccountLogin:
         db = db_session_maker()
         service_user = User(
             email="test-service@system.internal",
+            username="svc_test",
             password_hash=AuthService.hash_password("ServicePass123"),
             is_service_account=True,
             email_verified=False,  # Explicitly unverified

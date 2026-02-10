@@ -28,7 +28,7 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    username: Mapped[str | None] = mapped_column(String(30), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

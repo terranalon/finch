@@ -33,6 +33,7 @@ from app.schemas.auth import (
 )
 from app.services.auth.auth_service import AuthService
 from app.services.auth.security_audit_service import SecurityAuditService, SecurityEventType
+from app.services.repositories.user_repository import UserRepository
 from app.services.shared.email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,8 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
         )
 
     # Check if username already taken (case-insensitive)
-    existing_username = db.query(User).filter(User.username.ilike(data.username)).first()
+    user_repo = UserRepository(db)
+    existing_username = user_repo.find_by_username(data.username)
     if existing_username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -577,15 +579,9 @@ def update_me(
 
     # Check username uniqueness if being updated
     if "username" in update_data and update_data["username"] != current_user.username:
-        existing = (
-            db.query(User)
-            .filter(
-                User.username.ilike(update_data["username"]),
-                User.id != current_user.id,
-            )
-            .first()
-        )
-        if existing:
+        user_repo = UserRepository(db)
+        existing = user_repo.find_by_username(update_data["username"])
+        if existing and existing.id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already taken",
