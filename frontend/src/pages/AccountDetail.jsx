@@ -1807,15 +1807,19 @@ export default function AccountDetail() {
         positionsData.forEach((position) => {
           const accountInfo = position.accounts?.find((a) => a.account_id === accountIdInt);
           if (accountInfo) {
-            // Use native currency values for per-holding display and account totals
-            // This ensures Meitav (ILS account) shows values in ILS, not USD
+            // Native currency values for per-holding display (e.g., "5,783 CAD")
             const valueNative = accountInfo.market_value_native ?? accountInfo.market_value ?? 0;
             const costBasisNative = accountInfo.cost_basis_native ?? accountInfo.cost_basis ?? 0;
             const isCash = position.asset_class === 'Cash';
 
+            // Display-currency values for account totals (FX-converted by backend)
+            const valueDisplay = accountInfo.market_value ?? valueNative;
+            const costBasisDisplay = accountInfo.cost_basis ?? costBasisNative;
+
             // For cash, cost basis = current value (1 ILS costs 1 ILS)
             // The backend returns all deposits as cost_basis for cash, which is incorrect
             const effectiveCostBasis = isCash ? valueNative : costBasisNative;
+            const effectiveCostBasisDisplay = isCash ? valueDisplay : costBasisDisplay;
             const gainNative = valueNative - effectiveCostBasis;
             const gainPct = effectiveCostBasis > 0 ? (gainNative / effectiveCostBasis) * 100 : 0;
 
@@ -1825,16 +1829,16 @@ export default function AccountDetail() {
               quantity: accountInfo.quantity,
               currency: position.currency || 'USD', // Native currency
               price: position.current_price || 0, // Native price
-              value: valueNative, // Native currency value for display
+              value: valueNative, // Native currency value for per-holding display
               cost_basis: effectiveCostBasis, // Native currency cost basis
               gain: gainNative, // Native currency gain
               gain_pct: gainPct,
               asset_class: position.asset_class,
             });
 
-            // Sum native values for account totals
-            totalValue += valueNative;
-            totalCostBasis += effectiveCostBasis;
+            // Sum display-currency values for account totals (handles mixed currencies)
+            totalValue += valueDisplay;
+            totalCostBasis += effectiveCostBasisDisplay;
           }
         });
 
