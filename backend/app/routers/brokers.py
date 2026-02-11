@@ -556,6 +556,43 @@ async def import_ibkr_snapshot(
     }
 
 
+def _test_credentials_against_broker(
+    config: BrokerConfig, cred_field1: str, cred_field2: str
+) -> dict[str, Any]:
+    """Test credentials by calling the broker API.
+
+    For FLEX_QUERY brokers (cred_field1=flex_token, cred_field2=flex_query_id),
+    initiates a Flex Query request.
+    For API_KEY_SECRET brokers (cred_field1=api_key, cred_field2=api_secret),
+    fetches account balances.
+
+    Returns a result dict with 'status' ('success'/'failed') and broker-specific fields.
+    """
+    if config.credential_type == CredentialType.FLEX_QUERY:
+        reference_code = IBKRFlexClient.request_flex_query(cred_field1, cred_field2)
+        if reference_code:
+            return {
+                "status": "success",
+                "message": f"{config.name} credentials are valid",
+                "reference_code": reference_code,
+            }
+        return {
+            "status": "failed",
+            "message": f"{config.name} credential test failed: invalid token or query ID",
+        }
+
+    client = _create_crypto_client(config, cred_field1, cred_field2)
+    balance_method = getattr(client, config.balance_method)
+    balances = balance_method()
+
+    return {
+        "status": "success",
+        "message": f"{config.name} credentials are valid",
+        "balances": {k: str(v) for k, v in balances.items()},
+        "assets_count": len(balances),
+    }
+
+
 @router.post("/{broker_type}/test-credentials", response_model=dict[str, Any])
 @limiter.limit("10/minute")
 async def test_credentials_stateless(
@@ -573,32 +610,10 @@ async def test_credentials_stateless(
     config = _get_broker_config(broker_type)
 
     try:
-        if config.credential_type == CredentialType.FLEX_QUERY:
-            reference_code = IBKRFlexClient.request_flex_query(
-                credentials.flex_token, credentials.flex_query_id
-            )
-            if reference_code:
-                return {
-                    "status": "success",
-                    "message": f"{config.name} credentials are valid",
-                    "reference_code": reference_code,
-                }
-            return {
-                "status": "failed",
-                "message": f"{config.name} credential test failed: invalid token or query ID",
-            }
-
-        client = _create_crypto_client(config, credentials.api_key, credentials.api_secret)
-        balance_method = getattr(client, config.balance_method)
-        balances = balance_method()
-
-        return {
-            "status": "success",
-            "message": f"{config.name} credentials are valid",
-            "balances": {k: str(v) for k, v in balances.items()},
-            "assets_count": len(balances),
-        }
-
+        field1, field2 = get_credential_fields(config.credential_type)
+        return _test_credentials_against_broker(
+            config, getattr(credentials, field1), getattr(credentials, field2)
+        )
     except HTTPException:
         raise
     except Exception:
@@ -616,8 +631,7 @@ async def test_broker_credentials(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """
-    Test broker API credentials without importing data.
+    """Test broker API credentials without importing data.
 
     For crypto brokers (Kraken, Bit2C, Binance), returns account balances.
     For IBKR, validates the Flex Query credentials by initiating a request.
@@ -634,37 +648,15 @@ async def test_broker_credentials(
 
     try:
         if config.credential_type == CredentialType.FLEX_QUERY:
-            # IBKR: Test by initiating a Flex Query request
-            flex_token, flex_query_id = _get_flex_query_credentials(
+            api_key, api_secret = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
             )
-            reference_code = IBKRFlexClient.request_flex_query(flex_token, flex_query_id)
-            if reference_code:
-                return {
-                    "status": "success",
-                    "message": f"{config.name} credentials are valid",
-                    "account_id": account_id,
-                    "reference_code": reference_code,
-                }
-            return {
-                "status": "failed",
-                "message": f"{config.name} credential test failed: invalid token or query ID",
-                "account_id": account_id,
-            }
+        else:
+            api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
 
-        # Crypto brokers: Test by fetching balances
-        api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
-        client = _create_crypto_client(config, api_key, api_secret)
-        balance_method = getattr(client, config.balance_method)
-        balances = balance_method()
-
-        return {
-            "status": "success",
-            "message": f"{config.name} credentials are valid",
-            "account_id": account_id,
-            "balances": {k: str(v) for k, v in balances.items()},
-            "assets_count": len(balances),
-        }
+        result = _test_credentials_against_broker(config, api_key, api_secret)
+        result["account_id"] = account_id
+        return result
 
     except HTTPException:
         raise

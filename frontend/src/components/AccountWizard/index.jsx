@@ -127,19 +127,10 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const goToStep = (step) => {
     setCurrentStep(step);
     // Reset forward state when going back
-    if (step === 1) {
-      setCategory(null);
-      setBroker(null);
-      setAccountDetails(null);
-      accountIdRef.current = null;
-    } else if (step === 2) {
-      setBroker(null);
-      setAccountDetails(null);
-      accountIdRef.current = null;
-    } else if (step === 3) {
-      setAccountDetails(null);
-      accountIdRef.current = null;
-    }
+    accountIdRef.current = null;
+    if (step <= 3) setAccountDetails(null);
+    if (step <= 2) setBroker(null);
+    if (step <= 1) setCategory(null);
   };
 
   // Step 1: Category selection
