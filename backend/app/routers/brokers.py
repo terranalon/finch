@@ -21,10 +21,11 @@ from app.models.account import Account
 from app.models.user import User
 from app.rate_limiter import limiter
 from app.services.brokers.broker_config import (
-    BROKER_REGISTRY,
     BrokerConfig,
     BrokerType,
     CredentialType,
+    get_all_broker_configs,
+    get_broker_config,
     get_credential_fields,
     has_credentials,
     remove_credential_fields,
@@ -114,12 +115,12 @@ def build_credential_data(
 
 def _get_broker_config(broker_type: str) -> BrokerConfig:
     """Get broker config or raise 404."""
-    config = BROKER_REGISTRY.get(broker_type)
+    config = get_broker_config(broker_type)
     if not config:
+        registry = get_all_broker_configs()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown broker type: {broker_type}. "
-            f"Supported: {', '.join(BROKER_REGISTRY.keys())}",
+            detail=f"Unknown broker type: {broker_type}. Supported: {', '.join(registry.keys())}",
         )
     return config
 
@@ -241,7 +242,7 @@ async def list_brokers() -> dict[str, Any]:
                 "credential_type": config.credential_type.value,
                 "supports_staging": config.supports_staging,
             }
-            for config in BROKER_REGISTRY.values()
+            for config in get_all_broker_configs().values()
         ]
     }
 
@@ -293,7 +294,7 @@ async def get_api_connections(
     for account in accounts:
         if not account.meta_data:
             continue
-        for broker_type, config in BROKER_REGISTRY.items():
+        for broker_type, config in get_all_broker_configs().items():
             broker_data = account.meta_data.get(broker_type, {})
             if has_credentials(broker_data, config.credential_type):
                 results.append(
@@ -472,9 +473,7 @@ async def test_credentials_stateless(
 
     try:
         field1, field2 = get_credential_fields(config.credential_type)
-        return test_credentials(
-            config, getattr(credentials, field1), getattr(credentials, field2)
-        )
+        return test_credentials(config, getattr(credentials, field1), getattr(credentials, field2))
     except HTTPException:
         raise
     except Exception:

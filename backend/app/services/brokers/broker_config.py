@@ -1,14 +1,12 @@
 """Broker configuration and registry.
 
 Domain objects shared between the broker router and broker services.
+Broker client imports are deferred to avoid coupling this module to every
+broker implementation at import time.
 """
 
 from dataclasses import dataclass
 from enum import Enum
-
-from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
-from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
-from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
 
 
 class BrokerType(str, Enum):
@@ -70,35 +68,63 @@ class BrokerConfig:
         return self.client_class(credentials)
 
 
-# Broker registry - defines all supported brokers
-BROKER_REGISTRY: dict[str, BrokerConfig] = {
-    BrokerType.IBKR: BrokerConfig(
-        key="ibkr",
-        name="Interactive Brokers",
-        credential_type=CredentialType.FLEX_QUERY,
-        supports_staging=True,
-        env_fallback_prefix="IBKR",
-    ),
-    BrokerType.KRAKEN: BrokerConfig(
-        key="kraken",
-        name="Kraken",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=KrakenClient,
-        credentials_class=KrakenCredentials,
-    ),
-    BrokerType.BIT2C: BrokerConfig(
-        key="bit2c",
-        name="Bit2C",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=Bit2CClient,
-        credentials_class=Bit2CCredentials,
-    ),
-    BrokerType.BINANCE: BrokerConfig(
-        key="binance",
-        name="Binance",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=BinanceClient,
-        credentials_class=BinanceCredentials,
-        balance_method="get_account_balances",
-    ),
-}
+BROKER_REGISTRY: dict[str, BrokerConfig] = {}
+_registry_initialized: bool = False
+
+
+def _ensure_registry_initialized() -> None:
+    """Lazily populate the broker registry on first access."""
+    global _registry_initialized
+    if _registry_initialized:
+        return
+
+    from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
+    from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
+    from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
+
+    BROKER_REGISTRY.update(
+        {
+            BrokerType.IBKR: BrokerConfig(
+                key="ibkr",
+                name="Interactive Brokers",
+                credential_type=CredentialType.FLEX_QUERY,
+                supports_staging=True,
+                env_fallback_prefix="IBKR",
+            ),
+            BrokerType.KRAKEN: BrokerConfig(
+                key="kraken",
+                name="Kraken",
+                credential_type=CredentialType.API_KEY_SECRET,
+                client_class=KrakenClient,
+                credentials_class=KrakenCredentials,
+            ),
+            BrokerType.BIT2C: BrokerConfig(
+                key="bit2c",
+                name="Bit2C",
+                credential_type=CredentialType.API_KEY_SECRET,
+                client_class=Bit2CClient,
+                credentials_class=Bit2CCredentials,
+            ),
+            BrokerType.BINANCE: BrokerConfig(
+                key="binance",
+                name="Binance",
+                credential_type=CredentialType.API_KEY_SECRET,
+                client_class=BinanceClient,
+                credentials_class=BinanceCredentials,
+                balance_method="get_account_balances",
+            ),
+        }
+    )
+    _registry_initialized = True
+
+
+def get_broker_config(broker_type: str) -> BrokerConfig | None:
+    """Look up a broker config by type. Returns None if not found."""
+    _ensure_registry_initialized()
+    return BROKER_REGISTRY.get(broker_type)
+
+
+def get_all_broker_configs() -> dict[str, BrokerConfig]:
+    """Return the full broker registry."""
+    _ensure_registry_initialized()
+    return BROKER_REGISTRY
