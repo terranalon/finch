@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Asset, Holding
+from app.models import Account, Asset, Holding, Transaction
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.portfolio.transaction_view_types import (
     CashActivityItem,
@@ -49,7 +49,7 @@ class TransactionViewService:
         )
 
         trades: list[TradeItem] = []
-        for txn, holding, asset, account in rows:
+        for txn, _, asset, account in rows:
             qty = txn.quantity or Decimal("0")
             price = txn.price_per_unit or Decimal("0")
             fees = txn.fees or Decimal("0")
@@ -119,7 +119,7 @@ class TransactionViewService:
                 account_name=account.name,
                 notes=txn.notes,
             )
-            for txn, holding, asset, account in rows
+            for txn, _, asset, account in rows
         ]
 
     def get_forex(
@@ -138,11 +138,12 @@ class TransactionViewService:
         forex_list: list[ForexItem] = []
         seen_legacy_pairs: set[tuple[str, ...]] = set()
 
-        for txn, holding, asset, account in rows:
+        for txn, _, asset, account in rows:
             if txn.to_holding_id is not None:
-                item = self._build_new_format_forex(txn, asset, account)
-                if item:
-                    forex_list = [*forex_list, item]
+                forex_list = [
+                    *forex_list,
+                    self._build_new_format_forex(txn, asset, account),
+                ]
             else:
                 parsed = self.parse_legacy_forex_notes(txn.notes)
                 if not parsed:
@@ -170,8 +171,9 @@ class TransactionViewService:
 
         return forex_list
 
-    def _build_new_format_forex(self, txn, asset, account) -> ForexItem | None:
-        """Build a ForexItem from a transaction with to_holding_id."""
+    def _build_new_format_forex(
+        self, txn: Transaction, asset: Asset, account: Account
+    ) -> ForexItem:
         to_holding = self._db.query(Holding).filter(Holding.id == txn.to_holding_id).first()
         to_asset = (
             self._db.query(Asset).filter(Asset.id == to_holding.asset_id).first()
@@ -207,7 +209,7 @@ class TransactionViewService:
         )
 
         items: list[CashActivityItem] = []
-        for txn, holding, asset, account in rows:
+        for txn, _, asset, account in rows:
             amount, fees, native_currency = self._compute_cash_values(txn, asset)
 
             if display_currency and display_currency != native_currency:
@@ -236,7 +238,9 @@ class TransactionViewService:
 
         return items
 
-    def _compute_cash_values(self, txn, asset) -> tuple[Decimal, Decimal | None, str]:
+    def _compute_cash_values(
+        self, txn: Transaction, asset: Asset
+    ) -> tuple[Decimal, Decimal | None, str]:
         """Compute amount, fees, and native currency for a cash activity row.
 
         For crypto assets with cash-like transaction types, converts quantity
@@ -250,7 +254,9 @@ class TransactionViewService:
         native_currency = asset.currency or asset.symbol
         return amount, fees, native_currency
 
-    def _compute_crypto_cash_values(self, txn, asset) -> tuple[Decimal, Decimal | None, str]:
+    def _compute_crypto_cash_values(
+        self, txn: Transaction, asset: Asset
+    ) -> tuple[Decimal, Decimal | None, str]:
         """Compute cash values for crypto deposit/withdrawal/custody fee."""
         quantity = txn.quantity or Decimal("0")
         price = txn.price_per_unit

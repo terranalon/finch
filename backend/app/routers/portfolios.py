@@ -201,7 +201,6 @@ async def set_default_portfolio(
     Set a portfolio as the default for the current user.
     This will unset any other portfolio that was previously marked as default.
     """
-    # Find the portfolio to set as default
     db_portfolio = (
         db.query(Portfolio)
         .filter(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id)
@@ -213,13 +212,11 @@ async def set_default_portfolio(
             detail=f"Portfolio with id {portfolio_id} not found",
         )
 
-    # Unset any existing default portfolio for this user
     db.query(Portfolio).filter(
         Portfolio.user_id == current_user.id,
         Portfolio.is_default == True,  # noqa: E712
     ).update({"is_default": False})
 
-    # Set the selected portfolio as default
     db_portfolio.is_default = True
     db.commit()
     db.refresh(db_portfolio)
@@ -242,7 +239,6 @@ async def link_account_to_portfolio(
     if not account:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
-    # Check if already linked
     existing = db.execute(
         portfolio_accounts.select().where(
             portfolio_accounts.c.portfolio_id == portfolio_id,
@@ -256,7 +252,6 @@ async def link_account_to_portfolio(
             detail="Account already linked to this portfolio",
         )
 
-    # Check for duplicate account name in target portfolio
     repo = AccountRepository(db)
     if repo.find_by_name_in_portfolio(account.name, portfolio_id):
         raise_duplicate_account_name(account.name, portfolio.name)
