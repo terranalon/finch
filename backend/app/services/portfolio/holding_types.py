@@ -1,8 +1,6 @@
 """Value objects for holding services."""
 
 from dataclasses import dataclass
-from datetime import datetime
-from decimal import Decimal
 
 
 @dataclass(frozen=True)
@@ -40,7 +38,7 @@ class HoldingDetail:
     asset: HoldingAssetInfo
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReconstructionStats:
     account_id: int
     holdings_updated: int

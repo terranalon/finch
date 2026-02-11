@@ -148,9 +148,11 @@ async def get_deletion_preview(
     svc = PortfolioManagementService(db)
     exclusive, shared = svc.categorize_accounts_for_deletion(portfolio)
 
-    warning = ""
-    if exclusive:
-        warning = f"This will permanently delete {len(exclusive)} account(s) and all their data."
+    warning = (
+        f"This will permanently delete {len(exclusive)} account(s) and all their data."
+        if exclusive
+        else ""
+    )
 
     return DeletionPreview(
         portfolio_name=portfolio.name,

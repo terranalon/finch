@@ -44,10 +44,9 @@ class PortfolioManagementService:
                         continue
                     market_value_native = holding.quantity
                 else:
-                    current_price = asset.last_fetched_price or Decimal("0")
-                    if not current_price:
+                    if not asset.last_fetched_price:
                         continue
-                    market_value_native = holding.quantity * current_price
+                    market_value_native = holding.quantity * asset.last_fetched_price
 
                 if asset_currency != "USD":
                     rate_to_usd = self._currency.get_exchange_rate(

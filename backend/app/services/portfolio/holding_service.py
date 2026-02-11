@@ -88,14 +88,6 @@ class HoldingService:
             PortfolioReconstructionService,
         )
 
-        stats = ReconstructionStats(
-            account_id=account_id,
-            holdings_updated=0,
-            holdings_activated=0,
-            holdings_deactivated=0,
-            reconstructed_count=0,
-        )
-
         today = date.today()
         reconstructed = PortfolioReconstructionService.reconstruct_holdings(
             self._db, account_id, today, apply_ticker_changes=False
@@ -108,8 +100,12 @@ class HoldingService:
             .all()
         )
 
+        updated = 0
+        activated = 0
+        deactivated = 0
+
         for holding in holdings:
-            recon = reconstructed_map.get(holding.asset_id)
+            recon = reconstructed_map.pop(holding.asset_id, None)
 
             if recon:
                 old_qty = holding.quantity
@@ -118,15 +114,19 @@ class HoldingService:
                 holding.is_active = recon["quantity"] != Decimal("0")
 
                 if old_qty == Decimal("0") and holding.quantity != Decimal("0"):
-                    stats.holdings_activated += 1
+                    activated += 1
                 elif old_qty != Decimal("0") and holding.quantity == Decimal("0"):
-                    stats.holdings_deactivated += 1
+                    deactivated += 1
 
-                stats.holdings_updated += 1
-                del reconstructed_map[holding.asset_id]
+                updated += 1
             else:
                 if holding.quantity == Decimal("0"):
                     holding.is_active = False
 
-        stats.reconstructed_count = len(reconstructed)
-        return stats
+        return ReconstructionStats(
+            account_id=account_id,
+            holdings_updated=updated,
+            holdings_activated=activated,
+            holdings_deactivated=deactivated,
+            reconstructed_count=len(reconstructed),
+        )
