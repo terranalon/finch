@@ -47,7 +47,6 @@ async def list_transactions(
     if not allowed_account_ids:
         return []
 
-    # Always join with Holding to filter by user's accounts
     query = (
         db.query(Transaction)
         .join(Transaction.holding)
@@ -71,11 +70,8 @@ async def list_transactions(
     if end_date:
         query = query.filter(Transaction.date <= end_date)
 
-    # Order by date descending (most recent first)
     query = query.order_by(desc(Transaction.date), desc(Transaction.id))
-
-    transactions = query.offset(offset).limit(limit).all()
-    return transactions
+    return query.offset(offset).limit(limit).all()
 
 
 @router.get("/{transaction_id}", response_model=TransactionSchema)
@@ -86,14 +82,12 @@ async def get_transaction(
 ):
     """Get a specific transaction by ID (must belong to user's accounts)."""
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
-
     if not transaction:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Transaction with id {transaction_id} not found",
         )
 
-    # Verify transaction belongs to user's account
     holding = db.query(Holding).filter(Holding.id == transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
@@ -184,14 +178,12 @@ async def update_transaction(
     For complex scenarios, delete and recreate the transaction.
     """
     db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
-
     if not db_transaction:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Transaction with id {transaction_id} not found",
         )
 
-    # Verify transaction belongs to user's account
     holding = db.query(Holding).filter(Holding.id == db_transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
@@ -200,7 +192,6 @@ async def update_transaction(
             detail=f"Transaction with id {transaction_id} not found",
         )
 
-    # Update only provided fields
     update_data = transaction_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_transaction, field, value)
@@ -224,14 +215,12 @@ async def delete_transaction(
     It does not reverse the effects on holdings/lots.
     """
     db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
-
     if not db_transaction:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Transaction with id {transaction_id} not found",
         )
 
-    # Verify transaction belongs to user's account
     holding = db.query(Holding).filter(Holding.id == db_transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:

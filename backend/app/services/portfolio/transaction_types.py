@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 
-@dataclass
+@dataclass(frozen=True)
 class BuyResult:
     """Result of processing a buy transaction."""
 
@@ -14,7 +14,7 @@ class BuyResult:
     lot_id: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class SellResult:
     """Result of processing a sell transaction."""
 

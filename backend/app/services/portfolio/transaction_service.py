@@ -1,6 +1,5 @@
 """Transaction business logic - buy/sell processing with FIFO lot allocation."""
 
-import logging
 from datetime import date
 from decimal import Decimal
 
@@ -17,8 +16,6 @@ from app.services.portfolio.transaction_types import (
     TransactionError,
 )
 from app.services.repositories import HoldingRepository
-
-logger = logging.getLogger(__name__)
 
 VALID_TRANSACTION_TYPES = ["Buy", "Sell", "Dividend", "Split", "Merger", "Transfer"]
 

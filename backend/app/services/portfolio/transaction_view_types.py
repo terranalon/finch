@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 
-@dataclass
+@dataclass(frozen=True)
 class TradeItem:
     id: int
     date: date
@@ -22,7 +22,7 @@ class TradeItem:
     notes: str | None
 
 
-@dataclass
+@dataclass(frozen=True)
 class DividendItem:
     id: int
     date: date
@@ -35,7 +35,7 @@ class DividendItem:
     notes: str | None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ForexItem:
     id: int
     date: date
@@ -48,7 +48,7 @@ class ForexItem:
     notes: str | None
 
 
-@dataclass
+@dataclass(frozen=True)
 class CashActivityItem:
     id: int
     date: date
