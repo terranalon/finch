@@ -6,9 +6,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 
 import logging
 import os
-from dataclasses import dataclass
 from datetime import date, datetime
-from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
@@ -22,15 +20,19 @@ from app.dependencies.user_scope import get_broker_credentials, get_user_account
 from app.models.account import Account
 from app.models.user import User
 from app.rate_limiter import limiter
-
-# Import broker clients and services at module level for testability
-from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
-from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
-from app.services.brokers.credential_test_service import create_crypto_client, test_credentials
+from app.services.brokers.broker_config import (
+    BROKER_REGISTRY,
+    BrokerConfig,
+    BrokerType,
+    CredentialType,
+    get_credential_fields,
+    has_credentials,
+    remove_credential_fields,
+)
+from app.services.brokers.credential_test_service import test_credentials
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
-from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
 from app.services.portfolio.snapshot_service import (
     generate_snapshots_background,
     update_snapshot_status,
@@ -93,48 +95,6 @@ class SnapshotImportResponse(BaseModel):
 router = APIRouter(prefix="/api/brokers", tags=["brokers"])
 
 
-class BrokerType(str, Enum):
-    """Supported broker types."""
-
-    IBKR = "ibkr"
-    KRAKEN = "kraken"
-    BIT2C = "bit2c"
-    BINANCE = "binance"
-
-
-class CredentialType(str, Enum):
-    """Types of credential schemes used by brokers."""
-
-    API_KEY_SECRET = "api_key_secret"  # api_key + api_secret (Kraken, Bit2C)
-    FLEX_QUERY = "flex_query"  # flex_token + flex_query_id (IBKR)
-
-
-# =============================================================================
-# Credential Field Helpers
-# =============================================================================
-
-
-def get_credential_fields(credential_type: CredentialType) -> tuple[str, str]:
-    """Get the field names for a credential type."""
-    if credential_type == CredentialType.API_KEY_SECRET:
-        return ("api_key", "api_secret")
-    return ("flex_token", "flex_query_id")
-
-
-def has_credentials(broker_data: dict, credential_type: CredentialType) -> bool:
-    """Check if credential fields are present and non-empty."""
-    field1, field2 = get_credential_fields(credential_type)
-    return bool(broker_data.get(field1) and broker_data.get(field2))
-
-
-def remove_credential_fields(broker_data: dict, credential_type: CredentialType) -> None:
-    """Remove credential fields from broker data dict (in place)."""
-    field1, field2 = get_credential_fields(credential_type)
-    broker_data.pop(field1, None)
-    broker_data.pop(field2, None)
-    broker_data.pop("updated_at", None)
-
-
 def build_credential_data(
     credentials: ApiKeyCredentials | FlexQueryCredentials,
     credential_type: CredentialType,
@@ -150,60 +110,6 @@ def build_credential_data(
         field2: values[1],
         "updated_at": datetime.now().isoformat(),
     }
-
-
-# =============================================================================
-# Broker Configuration
-# =============================================================================
-
-
-@dataclass
-class BrokerConfig:
-    """Configuration for a broker integration."""
-
-    key: str
-    name: str
-    credential_type: CredentialType
-    supports_staging: bool = False
-    env_fallback_prefix: str | None = None  # e.g., "IBKR" for IBKR_FLEX_TOKEN
-    # Client factory components (for API_KEY_SECRET brokers)
-    client_class: type | None = None
-    credentials_class: type | None = None
-    balance_method: str = "get_balance"  # Method name to call for balance
-
-
-# Broker registry - defines all supported brokers
-BROKER_REGISTRY: dict[str, BrokerConfig] = {
-    BrokerType.IBKR: BrokerConfig(
-        key="ibkr",
-        name="Interactive Brokers",
-        credential_type=CredentialType.FLEX_QUERY,
-        supports_staging=True,
-        env_fallback_prefix="IBKR",
-    ),
-    BrokerType.KRAKEN: BrokerConfig(
-        key="kraken",
-        name="Kraken",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=KrakenClient,
-        credentials_class=KrakenCredentials,
-    ),
-    BrokerType.BIT2C: BrokerConfig(
-        key="bit2c",
-        name="Bit2C",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=Bit2CClient,
-        credentials_class=Bit2CCredentials,
-    ),
-    BrokerType.BINANCE: BrokerConfig(
-        key="binance",
-        name="Binance",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=BinanceClient,
-        credentials_class=BinanceCredentials,
-        balance_method="get_account_balances",
-    ),
-}
 
 
 def _get_broker_config(broker_type: str) -> BrokerConfig:
@@ -294,7 +200,7 @@ def _import_crypto_broker(
     db: Session,
 ) -> dict[str, Any]:
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
-    client = create_crypto_client(config, api_key, api_secret)
+    client = config.create_client(api_key, api_secret)
 
     logger.info(f"Fetching {config.name} data for account {account_id}")
     broker_data = client.fetch_all_data()

@@ -253,7 +253,7 @@ class TestCryptoBrokerImport:
         mock_client.fetch_all_data.return_value = mock_broker_data
 
         with (
-            patch("app.routers.brokers.create_crypto_client", return_value=mock_client),
+            patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client),
             patch("app.routers.brokers.CryptoImportService") as mock_service_class,
         ):
             mock_service = MagicMock()
@@ -283,7 +283,7 @@ class TestCryptoBrokerImport:
         mock_client.fetch_all_data.return_value = mock_broker_data
 
         with (
-            patch("app.routers.brokers.create_crypto_client", return_value=mock_client),
+            patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client),
             patch("app.routers.brokers.CryptoImportService") as mock_service_class,
         ):
             mock_service = MagicMock()
@@ -310,7 +310,7 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.return_value = {"USD": 1000, "BTC": 0.5}
 
-        with patch("app.services.brokers.credential_test_service.create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/kraken/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200
@@ -325,7 +325,7 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.return_value = {"ILS": 5000, "BTC": 0.1}
 
-        with patch("app.services.brokers.credential_test_service.create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/bit2c/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200
@@ -353,7 +353,7 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.side_effect = Exception("Invalid API key")
 
-        with patch("app.services.brokers.credential_test_service.create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/kraken/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200  # Returns 200 with status: failed
@@ -372,7 +372,7 @@ class TestStatelessTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.return_value = {"USD": 1000, "BTC": 0.5}
 
-        with patch("app.services.brokers.credential_test_service.create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post(
                 "/api/brokers/kraken/test-credentials",
                 json={"api_key": "test_key", "api_secret": "test_secret"},
@@ -412,7 +412,7 @@ class TestStatelessTestCredentials:
             "Internal: connection to 172.18.0.5 refused"
         )
 
-        with patch("app.services.brokers.credential_test_service.create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post(
                 "/api/brokers/kraken/test-credentials",
                 json={"api_key": "bad_key", "api_secret": "bad_secret"},
