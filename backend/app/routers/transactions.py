@@ -158,6 +158,7 @@ async def create_transaction(
         return db_transaction
 
     except TransactionError as e:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

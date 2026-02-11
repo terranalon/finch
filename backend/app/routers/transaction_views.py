@@ -33,7 +33,11 @@ async def list_trades(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[TradeResponse]:
-    """Get list of trade transactions (Buy/Sell) for user's accounts."""
+    """Get list of trade transactions (Buy/Sell) for user's accounts.
+
+    Returns enriched trade data with computed totals.
+    If display_currency is provided, converts price_per_unit and total to that currency.
+    """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return []
@@ -62,7 +66,11 @@ async def list_dividends(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[DividendResponse]:
-    """Get list of dividend and income transactions for user's accounts."""
+    """Get list of dividend and income transactions for user's accounts.
+
+    Includes: Dividend, Tax (excludes Dividend Cash which is the cash-side duplicate).
+    Interest is shown in Cash Activity instead.
+    """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return []
@@ -89,7 +97,11 @@ async def list_forex(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ForexResponse]:
-    """Get list of forex conversion transactions for user's accounts."""
+    """Get list of forex conversion transactions for user's accounts.
+
+    Returns single record per conversion with from/to currencies and amounts.
+    For legacy data (paired transactions), parses info from notes field.
+    """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return []
@@ -118,7 +130,11 @@ async def list_cash_activity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[CashActivityResponse]:
-    """Get list of cash activity transactions for user's accounts."""
+    """Get list of cash activity transactions for user's accounts.
+
+    Includes: Deposit, Withdrawal, Fee, Transfer (excludes Trade Settlement which is shown in Trades).
+    If display_currency is provided, converts amount to that currency.
+    """
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return []

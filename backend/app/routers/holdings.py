@@ -155,7 +155,10 @@ async def delete_holding(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a holding (must belong to user's accounts)."""
+    """Delete a holding (must belong to user's accounts).
+
+    Note: This will cascade delete associated holding_lots and transactions.
+    """
     holding = db.query(Holding).filter(Holding.id == holding_id).first()
     if not holding:
         raise HTTPException(

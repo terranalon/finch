@@ -195,6 +195,12 @@ class TestProcessSell:
         with pytest.raises(InsufficientQuantityError):
             svc.process_sell(holding, quantity=Decimal("20"))
 
+    def test_rejects_missing_quantity(self, db, holding_with_lots):
+        holding, _, _ = holding_with_lots
+        svc = TransactionService(db)
+        with pytest.raises(TransactionError):
+            svc.process_sell(holding, quantity=None)
+
     def test_no_open_lots_raises(self, db, test_account, test_asset):
         holding = Holding(
             account_id=test_account.id,

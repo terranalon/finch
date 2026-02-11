@@ -78,8 +78,11 @@ class TransactionService:
     def process_sell(
         self,
         holding: Holding,
-        quantity: Decimal,
+        quantity: Decimal | None,
     ) -> SellResult:
+        if not quantity:
+            raise TransactionError("Sell transactions require quantity")
+
         if holding.quantity < quantity:
             raise InsufficientQuantityError(
                 f"Insufficient quantity. Holding has {holding.quantity}, trying to sell {quantity}"
