@@ -49,6 +49,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [accountDetails, setAccountDetails] = useState(null);
   const [createdAccountId, setCreatedAccountId] = useState(null);
   const accountIdRef = useRef(null);
+  const createPromiseRef = useRef(null);
   const [skippedData, setSkippedData] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showImportResults, setShowImportResults] = useState(false);
@@ -73,29 +74,39 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
   const createAccount = useCallback(async () => {
     if (accountIdRef.current) return accountIdRef.current;
+    if (createPromiseRef.current) return createPromiseRef.current;
 
-    const response = await api('/accounts', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: accountDetails.name,
-        description: accountDetails.description || null,
-        account_type: accountDetails.accountType,
-        currency: accountDetails.currency,
-        institution: broker?.name || 'Manual',
-        broker_type: broker?.type || null,
-        portfolio_ids: portfolioId ? [portfolioId] : [],
-      }),
-    });
+    const promise = (async () => {
+      try {
+        const response = await api('/accounts', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: accountDetails.name,
+            description: accountDetails.description || null,
+            account_type: accountDetails.accountType,
+            currency: accountDetails.currency,
+            institution: broker?.name || 'Manual',
+            broker_type: broker?.type || null,
+            portfolio_ids: portfolioId ? [portfolioId] : [],
+          }),
+        });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to create account');
-    }
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to create account');
+        }
 
-    const account = await response.json();
-    accountIdRef.current = account.id;
-    setCreatedAccountId(account.id);
-    return account.id;
+        const account = await response.json();
+        accountIdRef.current = account.id;
+        setCreatedAccountId(account.id);
+        return account.id;
+      } finally {
+        createPromiseRef.current = null;
+      }
+    })();
+
+    createPromiseRef.current = promise;
+    return promise;
   }, [accountDetails, broker, portfolioId]);
 
   const reset = () => {
@@ -107,6 +118,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setAccountDetails(null);
     setCreatedAccountId(null);
     accountIdRef.current = null;
+    createPromiseRef.current = null;
     setSkippedData(false);
     setIsImporting(false);
     setShowImportResults(false);
@@ -125,9 +137,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   };
 
   const goToStep = (step) => {
+    if (accountIdRef.current) return; // Account persisted -- no going back
     setCurrentStep(step);
-    // Reset forward state when going back
-    accountIdRef.current = null;
     if (step <= 3) setAccountDetails(null);
     if (step <= 2) setBroker(null);
     if (step <= 1) setCategory(null);
@@ -541,6 +552,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             maxReachedStep={maxReachedStep}
             skippedSteps={skippedSteps}
             onStepClick={goToStep}
+            locked={!!createdAccountId}
           />
         </div>
       )}
