@@ -24,6 +24,21 @@ def cash_usd(db):
     return asset
 
 
+@pytest.fixture
+def cash_holding(db, test_account, cash_usd):
+    """Holding for a cash asset, used by forex and cash activity tests."""
+    holding = Holding(
+        account_id=test_account.id,
+        asset_id=cash_usd.id,
+        quantity=Decimal("5000"),
+        cost_basis=Decimal("0"),
+        is_active=True,
+    )
+    db.add(holding)
+    db.flush()
+    return holding
+
+
 def _create_txn(db, holding, **kwargs):
     """Helper to create a transaction with defaults."""
     defaults = {
@@ -130,20 +145,10 @@ class TestGetForex:
         assert len(forex) == 1
         assert forex[0].from_currency == "USD"
 
-    def test_legacy_format_parses_notes(self, db, test_account, cash_usd):
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
-
+    def test_legacy_format_parses_notes(self, db, test_account, cash_holding):
         _create_txn(
             db,
-            holding,
+            cash_holding,
             type="Forex Conversion",
             notes="IBKR Import - Convert 1500 ILS to 420 USD @ 0.28",
             amount=Decimal("1500"),
@@ -160,20 +165,10 @@ class TestGetForex:
 
 
 class TestGetCashActivity:
-    def test_returns_cash_transactions(self, db, test_account, cash_usd):
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("5000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
-
+    def test_returns_cash_transactions(self, db, test_account, cash_holding):
         _create_txn(
             db,
-            holding,
+            cash_holding,
             type="Deposit",
             amount=Decimal("5000"),
             quantity=None,
@@ -228,19 +223,10 @@ class TestCountDividends:
 
 
 class TestCountForex:
-    def test_counts_forex_transactions(self, db, test_account, cash_usd):
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
+    def test_counts_forex_transactions(self, db, test_account, cash_holding):
         _create_txn(
             db,
-            holding,
+            cash_holding,
             type="Forex Conversion",
             amount=Decimal("1000"),
             quantity=None,
@@ -251,19 +237,10 @@ class TestCountForex:
 
 
 class TestCountCashActivity:
-    def test_counts_cash_transactions(self, db, test_account, cash_usd):
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("5000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
+    def test_counts_cash_transactions(self, db, test_account, cash_holding):
         _create_txn(
             db,
-            holding,
+            cash_holding,
             type="Deposit",
             amount=Decimal("5000"),
             quantity=None,

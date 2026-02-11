@@ -1,6 +1,7 @@
 """Value objects for holding services."""
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class HoldingDetail:
     quantity: float
     cost_basis: float
     strategy_horizon: str | None
-    tags: str | None
+    tags: dict[str, Any] | None
     is_active: bool
     closed_at: str | None
     created_at: str

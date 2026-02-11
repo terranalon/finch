@@ -29,9 +29,9 @@ class TransactionRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[_TransactionRow]:
-        query = self._base_query(account_ids, _TRADE_TYPES, account_id=account_id)
-        if symbol:
-            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
+        query = self._filtered_query(
+            account_ids, _TRADE_TYPES, account_id=account_id, symbol=symbol
+        )
         return self._paginate(query, limit, offset)
 
     def find_dividends(
@@ -43,9 +43,9 @@ class TransactionRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[_TransactionRow]:
-        query = self._base_query(account_ids, _DIVIDEND_TYPES, account_id=account_id)
-        if symbol:
-            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
+        query = self._filtered_query(
+            account_ids, _DIVIDEND_TYPES, account_id=account_id, symbol=symbol
+        )
         return self._paginate(query, limit, offset)
 
     def find_forex(
@@ -77,10 +77,9 @@ class TransactionRepository:
         account_id: int | None = None,
         symbol: str | None = None,
     ) -> int:
-        query = self._base_query(account_ids, _TRADE_TYPES, account_id=account_id)
-        if symbol:
-            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
-        return query.count()
+        return self._filtered_query(
+            account_ids, _TRADE_TYPES, account_id=account_id, symbol=symbol
+        ).count()
 
     def count_dividends(
         self,
@@ -89,10 +88,9 @@ class TransactionRepository:
         account_id: int | None = None,
         symbol: str | None = None,
     ) -> int:
-        query = self._base_query(account_ids, _DIVIDEND_TYPES, account_id=account_id)
-        if symbol:
-            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
-        return query.count()
+        return self._filtered_query(
+            account_ids, _DIVIDEND_TYPES, account_id=account_id, symbol=symbol
+        ).count()
 
     def count_forex(
         self,
@@ -100,9 +98,7 @@ class TransactionRepository:
         *,
         account_id: int | None = None,
     ) -> int:
-        return self._base_query(
-            account_ids, ["Forex Conversion"], account_id=account_id
-        ).count()
+        return self._base_query(account_ids, ["Forex Conversion"], account_id=account_id).count()
 
     def count_cash_activity(
         self,
@@ -132,6 +128,20 @@ class TransactionRepository:
         )
         if account_id:
             query = query.filter(Account.id == account_id)
+        return query
+
+    def _filtered_query(
+        self,
+        account_ids: Sequence[int],
+        transaction_types: list[str],
+        *,
+        account_id: int | None = None,
+        symbol: str | None = None,
+    ) -> Query:
+        """Build base query with optional symbol filter."""
+        query = self._base_query(account_ids, transaction_types, account_id=account_id)
+        if symbol:
+            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
         return query
 
     @staticmethod
