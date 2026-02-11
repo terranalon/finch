@@ -7,6 +7,7 @@ import pytest
 
 from app.models import Asset, Holding, Transaction
 from app.services.portfolio.transaction_view_service import TransactionViewService
+from app.services.repositories.transaction_repository import TransactionRepository
 
 
 @pytest.fixture
@@ -183,6 +184,93 @@ class TestGetCashActivity:
         assert len(cash) == 1
         assert cash[0].amount == Decimal("5000")
         assert cash[0].type == "Deposit"
+
+
+class TestCountTrades:
+    def test_counts_trade_transactions(self, db, test_account, test_asset, test_holding):
+        _create_txn(db, test_holding, type="Buy")
+        _create_txn(db, test_holding, type="Sell")
+        repo = TransactionRepository(db)
+        assert repo.count_trades([test_account.id]) == 2
+
+    def test_excludes_non_trade_types(self, db, test_account, test_asset, test_holding):
+        _create_txn(db, test_holding, type="Buy")
+        _create_txn(
+            db,
+            test_holding,
+            type="Dividend",
+            amount=Decimal("10"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        repo = TransactionRepository(db)
+        assert repo.count_trades([test_account.id]) == 1
+
+    def test_filters_by_symbol(self, db, test_account, test_asset, test_holding):
+        _create_txn(db, test_holding, type="Buy")
+        repo = TransactionRepository(db)
+        assert repo.count_trades([test_account.id], symbol="AAPL") == 1
+        assert repo.count_trades([test_account.id], symbol="MSFT") == 0
+
+
+class TestCountDividends:
+    def test_counts_dividend_transactions(self, db, test_account, test_asset, test_holding):
+        _create_txn(
+            db,
+            test_holding,
+            type="Dividend",
+            amount=Decimal("25"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        repo = TransactionRepository(db)
+        assert repo.count_dividends([test_account.id]) == 1
+
+
+class TestCountForex:
+    def test_counts_forex_transactions(self, db, test_account, cash_usd):
+        holding = Holding(
+            account_id=test_account.id,
+            asset_id=cash_usd.id,
+            quantity=Decimal("1000"),
+            cost_basis=Decimal("0"),
+            is_active=True,
+        )
+        db.add(holding)
+        db.flush()
+        _create_txn(
+            db,
+            holding,
+            type="Forex Conversion",
+            amount=Decimal("1000"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        repo = TransactionRepository(db)
+        assert repo.count_forex([test_account.id]) == 1
+
+
+class TestCountCashActivity:
+    def test_counts_cash_transactions(self, db, test_account, cash_usd):
+        holding = Holding(
+            account_id=test_account.id,
+            asset_id=cash_usd.id,
+            quantity=Decimal("5000"),
+            cost_basis=Decimal("0"),
+            is_active=True,
+        )
+        db.add(holding)
+        db.flush()
+        _create_txn(
+            db,
+            holding,
+            type="Deposit",
+            amount=Decimal("5000"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        repo = TransactionRepository(db)
+        assert repo.count_cash_activity([test_account.id]) == 1
 
 
 class TestParseLegacyForexNotes:

@@ -70,6 +70,48 @@ class TransactionRepository:
         query = self._base_query(account_ids, _CASH_TYPES, account_id=account_id)
         return self._paginate(query, limit, offset)
 
+    def count_trades(
+        self,
+        account_ids: Sequence[int],
+        *,
+        account_id: int | None = None,
+        symbol: str | None = None,
+    ) -> int:
+        query = self._base_query(account_ids, _TRADE_TYPES, account_id=account_id)
+        if symbol:
+            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
+        return query.count()
+
+    def count_dividends(
+        self,
+        account_ids: Sequence[int],
+        *,
+        account_id: int | None = None,
+        symbol: str | None = None,
+    ) -> int:
+        query = self._base_query(account_ids, _DIVIDEND_TYPES, account_id=account_id)
+        if symbol:
+            query = query.filter(Asset.symbol.ilike(f"%{symbol}%"))
+        return query.count()
+
+    def count_forex(
+        self,
+        account_ids: Sequence[int],
+        *,
+        account_id: int | None = None,
+    ) -> int:
+        return self._base_query(
+            account_ids, ["Forex Conversion"], account_id=account_id
+        ).count()
+
+    def count_cash_activity(
+        self,
+        account_ids: Sequence[int],
+        *,
+        account_id: int | None = None,
+    ) -> int:
+        return self._base_query(account_ids, _CASH_TYPES, account_id=account_id).count()
+
     def _base_query(
         self,
         account_ids: Sequence[int],
