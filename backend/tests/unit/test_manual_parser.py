@@ -59,3 +59,47 @@ class TestManualParserMetadata:
 
     def test_has_no_api(self, parser: ManualParser):
         assert parser.has_api() is False
+
+
+class TestManualParserDateRange:
+
+    def test_extract_date_range_csv(self, parser: ManualParser, sample_csv_content: bytes):
+        start, end = parser.extract_date_range(sample_csv_content)
+        assert start == date(2025, 1, 15)
+        assert end == date(2025, 9, 1)
+
+    def test_extract_date_range_xlsx(self, parser: ManualParser, sample_xlsx_content: bytes):
+        start, end = parser.extract_date_range(sample_xlsx_content)
+        assert start == date(2025, 1, 15)
+        assert end == date(2025, 9, 1)
+
+    def test_extract_date_range_empty_file(self, parser: ManualParser):
+        with pytest.raises(ValueError, match="Empty"):
+            parser.extract_date_range(b"")
+
+    def test_extract_date_range_missing_columns(self, parser: ManualParser):
+        bad_csv = b"col_a,col_b\n1,2\n"
+        with pytest.raises(ValueError, match="Missing required columns"):
+            parser.extract_date_range(bad_csv)
+
+
+class TestManualParserCSVStructure:
+
+    def test_total_records(self, parsed_csv: "BrokerImportData"):
+        assert parsed_csv.total_records == 15
+
+    def test_date_range(self, parsed_csv: "BrokerImportData"):
+        assert parsed_csv.start_date == date(2025, 1, 15)
+        assert parsed_csv.end_date == date(2025, 9, 1)
+
+    def test_transaction_count(self, parsed_csv: "BrokerImportData"):
+        """Buy + Sell transactions (not dividends or cash)."""
+        assert len(parsed_csv.transactions) == 9
+
+    def test_cash_transaction_count(self, parsed_csv: "BrokerImportData"):
+        """Deposit + Withdrawal."""
+        assert len(parsed_csv.cash_transactions) == 2
+
+    def test_dividend_count(self, parsed_csv: "BrokerImportData"):
+        """Dividend + Interest + Staking."""
+        assert len(parsed_csv.dividends) == 4
