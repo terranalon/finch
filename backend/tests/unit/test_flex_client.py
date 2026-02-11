@@ -122,9 +122,7 @@ class TestFetchFlexReportRateLimit:
     @patch(f"{PATCH_PREFIX}.time.sleep")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
-    def test_retries_on_rate_limit_then_succeeds(
-        self, mock_request, mock_poll, mock_sleep
-    ):
+    def test_retries_on_rate_limit_then_succeeds(self, mock_request, mock_poll, mock_sleep):
         mock_request.return_value = "ref123"
         mock_poll.side_effect = [
             ("rate_limited", None),
@@ -179,9 +177,7 @@ class TestFetchFlexReportRateLimit:
     @patch(f"{PATCH_PREFIX}.time.sleep")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient._poll_once")
     @patch(f"{PATCH_PREFIX}.IBKRFlexClient.request_flex_query")
-    def test_no_separate_download_after_success(
-        self, mock_request, mock_poll, mock_sleep
-    ):
+    def test_no_separate_download_after_success(self, mock_request, mock_poll, mock_sleep):
         """Verify success returns data directly from poll without extra HTTP call."""
         mock_request.return_value = "ref123"
         expected_data = FLEX_QUERY_RESPONSE_XML.encode()

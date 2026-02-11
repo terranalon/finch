@@ -24,16 +24,12 @@ class PortfolioManagementService:
         for account in portfolio.accounts:
             holdings = (
                 self._db.query(Holding)
-                .filter(
-                    Holding.account_id == account.id, Holding.is_active.is_(True)
-                )
+                .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
                 .all()
             )
 
             for holding in holdings:
-                asset = (
-                    self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
-                )
+                asset = self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
                 if not asset:
                     continue
 
@@ -49,13 +45,9 @@ class PortfolioManagementService:
                     market_value_native = holding.quantity * asset.last_fetched_price
 
                 if asset_currency != "USD":
-                    rate_to_usd = self._currency.get_exchange_rate(
-                        asset_currency, "USD"
-                    )
+                    rate_to_usd = self._currency.get_exchange_rate(asset_currency, "USD")
                     market_value_usd = (
-                        market_value_native * rate_to_usd
-                        if rate_to_usd
-                        else market_value_native
+                        market_value_native * rate_to_usd if rate_to_usd else market_value_native
                     )
                 else:
                     market_value_usd = market_value_native
@@ -77,9 +69,7 @@ class PortfolioManagementService:
         shared: list[SharedAccountInfo] = []
 
         for account in portfolio.accounts:
-            other_portfolios = [
-                p for p in account.portfolios if p.id != portfolio.id
-            ]
+            other_portfolios = [p for p in account.portfolios if p.id != portfolio.id]
             if other_portfolios:
                 shared = [
                     *shared,

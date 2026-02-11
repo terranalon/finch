@@ -12,7 +12,9 @@ from app.services.portfolio.portfolio_management_service import (
 
 
 class TestCalculatePortfolioValue:
-    def test_single_equity_holding(self, db, test_portfolio, test_account, test_asset, test_holding):
+    def test_single_equity_holding(
+        self, db, test_portfolio, test_account, test_asset, test_holding
+    ):
         svc = PortfolioManagementService(db)
         value = svc.calculate_portfolio_value(test_portfolio)
         # test_holding: qty=10, test_asset: last_fetched_price=150, currency=USD

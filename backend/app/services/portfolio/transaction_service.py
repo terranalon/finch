@@ -34,9 +34,7 @@ class TransactionService:
                 f"Must be one of: {', '.join(VALID_TRANSACTION_TYPES)}"
             )
 
-    def find_or_create_holding(
-        self, account_id: int, asset_id: int
-    ) -> tuple[Holding, bool]:
+    def find_or_create_holding(self, account_id: int, asset_id: int) -> tuple[Holding, bool]:
         return self._holding_repo.find_or_create(account_id, asset_id)
 
     def process_buy(
@@ -48,9 +46,7 @@ class TransactionService:
         purchase_date: date,
     ) -> BuyResult:
         if not quantity or not price_per_unit:
-            raise TransactionError(
-                "Buy transactions require quantity and price_per_unit"
-            )
+            raise TransactionError("Buy transactions require quantity and price_per_unit")
 
         cost = (quantity * price_per_unit) + fees
 
@@ -86,8 +82,7 @@ class TransactionService:
     ) -> SellResult:
         if holding.quantity < quantity:
             raise InsufficientQuantityError(
-                f"Insufficient quantity. Holding has {holding.quantity}, "
-                f"trying to sell {quantity}"
+                f"Insufficient quantity. Holding has {holding.quantity}, trying to sell {quantity}"
             )
 
         lots = (
@@ -124,8 +119,7 @@ class TransactionService:
 
         if remaining_to_sell > 0:
             raise InsufficientQuantityError(
-                f"Could not allocate all shares to lots. "
-                f"{remaining_to_sell} shares remaining."
+                f"Could not allocate all shares to lots. {remaining_to_sell} shares remaining."
             )
 
         holding.quantity -= quantity

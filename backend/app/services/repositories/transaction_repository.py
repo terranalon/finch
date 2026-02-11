@@ -56,9 +56,7 @@ class TransactionRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[_TransactionRow]:
-        query = self._base_query(
-            account_ids, ["Forex Conversion"], account_id=account_id
-        )
+        query = self._base_query(account_ids, ["Forex Conversion"], account_id=account_id)
         return self._paginate(query, limit, offset)
 
     def find_cash_activity(

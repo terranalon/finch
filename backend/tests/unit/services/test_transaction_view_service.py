@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import Account, Asset, Holding, Transaction
+from app.models import Asset, Holding, Transaction
 from app.services.portfolio.transaction_view_service import TransactionViewService
 
 

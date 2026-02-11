@@ -78,7 +78,7 @@ class TestProcessBuy:
         db.flush()
 
         svc = TransactionService(db)
-        result = svc.process_buy(
+        svc.process_buy(
             holding,
             quantity=Decimal("10"),
             price_per_unit=Decimal("50"),

@@ -60,9 +60,7 @@ class HoldingService:
                 strategy_horizon=holding.strategy_horizon,
                 tags=holding.tags,
                 is_active=holding.is_active,
-                closed_at=(
-                    holding.closed_at.isoformat() if holding.closed_at else None
-                ),
+                closed_at=(holding.closed_at.isoformat() if holding.closed_at else None),
                 created_at=holding.created_at.isoformat(),
                 updated_at=holding.updated_at.isoformat(),
                 account=HoldingAccountInfo(
@@ -94,11 +92,7 @@ class HoldingService:
         )
 
         reconstructed_map = {h["asset_id"]: h for h in reconstructed}
-        holdings = (
-            self._db.query(Holding)
-            .filter(Holding.account_id == account_id)
-            .all()
-        )
+        holdings = self._db.query(Holding).filter(Holding.account_id == account_id).all()
 
         updated = 0
         activated = 0

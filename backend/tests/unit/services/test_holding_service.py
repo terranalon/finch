@@ -3,8 +3,6 @@
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from app.models import Transaction
 from app.services.portfolio.holding_service import HoldingService
 
@@ -39,9 +37,7 @@ class TestListHoldings:
 
 
 class TestReconstructHoldings:
-    def test_updates_holding_from_transactions(
-        self, db, test_account, test_asset, test_holding
-    ):
+    def test_updates_holding_from_transactions(self, db, test_account, test_asset, test_holding):
         txn = Transaction(
             holding_id=test_holding.id,
             date=date(2024, 1, 15),

@@ -133,9 +133,7 @@ class TransactionViewService:
         if not account_ids:
             return []
 
-        rows = self._repo.find_forex(
-            account_ids, account_id=account_id, limit=limit, offset=offset
-        )
+        rows = self._repo.find_forex(account_ids, account_id=account_id, limit=limit, offset=offset)
 
         forex_list: list[ForexItem] = []
         seen_legacy_pairs: set[tuple[str, ...]] = set()
@@ -174,15 +172,9 @@ class TransactionViewService:
 
     def _build_new_format_forex(self, txn, asset, account) -> ForexItem | None:
         """Build a ForexItem from a transaction with to_holding_id."""
-        to_holding = (
-            self._db.query(Holding)
-            .filter(Holding.id == txn.to_holding_id)
-            .first()
-        )
+        to_holding = self._db.query(Holding).filter(Holding.id == txn.to_holding_id).first()
         to_asset = (
-            self._db.query(Asset)
-            .filter(Asset.id == to_holding.asset_id)
-            .first()
+            self._db.query(Asset).filter(Asset.id == to_holding.asset_id).first()
             if to_holding
             else None
         )
@@ -244,9 +236,7 @@ class TransactionViewService:
 
         return items
 
-    def _compute_cash_values(
-        self, txn, asset
-    ) -> tuple[Decimal, Decimal | None, str]:
+    def _compute_cash_values(self, txn, asset) -> tuple[Decimal, Decimal | None, str]:
         """Compute amount, fees, and native currency for a cash activity row.
 
         For crypto assets with cash-like transaction types, converts quantity
@@ -260,9 +250,7 @@ class TransactionViewService:
         native_currency = asset.currency or asset.symbol
         return amount, fees, native_currency
 
-    def _compute_crypto_cash_values(
-        self, txn, asset
-    ) -> tuple[Decimal, Decimal | None, str]:
+    def _compute_crypto_cash_values(self, txn, asset) -> tuple[Decimal, Decimal | None, str]:
         """Compute cash values for crypto deposit/withdrawal/custody fee."""
         quantity = txn.quantity or Decimal("0")
         price = txn.price_per_unit
@@ -286,9 +274,7 @@ class TransactionViewService:
     ) -> tuple[Decimal, str, Decimal, str, Decimal] | None:
         if not notes:
             return None
-        match = re.search(
-            r"Convert ([\d.]+) (\w+) to ([\d.]+) (\w+) @ ([\d.]+)", notes
-        )
+        match = re.search(r"Convert ([\d.]+) (\w+) to ([\d.]+) (\w+) @ ([\d.]+)", notes)
         if not match:
             return None
         return (

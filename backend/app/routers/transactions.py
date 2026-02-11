@@ -132,9 +132,7 @@ async def create_transaction(
     svc = TransactionService(db)
     try:
         svc.validate_transaction_type(transaction.type)
-        holding, _ = svc.find_or_create_holding(
-            transaction.account_id, transaction.asset_id
-        )
+        holding, _ = svc.find_or_create_holding(transaction.account_id, transaction.asset_id)
 
         transaction_data = transaction.model_dump()
         transaction_data["holding_id"] = holding.id
