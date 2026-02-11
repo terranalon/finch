@@ -126,9 +126,7 @@ class IBKRFlexClient:
                 root = ET.fromstring(response.content)
             except ET.ParseError:
                 # Not parseable as XML -- treat as raw data (success)
-                logger.info(
-                    f"Successfully fetched Flex Query data ({len(response.content)} bytes)"
-                )
+                logger.info(f"Successfully fetched Flex Query data ({len(response.content)} bytes)")
                 return ("success", response.content)
 
             # Check for error codes (rate limit, pending, or fatal)
@@ -144,9 +142,7 @@ class IBKRFlexClient:
 
             # Success -- got actual FlexQueryResponse data
             if root.tag == "FlexQueryResponse":
-                logger.info(
-                    f"Successfully fetched Flex Query data ({len(response.content)} bytes)"
-                )
+                logger.info(f"Successfully fetched Flex Query data ({len(response.content)} bytes)")
                 return ("success", response.content)
 
             logger.warning(f"Unknown response: {response.text[:200]}")

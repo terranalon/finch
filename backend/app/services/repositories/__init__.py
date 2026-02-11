@@ -16,6 +16,7 @@ from .asset_repository import AssetRepository
 from .exceptions import DuplicateError, NotFoundError, RepositoryError
 from .holding_repository import HoldingRepository
 from .price_repository import PriceRepository
+from .transaction_repository import TransactionRepository
 from .user_repository import UserRepository
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     "NotFoundError",
     "PriceRepository",
     "RepositoryError",
+    "TransactionRepository",
     "UserRepository",
 ]
