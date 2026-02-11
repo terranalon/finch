@@ -76,35 +76,32 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     if (accountIdRef.current) return accountIdRef.current;
     if (createPromiseRef.current) return createPromiseRef.current;
 
-    const promise = (async () => {
-      try {
-        const response = await api('/accounts', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: accountDetails.name,
-            description: accountDetails.description || null,
-            account_type: accountDetails.accountType,
-            currency: accountDetails.currency,
-            institution: broker?.name || 'Manual',
-            broker_type: broker?.type || null,
-            portfolio_ids: portfolioId ? [portfolioId] : [],
-          }),
-        });
+    async function doCreate() {
+      const response = await api('/accounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: accountDetails.name,
+          description: accountDetails.description || null,
+          account_type: accountDetails.accountType,
+          currency: accountDetails.currency,
+          institution: broker?.name || 'Manual',
+          broker_type: broker?.type || null,
+          portfolio_ids: portfolioId ? [portfolioId] : [],
+        }),
+      });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || 'Failed to create account');
-        }
-
-        const account = await response.json();
-        accountIdRef.current = account.id;
-        setCreatedAccountId(account.id);
-        return account.id;
-      } finally {
-        createPromiseRef.current = null;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create account');
       }
-    })();
 
+      const account = await response.json();
+      accountIdRef.current = account.id;
+      setCreatedAccountId(account.id);
+      return account.id;
+    }
+
+    const promise = doCreate().finally(() => { createPromiseRef.current = null; });
     createPromiseRef.current = promise;
     return promise;
   }, [accountDetails, broker, portfolioId]);
