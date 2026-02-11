@@ -26,7 +26,7 @@ from app.rate_limiter import limiter
 # Import broker clients and services at module level for testability
 from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
 from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
-from app.services.brokers.ibkr.flex_client import IBKRFlexClient
+from app.services.brokers.credential_test_service import create_crypto_client, test_credentials
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
@@ -229,14 +229,6 @@ def _get_validated_account(account_id: int, current_user: User, db: Session) -> 
     return account
 
 
-def _create_crypto_client(config: BrokerConfig, api_key: str, api_secret: str):
-    """Create a crypto broker client using the registry configuration."""
-    if not config.client_class or not config.credentials_class:
-        raise ValueError(f"Broker {config.key} missing client_class or credentials_class")
-    credentials = config.credentials_class(api_key=api_key, api_secret=api_secret)
-    return config.client_class(credentials)
-
-
 def _get_api_key_credentials(
     account: Account, broker_key: str, broker_name: str
 ) -> tuple[str, str]:
@@ -302,7 +294,7 @@ def _import_crypto_broker(
     db: Session,
 ) -> dict[str, Any]:
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
-    client = _create_crypto_client(config, api_key, api_secret)
+    client = create_crypto_client(config, api_key, api_secret)
 
     logger.info(f"Fetching {config.name} data for account {account_id}")
     broker_data = client.fetch_all_data()
@@ -556,43 +548,6 @@ async def import_ibkr_snapshot(
     }
 
 
-def _test_credentials_against_broker(
-    config: BrokerConfig, cred_field1: str, cred_field2: str
-) -> dict[str, Any]:
-    """Test credentials by calling the broker API.
-
-    For FLEX_QUERY brokers (cred_field1=flex_token, cred_field2=flex_query_id),
-    initiates a Flex Query request.
-    For API_KEY_SECRET brokers (cred_field1=api_key, cred_field2=api_secret),
-    fetches account balances.
-
-    Returns a result dict with 'status' ('success'/'failed') and broker-specific fields.
-    """
-    if config.credential_type == CredentialType.FLEX_QUERY:
-        reference_code = IBKRFlexClient.request_flex_query(cred_field1, cred_field2)
-        if reference_code:
-            return {
-                "status": "success",
-                "message": f"{config.name} credentials are valid",
-                "reference_code": reference_code,
-            }
-        return {
-            "status": "failed",
-            "message": f"{config.name} credential test failed: invalid token or query ID",
-        }
-
-    client = _create_crypto_client(config, cred_field1, cred_field2)
-    balance_method = getattr(client, config.balance_method)
-    balances = balance_method()
-
-    return {
-        "status": "success",
-        "message": f"{config.name} credentials are valid",
-        "balances": {k: str(v) for k, v in balances.items()},
-        "assets_count": len(balances),
-    }
-
-
 @router.post("/{broker_type}/test-credentials", response_model=dict[str, Any])
 @limiter.limit("10/minute")
 async def test_credentials_stateless(
@@ -611,7 +566,7 @@ async def test_credentials_stateless(
 
     try:
         field1, field2 = get_credential_fields(config.credential_type)
-        return _test_credentials_against_broker(
+        return test_credentials(
             config, getattr(credentials, field1), getattr(credentials, field2)
         )
     except HTTPException:
@@ -654,7 +609,7 @@ async def test_broker_credentials(
         else:
             cred1, cred2 = _get_api_key_credentials(account, config.key, config.name)
 
-        result = _test_credentials_against_broker(config, cred1, cred2)
+        result = test_credentials(config, cred1, cred2)
         result["account_id"] = account_id
         return result
 
