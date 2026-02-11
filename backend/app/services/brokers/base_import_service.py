@@ -232,7 +232,6 @@ class BaseBrokerImportService(ABC):
     def _reconstruct_holdings(
         self,
         account_id: int,
-        data_source_ids: list[int] | None = None,
     ) -> dict:
         """Reconstruct holdings from transactions.
 
@@ -241,11 +240,10 @@ class BaseBrokerImportService(ABC):
 
         Args:
             account_id: Account ID to reconstruct holdings for
-            data_source_ids: Optional list of data source IDs to filter by
 
         Returns:
             Statistics dictionary from holdings reconstruction
         """
         from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 
-        return reconstruct_and_update_holdings(self.db, account_id, data_source_ids=data_source_ids)
+        return reconstruct_and_update_holdings(self.db, account_id)
