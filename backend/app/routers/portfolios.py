@@ -1,11 +1,8 @@
 """Portfolios API router."""
 
-from decimal import Decimal
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.constants import AssetClass
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import (
@@ -14,8 +11,6 @@ from app.dependencies.user_scope import (
     validate_user_portfolio,
 )
 from app.models.account import Account
-from app.models.asset import Asset
-from app.models.holding import Holding
 from app.models.portfolio import Portfolio
 from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
@@ -26,13 +21,12 @@ from app.schemas.portfolio import (
     PortfolioCreate,
     PortfolioUpdate,
     PortfolioWithAccountCount,
-    SharedAccountInfo,
 )
 from app.schemas.portfolio import (
     Portfolio as PortfolioSchema,
 )
+from app.services.portfolio.portfolio_management_service import PortfolioManagementService
 from app.services.repositories import AccountRepository
-from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
 
@@ -59,67 +53,17 @@ def _to_portfolio_with_account_count(
     include_values: bool = False,
 ) -> PortfolioWithAccountCount:
     """Convert a Portfolio model to PortfolioWithAccountCount schema."""
-    total_value = _calculate_portfolio_value(db, portfolio) if include_values else None
+    total_value = (
+        PortfolioManagementService(db).calculate_portfolio_value(portfolio)
+        if include_values
+        else None
+    )
     base = PortfolioSchema.model_validate(portfolio)
     return PortfolioWithAccountCount(
         **base.model_dump(),
         account_count=len(portfolio.accounts),
         total_value=total_value,
     )
-
-
-def _calculate_portfolio_value(db: Session, portfolio: Portfolio) -> float:
-    """Calculate total portfolio value in the portfolio's default currency."""
-    total_value_usd = Decimal("0")
-
-    # Get all accounts in this portfolio via relationship
-    accounts = portfolio.accounts
-
-    for account in accounts:
-        # Get active holdings for this account
-        holdings = (
-            db.query(Holding)
-            .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
-            .all()
-        )
-
-        for holding in holdings:
-            asset = db.query(Asset).filter(Asset.id == holding.asset_id).first()
-            if not asset:
-                continue
-
-            asset_currency = asset.currency or "USD"
-
-            # Handle Cash assets - value is the quantity itself
-            if asset.asset_class == AssetClass.CASH:
-                if holding.quantity <= 0:
-                    continue
-                market_value_native = holding.quantity
-            else:
-                current_price = asset.last_fetched_price or Decimal("0")
-                if not current_price:
-                    continue
-                market_value_native = holding.quantity * current_price
-
-            # Convert to USD
-            if asset_currency != "USD":
-                rate_to_usd = CurrencyService(db).get_exchange_rate(asset_currency, "USD")
-                market_value_usd = (
-                    market_value_native * rate_to_usd if rate_to_usd else market_value_native
-                )
-            else:
-                market_value_usd = market_value_native
-
-            total_value_usd += market_value_usd
-
-    # Convert from USD to portfolio's default currency
-    if portfolio.default_currency != "USD":
-        rate = CurrencyService(db).get_exchange_rate("USD", portfolio.default_currency)
-        total_value = total_value_usd * rate if rate else total_value_usd
-    else:
-        total_value = total_value_usd
-
-    return float(total_value)
 
 
 @router.post("", response_model=PortfolioSchema, status_code=status.HTTP_201_CREATED)
@@ -190,29 +134,6 @@ async def update_portfolio(
     return db_portfolio
 
 
-def _categorize_accounts(
-    portfolio: Portfolio,
-) -> tuple[list[Account], list[SharedAccountInfo]]:
-    """Categorize portfolio accounts into exclusive (will be deleted) and shared (will be unlinked)."""
-    exclusive: list[Account] = []
-    shared: list[SharedAccountInfo] = []
-
-    for account in portfolio.accounts:
-        other_portfolios = [p for p in account.portfolios if p.id != portfolio.id]
-        if other_portfolios:
-            shared.append(
-                SharedAccountInfo(
-                    id=account.id,
-                    name=account.name,
-                    other_portfolios=[p.name for p in other_portfolios],
-                )
-            )
-        else:
-            exclusive.append(account)
-
-    return exclusive, shared
-
-
 @router.get("/{portfolio_id}/deletion-preview", response_model=DeletionPreview)
 async def get_deletion_preview(
     portfolio_id: str,
@@ -224,7 +145,8 @@ async def get_deletion_preview(
     if not portfolio:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
 
-    exclusive, shared = _categorize_accounts(portfolio)
+    svc = PortfolioManagementService(db)
+    exclusive, shared = svc.categorize_accounts_for_deletion(portfolio)
 
     warning = ""
     if exclusive:
@@ -262,15 +184,8 @@ async def delete_portfolio(
             detail="Portfolio has accounts. Use ?confirm=true or call deletion-preview first.",
         )
 
-    exclusive, _ = _categorize_accounts(portfolio)
-
-    for account in list(portfolio.accounts):
-        if account in exclusive:
-            db.delete(account)
-        else:
-            account.portfolios.remove(portfolio)
-
-    db.delete(portfolio)
+    svc = PortfolioManagementService(db)
+    svc.delete_portfolio_cascade(portfolio)
     db.commit()
 
 
