@@ -10,8 +10,9 @@ const STEPS = [
   { num: 5, label: 'Done' },
 ];
 
-export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps = [], onStepClick }) {
+export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps = [], onStepClick, locked = false }) {
   const canClickStep = (stepNum) => {
+    if (locked) return false; // Account persisted -- navigation locked
     if (currentStep === 5) return false; // Terminal step - no navigation
     if (skippedSteps.includes(stepNum)) return false; // Skipped steps disabled
     if (stepNum >= currentStep) return false; // Can't go forward via indicator

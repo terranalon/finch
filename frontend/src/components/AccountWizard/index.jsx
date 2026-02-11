@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../../lib/index.js';
@@ -48,6 +48,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [broker, setBroker] = useState(null);
   const [accountDetails, setAccountDetails] = useState(null);
   const [createdAccountId, setCreatedAccountId] = useState(null);
+  const accountIdRef = useRef(null);
+  const createPromiseRef = useRef(null);
   const [skippedData, setSkippedData] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showImportResults, setShowImportResults] = useState(false);
@@ -70,6 +72,40 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setNotification({ message: null, type: 'error' });
   }, []);
 
+  const createAccount = useCallback(async () => {
+    if (accountIdRef.current) return accountIdRef.current;
+    if (createPromiseRef.current) return createPromiseRef.current;
+
+    async function doCreate() {
+      const response = await api('/accounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: accountDetails.name,
+          description: accountDetails.description || null,
+          account_type: accountDetails.accountType,
+          currency: accountDetails.currency,
+          institution: broker?.name || 'Manual',
+          broker_type: broker?.type || null,
+          portfolio_ids: portfolioId ? [portfolioId] : [],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create account');
+      }
+
+      const account = await response.json();
+      accountIdRef.current = account.id;
+      setCreatedAccountId(account.id);
+      return account.id;
+    }
+
+    const promise = doCreate().finally(() => { createPromiseRef.current = null; });
+    createPromiseRef.current = promise;
+    return promise;
+  }, [accountDetails, broker, portfolioId]);
+
   const reset = () => {
     setCurrentStep(1);
     setMaxReachedStep(1);
@@ -78,6 +114,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setBroker(null);
     setAccountDetails(null);
     setCreatedAccountId(null);
+    accountIdRef.current = null;
+    createPromiseRef.current = null;
     setSkippedData(false);
     setIsImporting(false);
     setShowImportResults(false);
@@ -96,18 +134,11 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   };
 
   const goToStep = (step) => {
+    if (accountIdRef.current) return; // Account persisted -- no going back
     setCurrentStep(step);
-    // Reset forward state when going back
-    if (step === 1) {
-      setCategory(null);
-      setBroker(null);
-      setAccountDetails(null);
-    } else if (step === 2) {
-      setBroker(null);
-      setAccountDetails(null);
-    } else if (step === 3) {
-      setAccountDetails(null);
-    }
+    if (step <= 3) setAccountDetails(null);
+    if (step <= 2) setBroker(null);
+    if (step <= 1) setCategory(null);
   };
 
   // Step 1: Category selection
@@ -134,46 +165,23 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setMaxReachedStep(Math.max(maxReachedStep, 3));
   };
 
-  // Step 3: Account details submission -> Create account via API
-  const handleDetailsSubmit = async (details) => {
+  // Step 3: Account details submission -> Store details and advance
+  const handleDetailsSubmit = (details) => {
     setAccountDetails(details);
-
-    try {
-      const response = await api('/accounts', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: details.name,
-          description: details.description || null,
-          account_type: details.accountType,
-          currency: details.currency,
-          institution: broker?.name || 'Manual',
-          broker_type: broker?.type || null,
-          portfolio_ids: portfolioId ? [portfolioId] : [],
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create account');
-      }
-
-      const account = await response.json();
-      setCreatedAccountId(account.id);
-      setCurrentStep(4);
-      setMaxReachedStep(Math.max(maxReachedStep, 4));
-    } catch (error) {
-      showNotification(`Failed to create account: ${error.message}`);
-    }
+    setCurrentStep(4);
+    setMaxReachedStep(Math.max(maxReachedStep, 4));
   };
 
-  // Step 4: Data connection complete -> Import data
+  // Step 4: Data connection complete -> Create account then import data
   const handleDataComplete = async (data) => {
     setIsImporting(true);
 
     try {
+      const accountId = await createAccount();
+
       if (data.credentials) {
-        // API connection - save credentials using PUT (correct method)
-        const credResponse = await api(`/brokers/${broker.type}/credentials/${createdAccountId}`, {
+        // API connection - save credentials using PUT
+        const credResponse = await api(`/brokers/${broker.type}/credentials/${accountId}`, {
           method: 'PUT',
           body: JSON.stringify(data.credentials),
         });
@@ -185,7 +193,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
         if (broker.supportsSnapshot) {
           // Snapshot-capable broker: import current positions
-          const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${createdAccountId}`, {
+          const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${accountId}`, {
             method: 'POST',
           });
 
@@ -199,7 +207,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           setHasSnapshotData(true);
         } else {
           // Regular broker: trigger full data import
-          const importResponse = await api(`/brokers/${broker.type}/import/${createdAccountId}`, {
+          const importResponse = await api(`/brokers/${broker.type}/import/${accountId}`, {
             method: 'POST',
           });
 
@@ -221,7 +229,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
         formData.append('file', data.file);
         formData.append('broker_type', broker?.type || 'manual');
 
-        const uploadResponse = await api(`/broker-data/upload/${createdAccountId}`, {
+        const uploadResponse = await api(`/broker-data/upload/${accountId}`, {
           method: 'POST',
           body: formData,
         });
@@ -331,22 +339,11 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     };
   }
 
-  // Step 4: Test credentials before import
+  // Step 4: Test credentials before import (stateless - no account needed)
   const handleTestCredentials = async (credentials) => {
-    // First save credentials
-    const credResponse = await api(`/brokers/${broker.type}/credentials/${createdAccountId}`, {
-      method: 'PUT',
-      body: JSON.stringify(credentials),
-    });
-
-    if (!credResponse.ok) {
-      const error = await credResponse.json();
-      throw new Error(error.detail || 'Failed to save credentials');
-    }
-
-    // Then test them
-    const testResponse = await api(`/brokers/${broker.type}/test-credentials/${createdAccountId}`, {
+    const testResponse = await api(`/brokers/${broker.type}/test-credentials`, {
       method: 'POST',
+      body: JSON.stringify(credentials),
     });
 
     const result = await testResponse.json();
@@ -357,11 +354,16 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     return result;
   };
 
-  // Step 4: Skip data import
-  const handleDataSkip = () => {
-    setSkippedData(true);
-    setCurrentStep(5);
-    setMaxReachedStep(5);
+  // Step 4: Skip data import - create account then advance
+  const handleDataSkip = async () => {
+    try {
+      await createAccount();
+      setSkippedData(true);
+      setCurrentStep(5);
+      setMaxReachedStep(5);
+    } catch (error) {
+      showNotification(`Failed to create account: ${error.message}`);
+    }
   };
 
   // File upload loop: Upload another file
@@ -547,6 +549,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             maxReachedStep={maxReachedStep}
             skippedSteps={skippedSteps}
             onStepClick={goToStep}
+            locked={!!createdAccountId}
           />
         </div>
       )}

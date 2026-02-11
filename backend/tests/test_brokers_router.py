@@ -253,7 +253,7 @@ class TestCryptoBrokerImport:
         mock_client.fetch_all_data.return_value = mock_broker_data
 
         with (
-            patch("app.routers.brokers._create_crypto_client", return_value=mock_client),
+            patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client),
             patch("app.routers.brokers.CryptoImportService") as mock_service_class,
         ):
             mock_service = MagicMock()
@@ -283,7 +283,7 @@ class TestCryptoBrokerImport:
         mock_client.fetch_all_data.return_value = mock_broker_data
 
         with (
-            patch("app.routers.brokers._create_crypto_client", return_value=mock_client),
+            patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client),
             patch("app.routers.brokers.CryptoImportService") as mock_service_class,
         ):
             mock_service = MagicMock()
@@ -310,7 +310,7 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.return_value = {"USD": 1000, "BTC": 0.5}
 
-        with patch("app.routers.brokers._create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/kraken/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200
@@ -325,7 +325,7 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.return_value = {"ILS": 5000, "BTC": 0.1}
 
-        with patch("app.routers.brokers._create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/bit2c/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200
@@ -336,7 +336,7 @@ class TestTestCredentials:
         """Test successful IBKR credential testing via Flex Query."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers.IBKRFlexClient") as mock_client_class:
+        with patch("app.services.brokers.credential_test_service.IBKRFlexClient") as mock_client_class:
             mock_client_class.request_flex_query.return_value = "12345"
 
             response = client.post("/api/brokers/ibkr/test-credentials/1", headers=auth_headers)
@@ -353,13 +353,96 @@ class TestTestCredentials:
         mock_client = MagicMock()
         mock_client.get_balance.side_effect = Exception("Invalid API key")
 
-        with patch("app.routers.brokers._create_crypto_client", return_value=mock_client):
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
             response = client.post("/api/brokers/kraken/test-credentials/1", headers=auth_headers)
 
         assert response.status_code == 200  # Returns 200 with status: failed
         data = response.json()
         assert data["status"] == "failed"
         assert "Invalid API key" in data["message"]
+
+
+class TestStatelessTestCredentials:
+    """Test stateless credential testing (no account required)."""
+
+    def test_kraken_stateless_test_success(self, client_with_user, auth_headers):
+        """Test Kraken credentials without an account."""
+        client, _ = client_with_user
+
+        mock_client = MagicMock()
+        mock_client.get_balance.return_value = {"USD": 1000, "BTC": 0.5}
+
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
+            response = client.post(
+                "/api/brokers/kraken/test-credentials",
+                json={"api_key": "test_key", "api_secret": "test_secret"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["assets_count"] == 2
+        assert "account_id" not in data
+
+    def test_ibkr_stateless_test_success(self, client_with_user, auth_headers):
+        """Test IBKR Flex Query credentials without an account."""
+        client, _ = client_with_user
+
+        with patch("app.services.brokers.credential_test_service.IBKRFlexClient") as mock_client_class:
+            mock_client_class.request_flex_query.return_value = "12345"
+
+            response = client.post(
+                "/api/brokers/ibkr/test-credentials",
+                json={"flex_token": "test_token", "flex_query_id": "test_query"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["reference_code"] == "12345"
+
+    def test_stateless_test_failure_no_detail_leakage(self, client_with_user, auth_headers):
+        """Test that failures return generic message (no internal detail leakage)."""
+        client, _ = client_with_user
+
+        mock_client = MagicMock()
+        mock_client.get_balance.side_effect = Exception(
+            "Internal: connection to 172.18.0.5 refused"
+        )
+
+        with patch("app.services.brokers.broker_config.BrokerConfig.create_client", return_value=mock_client):
+            response = client.post(
+                "/api/brokers/kraken/test-credentials",
+                json={"api_key": "bad_key", "api_secret": "bad_secret"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert "Check your credentials" in data["message"]
+        assert "172.18.0.5" not in data["message"]
+
+    def test_stateless_test_requires_auth(self, client_with_user):
+        """Test that stateless test-credentials requires authentication."""
+        client, _ = client_with_user
+        response = client.post(
+            "/api/brokers/kraken/test-credentials",
+            json={"api_key": "key", "api_secret": "secret"},
+        )
+        assert response.status_code in [401, 403]
+
+    def test_stateless_test_unknown_broker_returns_422(self, client_with_user, auth_headers):
+        """Test that unknown broker type returns 422."""
+        client, _ = client_with_user
+        response = client.post(
+            "/api/brokers/unknown_broker/test-credentials",
+            json={"api_key": "key", "api_secret": "secret"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
 
 
 class TestCredentialManagement:

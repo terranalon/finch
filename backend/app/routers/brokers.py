@@ -6,12 +6,10 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 
 import logging
 import os
-from dataclasses import dataclass
 from datetime import date, datetime
-from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -21,15 +19,21 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_broker_credentials, get_user_account
 from app.models.account import Account
 from app.models.user import User
-
-# Import broker clients and services at module level for testability
-from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
-from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
-from app.services.brokers.ibkr.flex_client import IBKRFlexClient
+from app.rate_limiter import limiter
+from app.services.brokers.broker_config import (
+    BrokerConfig,
+    BrokerType,
+    CredentialType,
+    get_all_broker_configs,
+    get_broker_config,
+    get_credential_fields,
+    has_credentials,
+    remove_credential_fields,
+)
+from app.services.brokers.credential_test_service import test_credentials
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
-from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
 from app.services.portfolio.snapshot_service import (
     generate_snapshots_background,
     update_snapshot_status,
@@ -92,48 +96,6 @@ class SnapshotImportResponse(BaseModel):
 router = APIRouter(prefix="/api/brokers", tags=["brokers"])
 
 
-class BrokerType(str, Enum):
-    """Supported broker types."""
-
-    IBKR = "ibkr"
-    KRAKEN = "kraken"
-    BIT2C = "bit2c"
-    BINANCE = "binance"
-
-
-class CredentialType(str, Enum):
-    """Types of credential schemes used by brokers."""
-
-    API_KEY_SECRET = "api_key_secret"  # api_key + api_secret (Kraken, Bit2C)
-    FLEX_QUERY = "flex_query"  # flex_token + flex_query_id (IBKR)
-
-
-# =============================================================================
-# Credential Field Helpers
-# =============================================================================
-
-
-def get_credential_fields(credential_type: CredentialType) -> tuple[str, str]:
-    """Get the field names for a credential type."""
-    if credential_type == CredentialType.API_KEY_SECRET:
-        return ("api_key", "api_secret")
-    return ("flex_token", "flex_query_id")
-
-
-def has_credentials(broker_data: dict, credential_type: CredentialType) -> bool:
-    """Check if credential fields are present and non-empty."""
-    field1, field2 = get_credential_fields(credential_type)
-    return bool(broker_data.get(field1) and broker_data.get(field2))
-
-
-def remove_credential_fields(broker_data: dict, credential_type: CredentialType) -> None:
-    """Remove credential fields from broker data dict (in place)."""
-    field1, field2 = get_credential_fields(credential_type)
-    broker_data.pop(field1, None)
-    broker_data.pop(field2, None)
-    broker_data.pop("updated_at", None)
-
-
 def build_credential_data(
     credentials: ApiKeyCredentials | FlexQueryCredentials,
     credential_type: CredentialType,
@@ -151,68 +113,14 @@ def build_credential_data(
     }
 
 
-# =============================================================================
-# Broker Configuration
-# =============================================================================
-
-
-@dataclass
-class BrokerConfig:
-    """Configuration for a broker integration."""
-
-    key: str
-    name: str
-    credential_type: CredentialType
-    supports_staging: bool = False
-    env_fallback_prefix: str | None = None  # e.g., "IBKR" for IBKR_FLEX_TOKEN
-    # Client factory components (for API_KEY_SECRET brokers)
-    client_class: type | None = None
-    credentials_class: type | None = None
-    balance_method: str = "get_balance"  # Method name to call for balance
-
-
-# Broker registry - defines all supported brokers
-BROKER_REGISTRY: dict[str, BrokerConfig] = {
-    BrokerType.IBKR: BrokerConfig(
-        key="ibkr",
-        name="Interactive Brokers",
-        credential_type=CredentialType.FLEX_QUERY,
-        supports_staging=True,
-        env_fallback_prefix="IBKR",
-    ),
-    BrokerType.KRAKEN: BrokerConfig(
-        key="kraken",
-        name="Kraken",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=KrakenClient,
-        credentials_class=KrakenCredentials,
-    ),
-    BrokerType.BIT2C: BrokerConfig(
-        key="bit2c",
-        name="Bit2C",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=Bit2CClient,
-        credentials_class=Bit2CCredentials,
-    ),
-    BrokerType.BINANCE: BrokerConfig(
-        key="binance",
-        name="Binance",
-        credential_type=CredentialType.API_KEY_SECRET,
-        client_class=BinanceClient,
-        credentials_class=BinanceCredentials,
-        balance_method="get_account_balances",
-    ),
-}
-
-
 def _get_broker_config(broker_type: str) -> BrokerConfig:
     """Get broker config or raise 404."""
-    config = BROKER_REGISTRY.get(broker_type)
+    config = get_broker_config(broker_type)
     if not config:
+        registry = get_all_broker_configs()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown broker type: {broker_type}. "
-            f"Supported: {', '.join(BROKER_REGISTRY.keys())}",
+            detail=f"Unknown broker type: {broker_type}. Supported: {', '.join(registry.keys())}",
         )
     return config
 
@@ -226,14 +134,6 @@ def _get_validated_account(account_id: int, current_user: User, db: Session) -> 
             detail=f"Account with id {account_id} not found",
         )
     return account
-
-
-def _create_crypto_client(config: BrokerConfig, api_key: str, api_secret: str):
-    """Create a crypto broker client using the registry configuration."""
-    if not config.client_class or not config.credentials_class:
-        raise ValueError(f"Broker {config.key} missing client_class or credentials_class")
-    credentials = config.credentials_class(api_key=api_key, api_secret=api_secret)
-    return config.client_class(credentials)
 
 
 def _get_api_key_credentials(
@@ -301,7 +201,7 @@ def _import_crypto_broker(
     db: Session,
 ) -> dict[str, Any]:
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
-    client = _create_crypto_client(config, api_key, api_secret)
+    client = config.create_client(api_key, api_secret)
 
     logger.info(f"Fetching {config.name} data for account {account_id}")
     broker_data = client.fetch_all_data()
@@ -342,7 +242,7 @@ async def list_brokers() -> dict[str, Any]:
                 "credential_type": config.credential_type.value,
                 "supports_staging": config.supports_staging,
             }
-            for config in BROKER_REGISTRY.values()
+            for config in get_all_broker_configs().values()
         ]
     }
 
@@ -394,7 +294,7 @@ async def get_api_connections(
     for account in accounts:
         if not account.meta_data:
             continue
-        for broker_type, config in BROKER_REGISTRY.items():
+        for broker_type, config in get_all_broker_configs().items():
             broker_data = account.meta_data.get(broker_type, {})
             if has_credentials(broker_data, config.credential_type):
                 results.append(
@@ -555,6 +455,35 @@ async def import_ibkr_snapshot(
     }
 
 
+@router.post("/{broker_type}/test-credentials", response_model=dict[str, Any])
+@limiter.limit("10/minute")
+async def test_credentials_stateless(
+    request: Request,
+    broker_type: BrokerType,
+    credentials: ApiKeyCredentials | FlexQueryCredentials = Body(...),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Test broker API credentials without requiring an account.
+
+    Accepts credentials directly in the request body and validates them
+    against the broker API. Used during account creation wizard before
+    the account is persisted.
+    """
+    config = _get_broker_config(broker_type)
+
+    try:
+        field1, field2 = get_credential_fields(config.credential_type)
+        return test_credentials(config, getattr(credentials, field1), getattr(credentials, field2))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(f"{config.name} stateless credential test failed")
+        return {
+            "status": "failed",
+            "message": f"{config.name} credential test failed. Check your credentials and try again.",
+        }
+
+
 @router.post("/{broker_type}/test-credentials/{account_id}", response_model=dict[str, Any])
 async def test_broker_credentials(
     broker_type: BrokerType,
@@ -562,8 +491,7 @@ async def test_broker_credentials(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """
-    Test broker API credentials without importing data.
+    """Test broker API credentials without importing data.
 
     For crypto brokers (Kraken, Bit2C, Binance), returns account balances.
     For IBKR, validates the Flex Query credentials by initiating a request.
@@ -580,37 +508,15 @@ async def test_broker_credentials(
 
     try:
         if config.credential_type == CredentialType.FLEX_QUERY:
-            # IBKR: Test by initiating a Flex Query request
-            flex_token, flex_query_id = _get_flex_query_credentials(
+            cred1, cred2 = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
             )
-            reference_code = IBKRFlexClient.request_flex_query(flex_token, flex_query_id)
-            if reference_code:
-                return {
-                    "status": "success",
-                    "message": f"{config.name} credentials are valid",
-                    "account_id": account_id,
-                    "reference_code": reference_code,
-                }
-            return {
-                "status": "failed",
-                "message": f"{config.name} credential test failed: invalid token or query ID",
-                "account_id": account_id,
-            }
+        else:
+            cred1, cred2 = _get_api_key_credentials(account, config.key, config.name)
 
-        # Crypto brokers: Test by fetching balances
-        api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
-        client = _create_crypto_client(config, api_key, api_secret)
-        balance_method = getattr(client, config.balance_method)
-        balances = balance_method()
-
-        return {
-            "status": "success",
-            "message": f"{config.name} credentials are valid",
-            "account_id": account_id,
-            "balances": {k: str(v) for k, v in balances.items()},
-            "assets_count": len(balances),
-        }
+        result = test_credentials(config, cred1, cred2)
+        result["account_id"] = account_id
+        return result
 
     except HTTPException:
         raise
