@@ -51,6 +51,7 @@ class BrokerParserRegistry:
         from app.services.brokers.bit2c.parser import Bit2CParser
         from app.services.brokers.ibkr.parser_adapter import IBKRParserAdapter
         from app.services.brokers.kraken.parser import KrakenParser
+        from app.services.brokers.manual.parser import ManualParser
         from app.services.brokers.meitav.parser import MeitavParser
 
         cls._parsers = {
@@ -60,6 +61,7 @@ class BrokerParserRegistry:
             "kraken": KrakenParser,
             "bit2c": Bit2CParser,
             "binance": BinanceParser,
+            "manual": ManualParser,
         }
         cls._initialized = True
         logger.info("Parser registry initialized with %d parsers", len(cls._parsers))
