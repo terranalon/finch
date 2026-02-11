@@ -58,7 +58,7 @@ class ServiceAuthHelper:
 
         response = requests.post(
             f"{self.backend_url}/api/auth/login",
-            json={"email": self.email, "password": self.password},
+            json={"identifier": self.email, "password": self.password},
             timeout=30,
         )
 

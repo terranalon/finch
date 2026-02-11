@@ -44,8 +44,11 @@ def create_service_account(db: DBSession, password: str | None = None) -> tuple[
     # Generate password if not provided
     password = password or os.getenv("AIRFLOW_SERVICE_PASSWORD") or generate_secure_password()
 
+    username = SERVICE_EMAIL.split("@")[0].replace("-", "_")
+
     user = User(
         email=SERVICE_EMAIL,
+        username=username,
         password_hash=AuthService.hash_password(password),
         is_active=True,
         is_service_account=True,
