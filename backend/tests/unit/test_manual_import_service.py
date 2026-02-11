@@ -4,7 +4,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Asset, Holding
@@ -17,27 +16,51 @@ from app.services.brokers.manual.import_service import ManualImportService
 from app.services.shared.transaction_hash_service import DedupResult
 
 
-class TestManualImportServiceMetadata:
+def _create_service() -> ManualImportService:
+    """Create a ManualImportService with mocked DB and repositories."""
+    db = MagicMock(spec=Session)
+    service = ManualImportService(db, "manual")
+    service._asset_repo = MagicMock()
+    service._holding_repo = MagicMock()
+    return service
 
+
+def _setup_asset_holding(
+    service: ManualImportService,
+    asset_id: int = 1,
+    symbol: str = "AAPL",
+    holding_id: int = 10,
+    *,
+    use_find_by_symbol: bool = True,
+) -> tuple[MagicMock, MagicMock]:
+    """Wire up mocked asset and holding on a service instance.
+
+    When use_find_by_symbol is True, the asset is returned by find_by_symbol (existing asset).
+    When False, the asset is returned by find_or_create (new asset via cash path).
+    """
+    mock_asset = MagicMock(spec=Asset, id=asset_id, symbol=symbol)
+    mock_holding = MagicMock(spec=Holding, id=holding_id)
+
+    if use_find_by_symbol:
+        service._asset_repo.find_by_symbol.return_value = mock_asset
+    else:
+        service._asset_repo.find_or_create.return_value = (mock_asset, False)
+
+    service._holding_repo.find_or_create.return_value = (mock_holding, False)
+    return mock_asset, mock_holding
+
+
+class TestManualImportServiceMetadata:
     def test_supported_broker_types(self):
         assert ManualImportService.supported_broker_types() == ["manual"]
 
 
 class TestManualImportBuySell:
-
     @patch("app.services.brokers.manual.import_service.create_or_transfer_transaction")
     def test_import_buy_transaction(self, mock_create_txn):
-        db = MagicMock(spec=Session)
-
-        mock_asset = MagicMock(spec=Asset, id=1, symbol="AAPL")
-        mock_holding = MagicMock(spec=Holding, id=10)
+        service = _create_service()
+        _setup_asset_holding(service)
         mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
-
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
-        service._asset_repo.find_by_symbol.return_value = mock_asset
-        service._holding_repo = MagicMock()
-        service._holding_repo.find_or_create.return_value = (mock_holding, False)
 
         data = BrokerImportData(
             start_date=date(2025, 1, 15),
@@ -64,19 +87,13 @@ class TestManualImportBuySell:
 
 
 class TestManualImportCash:
-
     @patch("app.services.brokers.manual.import_service.create_or_transfer_transaction")
     def test_import_deposit(self, mock_create_txn):
-        db = MagicMock(spec=Session)
-        mock_asset = MagicMock(spec=Asset, id=2, symbol="USD")
-        mock_holding = MagicMock(spec=Holding, id=20)
+        service = _create_service()
+        _setup_asset_holding(
+            service, asset_id=2, symbol="USD", holding_id=20, use_find_by_symbol=False
+        )
         mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
-
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
-        service._asset_repo.find_or_create.return_value = (mock_asset, False)
-        service._holding_repo = MagicMock()
-        service._holding_repo.find_or_create.return_value = (mock_holding, False)
 
         data = BrokerImportData(
             start_date=date(2025, 2, 1),
@@ -98,19 +115,11 @@ class TestManualImportCash:
 
 
 class TestManualImportDividends:
-
     @patch("app.services.brokers.manual.import_service.create_or_transfer_transaction")
     def test_import_dividend(self, mock_create_txn):
-        db = MagicMock(spec=Session)
-        mock_asset = MagicMock(spec=Asset, id=3, symbol="AAPL")
-        mock_holding = MagicMock(spec=Holding, id=30)
+        service = _create_service()
+        _setup_asset_holding(service, asset_id=3, holding_id=30)
         mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
-
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
-        service._asset_repo.find_by_symbol.return_value = mock_asset
-        service._holding_repo = MagicMock()
-        service._holding_repo.find_or_create.return_value = (mock_holding, False)
 
         data = BrokerImportData(
             start_date=date(2025, 4, 1),
@@ -133,12 +142,9 @@ class TestManualImportDividends:
 
 
 class TestManualAssetResolution:
-
     def test_existing_asset_returns_from_db(self):
-        db = MagicMock(spec=Session)
-        service = ManualImportService(db, "manual")
+        service = _create_service()
         mock_asset = MagicMock(spec=Asset, id=1, symbol="AAPL")
-        service._asset_repo = MagicMock()
         service._asset_repo.find_by_symbol.return_value = mock_asset
 
         asset, created = service._find_or_create_asset("AAPL", "USD")
@@ -148,9 +154,7 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_coingecko")
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_yfinance_detected_stock(self, mock_yf, mock_cg):
-        db = MagicMock(spec=Session)
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
+        service = _create_service()
         service._asset_repo.find_by_symbol.return_value = None
 
         mock_yf.return_value = ("Stock", "Apple Inc.", "Technology", "Consumer Electronics")
@@ -172,9 +176,7 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_coingecko")
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_coingecko_detected_crypto(self, mock_yf, mock_cg):
-        db = MagicMock(spec=Session)
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
+        service = _create_service()
         service._asset_repo.find_by_symbol.return_value = None
 
         mock_yf.return_value = (None, None, None, None)
@@ -196,9 +198,7 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_coingecko")
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_fallback_to_stock(self, mock_yf, mock_cg):
-        db = MagicMock(spec=Session)
-        service = ManualImportService(db, "manual")
-        service._asset_repo = MagicMock()
+        service = _create_service()
         service._asset_repo.find_by_symbol.return_value = None
 
         mock_yf.return_value = (None, None, None, None)

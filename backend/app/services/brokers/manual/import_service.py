@@ -3,8 +3,6 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy.orm import Session
-
 from app.models import Asset
 from app.services.brokers.base_broker_parser import (
     BrokerImportData,
@@ -30,9 +28,6 @@ class ManualImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         return ["manual"]
-
-    def __init__(self, db: Session, broker_type: str) -> None:
-        super().__init__(db, broker_type)
 
     def import_data(
         self,
@@ -63,11 +58,13 @@ class ManualImportService(BaseBrokerImportService):
                     account_id, data.cash_transactions, source_id
                 )
             if data.transactions:
-                stats["transactions"] = self._import_transactions(
+                stats["transactions"] = self._import_asset_transactions(
                     account_id, data.transactions, source_id
                 )
             if data.dividends:
-                stats["dividends"] = self._import_dividends(account_id, data.dividends, source_id)
+                stats["dividends"] = self._import_asset_transactions(
+                    account_id, data.dividends, source_id
+                )
 
             self.db.commit()
 
@@ -97,12 +94,13 @@ class ManualImportService(BaseBrokerImportService):
         stats["end_time"] = datetime.now().isoformat()
         return stats
 
-    def _import_transactions(
+    def _import_asset_transactions(
         self,
         account_id: int,
         transactions: list[ParsedTransaction],
         source_id: int | None = None,
     ) -> dict:
+        """Import transactions that require asset resolution (trades and dividends)."""
         stats = {
             "total": len(transactions),
             "imported": 0,
@@ -131,12 +129,12 @@ class ManualImportService(BaseBrokerImportService):
                     price=txn.price_per_unit,
                     fees=txn.fees,
                     amount=txn.amount,
-                    notes=f"Manual Import - {txn.notes or ''}",
+                    notes=f"Manual Import - {txn.notes or txn.transaction_type}",
                 )
                 result.update_stats(stats)
 
             except Exception as e:
-                logger.error("Error importing transaction for %s: %s", txn.symbol, e)
+                logger.error("Error importing %s for %s: %s", txn.transaction_type, txn.symbol, e)
                 stats["errors"].append(f"{txn.symbol}: {e!s}")
 
         return stats
@@ -176,49 +174,6 @@ class ManualImportService(BaseBrokerImportService):
             except Exception as e:
                 logger.error("Error importing cash transaction: %s", e)
                 stats["errors"].append(str(e))
-
-        return stats
-
-    def _import_dividends(
-        self,
-        account_id: int,
-        dividends: list[ParsedTransaction],
-        source_id: int | None = None,
-    ) -> dict:
-        stats = {
-            "total": len(dividends),
-            "imported": 0,
-            "transferred": 0,
-            "skipped": 0,
-            "assets_created": 0,
-            "errors": [],
-        }
-
-        for div in dividends:
-            try:
-                asset, created = self._find_or_create_asset(div.symbol, div.currency)
-                if created:
-                    stats["assets_created"] += 1
-
-                holding = self._find_or_create_holding_for_asset(account_id, asset)
-
-                result, _ = create_or_transfer_transaction(
-                    db=self.db,
-                    holding_id=holding.id,
-                    source_id=source_id,
-                    txn_date=div.trade_date,
-                    txn_type=div.transaction_type,
-                    symbol=div.symbol,
-                    quantity=div.quantity,
-                    amount=div.amount,
-                    fees=div.fees,
-                    notes=f"Manual Import - {div.notes or div.transaction_type}",
-                )
-                result.update_stats(stats)
-
-            except Exception as e:
-                logger.error("Error importing dividend for %s: %s", div.symbol, e)
-                stats["errors"].append(f"{div.symbol}: {e!s}")
 
         return stats
 

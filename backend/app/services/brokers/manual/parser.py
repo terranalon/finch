@@ -71,10 +71,11 @@ class ManualParser(BaseBrokerParser):
         if not rows:
             raise ValueError("Empty file: no data rows found")
 
-        transactions: list[ParsedTransaction] = []
-        cash_transactions: list[ParsedCashTransaction] = []
-        dividends: list[ParsedTransaction] = []
-        dates: list[date] = []
+        buckets: dict[str, list] = {
+            "transaction": [],
+            "cash": [],
+            "dividend": [],
+        }
 
         for i, row in enumerate(rows, start=2):
             try:
@@ -86,16 +87,17 @@ class ManualParser(BaseBrokerParser):
                 continue
 
             category, record = result
+            buckets[category].append(record)
 
-            if category == "transaction":
-                transactions.append(record)
-                dates.append(record.trade_date)
-            elif category == "cash":
-                cash_transactions.append(record)
-                dates.append(record.date)
-            elif category == "dividend":
-                dividends.append(record)
-                dates.append(record.trade_date)
+        transactions = buckets["transaction"]
+        cash_transactions = buckets["cash"]
+        dividends = buckets["dividend"]
+
+        dates = (
+            [t.trade_date for t in transactions]
+            + [c.date for c in cash_transactions]
+            + [d.trade_date for d in dividends]
+        )
 
         if not dates:
             today = date.today()
@@ -153,15 +155,10 @@ class ManualParser(BaseBrokerParser):
             raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
 
     def _normalize_row(self, row: dict) -> dict:
-        normalized = {}
-        for k, v in row.items():
-            if isinstance(v, str):
-                normalized[k.strip().lower()] = v.strip()
-            elif v is not None:
-                normalized[k.strip().lower()] = str(v)
-            else:
-                normalized[k.strip().lower()] = ""
-        return normalized
+        return {
+            k.strip().lower(): v.strip() if isinstance(v, str) else str(v or "")
+            for k, v in row.items()
+        }
 
     def _parse_row(
         self, row: dict, row_num: int
@@ -228,22 +225,24 @@ class ManualParser(BaseBrokerParser):
 
     @staticmethod
     def _parse_decimal(value: str | None) -> Decimal | None:
-        if not value or not value.strip():
+        if not value:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
             return None
         try:
-            return Decimal(value.strip())
+            return Decimal(cleaned)
         except InvalidOperation:
             return None
 
     @staticmethod
     def _collect_dates(rows: list[dict]) -> list[date]:
-        dates = []
+        dates: list[date] = []
         for row in rows:
             raw_date = row.get("date", "").strip()
-            if not raw_date:
-                continue
-            try:
-                dates.append(date.fromisoformat(raw_date))
-            except ValueError:
-                continue
+            if raw_date:
+                try:
+                    dates.append(date.fromisoformat(raw_date))
+                except ValueError:
+                    pass
         return dates
