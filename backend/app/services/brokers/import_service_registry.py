@@ -36,13 +36,14 @@ class BrokerImportServiceRegistry:
             return
 
         # Import services here to avoid circular imports
+        from app.services.brokers.manual.import_service import ManualImportService
         from app.services.brokers.shared.crypto_import_service import CryptoImportService
         from app.services.brokers.shared.israeli_import_service import (
             IsraeliSecuritiesImportService,
         )
 
         # Register services - each service declares which broker types it handles
-        for service_class in [IsraeliSecuritiesImportService, CryptoImportService]:
+        for service_class in [IsraeliSecuritiesImportService, CryptoImportService, ManualImportService]:
             for broker_type in service_class.supported_broker_types():
                 cls._services[broker_type] = service_class
 

@@ -53,6 +53,14 @@ class TestBrokerImportServiceRegistry:
         assert service is not None
         assert service.broker_type == "binance"
 
+    def test_get_import_service_manual(self):
+        """Test getting import service for manual broker."""
+        mock_db = MagicMock()
+        service = BrokerImportServiceRegistry.get_import_service("manual", mock_db)
+
+        assert service is not None
+        assert service.broker_type == "manual"
+
     def test_get_import_service_unsupported_raises(self):
         """Test that unsupported broker type raises ValueError."""
         mock_db = MagicMock()
@@ -65,6 +73,7 @@ class TestBrokerImportServiceRegistry:
         assert BrokerImportServiceRegistry.is_supported("kraken") is True
         assert BrokerImportServiceRegistry.is_supported("bit2c") is True
         assert BrokerImportServiceRegistry.is_supported("binance") is True
+        assert BrokerImportServiceRegistry.is_supported("manual") is True
 
     def test_is_supported_false(self):
         """Test is_supported returns False for unsupported brokers."""
@@ -79,4 +88,5 @@ class TestBrokerImportServiceRegistry:
         assert "kraken" in broker_types
         assert "bit2c" in broker_types
         assert "binance" in broker_types
+        assert "manual" in broker_types
         assert "ibkr" not in broker_types  # IBKR uses different pattern
