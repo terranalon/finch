@@ -21,6 +21,10 @@ REQUIRED_COLUMNS = {"date", "type", "symbol", "currency"}
 
 VALID_TYPES = {"Buy", "Sell", "Dividend", "Deposit", "Withdrawal", "Interest", "Staking"}
 
+TRADE_TYPES = {"Buy", "Sell"}
+DIVIDEND_TYPES = {"Dividend", "Interest", "Staking"}
+CASH_TYPES = {"Deposit", "Withdrawal"}
+
 TYPE_REQUIRED_FIELDS: dict[str, set[str]] = {
     "Buy": {"quantity", "price"},
     "Sell": {"quantity", "price"},
@@ -56,15 +60,7 @@ class ManualParser(BaseBrokerParser):
         if not rows:
             raise ValueError("Empty file: no data rows found")
 
-        dates: list[date] = []
-        for row in rows:
-            raw_date = row.get("date", "").strip()
-            if raw_date:
-                try:
-                    dates.append(date.fromisoformat(raw_date))
-                except ValueError:
-                    continue
-
+        dates = self._collect_dates(rows)
         if not dates:
             raise ValueError("No valid dates found in file")
 
@@ -85,27 +81,25 @@ class ManualParser(BaseBrokerParser):
                 result = self._parse_row(row, i)
                 if result is None:
                     continue
-
-                category, record = result
-                record_date = record.trade_date if hasattr(record, "trade_date") else record.date
-                dates.append(record_date)
-
-                if category == "transaction":
-                    transactions.append(record)
-                elif category == "cash":
-                    cash_transactions.append(record)
-                elif category == "dividend":
-                    dividends.append(record)
             except ValueError as e:
                 logger.warning("Row %d: %s", i, e)
                 continue
 
+            category, record = result
+
+            if category == "transaction":
+                transactions.append(record)
+                dates.append(record.trade_date)
+            elif category == "cash":
+                cash_transactions.append(record)
+                dates.append(record.date)
+            elif category == "dividend":
+                dividends.append(record)
+                dates.append(record.trade_date)
+
         if not dates:
             today = date.today()
-            return BrokerImportData(
-                start_date=today,
-                end_date=today,
-            )
+            return BrokerImportData(start_date=today, end_date=today)
 
         return BrokerImportData(
             start_date=min(dates),
@@ -118,7 +112,6 @@ class ManualParser(BaseBrokerParser):
     # -- Private helpers -------------------------------------------------------
 
     def _read_rows(self, file_content: bytes) -> list[dict]:
-        """Read rows from CSV or XLSX, auto-detecting format."""
         if not file_content:
             raise ValueError("Empty file")
         if file_content[:4] == b"PK\x03\x04":
@@ -159,39 +152,43 @@ class ManualParser(BaseBrokerParser):
         if missing:
             raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
 
+    def _normalize_row(self, row: dict) -> dict:
+        normalized = {}
+        for k, v in row.items():
+            if isinstance(v, str):
+                normalized[k.strip().lower()] = v.strip()
+            elif v is not None:
+                normalized[k.strip().lower()] = str(v)
+            else:
+                normalized[k.strip().lower()] = ""
+        return normalized
+
     def _parse_row(
         self, row: dict, row_num: int
     ) -> tuple[str, ParsedTransaction | ParsedCashTransaction] | None:
-        """Parse a single row into (category, record)."""
-        row = {
-            k.strip().lower(): (
-                v.strip() if isinstance(v, str) else str(v) if v is not None else ""
-            )
-            for k, v in row.items()
-        }
+        row = self._normalize_row(row)
 
         txn_type = row.get("type", "").title()
         if txn_type not in VALID_TYPES:
             raise ValueError(
-                f"Invalid type '{row.get('type', '')}'. "
-                f"Must be one of: {', '.join(sorted(VALID_TYPES))}"
+                f"Invalid type '{txn_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}"
             )
 
         for field in TYPE_REQUIRED_FIELDS[txn_type]:
-            if not row.get(field, "").strip():
+            if not row.get(field, ""):
                 raise ValueError(f"'{field}' is required for type '{txn_type}'")
 
-        trade_date = date.fromisoformat(row["date"].strip())
-        symbol = row["symbol"].strip().upper()
-        currency = row["currency"].strip().upper()
+        trade_date = date.fromisoformat(row["date"])
+        symbol = row["symbol"].upper()
+        currency = row["currency"].upper()
         fees = self._parse_decimal(row.get("fees")) or Decimal("0")
-        notes = row.get("notes", "").strip() or None
+        notes = row.get("notes", "") or None
 
         quantity = self._parse_decimal(row.get("quantity"))
         price = self._parse_decimal(row.get("price"))
         amount = self._parse_decimal(row.get("amount"))
 
-        if txn_type in ("Deposit", "Withdrawal"):
+        if txn_type in CASH_TYPES:
             return "cash", ParsedCashTransaction(
                 date=trade_date,
                 transaction_type=txn_type,
@@ -201,23 +198,13 @@ class ManualParser(BaseBrokerParser):
                 notes=notes,
             )
 
-        if txn_type in ("Dividend", "Interest"):
+        if txn_type in DIVIDEND_TYPES:
             return "dividend", ParsedTransaction(
                 trade_date=trade_date,
                 symbol=symbol,
                 transaction_type=txn_type,
-                amount=amount,
-                currency=currency,
-                fees=fees,
-                notes=notes,
-            )
-
-        if txn_type == "Staking":
-            return "dividend", ParsedTransaction(
-                trade_date=trade_date,
-                symbol=symbol,
-                transaction_type="Staking",
                 quantity=quantity,
+                amount=amount,
                 currency=currency,
                 fees=fees,
                 notes=notes,
@@ -247,3 +234,16 @@ class ManualParser(BaseBrokerParser):
             return Decimal(value.strip())
         except InvalidOperation:
             return None
+
+    @staticmethod
+    def _collect_dates(rows: list[dict]) -> list[date]:
+        dates = []
+        for row in rows:
+            raw_date = row.get("date", "").strip()
+            if not raw_date:
+                continue
+            try:
+                dates.append(date.fromisoformat(raw_date))
+            except ValueError:
+                continue
+        return dates
