@@ -648,13 +648,13 @@ async def test_broker_credentials(
 
     try:
         if config.credential_type == CredentialType.FLEX_QUERY:
-            api_key, api_secret = _get_flex_query_credentials(
+            cred1, cred2 = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
             )
         else:
-            api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
+            cred1, cred2 = _get_api_key_credentials(account, config.key, config.name)
 
-        result = _test_credentials_against_broker(config, api_key, api_secret)
+        result = _test_credentials_against_broker(config, cred1, cred2)
         result["account_id"] = account_id
         return result
 
