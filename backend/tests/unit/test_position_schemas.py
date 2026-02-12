@@ -1,5 +1,7 @@
 """Tests for position schemas."""
 
+from decimal import Decimal
+
 from app.schemas.position import PositionAccountDetail, PositionResponse
 
 
@@ -12,16 +14,16 @@ class TestPositionAccountDetail:
             holding_id=1,
             account_id=1,
             account_name="Test Account",
-            quantity=10.0,
-            cost_basis_native=1400.0,
-            cost_basis=1400.0,
+            quantity=Decimal("10"),
+            cost_basis_native=Decimal("1400"),
+            cost_basis=Decimal("1400"),
         )
         assert account_detail.holding_id == 1
         assert account_detail.account_id == 1
         assert account_detail.account_name == "Test Account"
-        assert account_detail.quantity == 10.0
-        assert account_detail.cost_basis_native == 1400.0
-        assert account_detail.cost_basis == 1400.0
+        assert account_detail.quantity == Decimal("10")
+        assert account_detail.cost_basis_native == Decimal("1400")
+        assert account_detail.cost_basis == Decimal("1400")
 
     def test_all_fields(self):
         """Create with all fields populated."""
@@ -31,23 +33,23 @@ class TestPositionAccountDetail:
             account_name="Test Account",
             account_type="brokerage",
             institution="Test Broker",
-            quantity=10.0,
-            cost_basis_native=1400.0,
-            market_value_native=1500.0,
-            pnl_native=100.0,
-            cost_basis=1400.0,
-            market_value=1500.0,
-            pnl=100.0,
-            pnl_pct=7.14,
+            quantity=Decimal("10"),
+            cost_basis_native=Decimal("1400"),
+            market_value_native=Decimal("1500"),
+            pnl_native=Decimal("100"),
+            cost_basis=Decimal("1400"),
+            market_value=Decimal("1500"),
+            pnl=Decimal("100"),
+            pnl_pct=Decimal("7.14"),
             strategy_horizon="LongTerm",
         )
         assert account_detail.account_type == "brokerage"
         assert account_detail.institution == "Test Broker"
-        assert account_detail.market_value_native == 1500.0
-        assert account_detail.pnl_native == 100.0
-        assert account_detail.market_value == 1500.0
-        assert account_detail.pnl == 100.0
-        assert account_detail.pnl_pct == 7.14
+        assert account_detail.market_value_native == Decimal("1500")
+        assert account_detail.pnl_native == Decimal("100")
+        assert account_detail.market_value == Decimal("1500")
+        assert account_detail.pnl == Decimal("100")
+        assert account_detail.pnl_pct == Decimal("7.14")
         assert account_detail.strategy_horizon == "LongTerm"
 
     def test_optional_fields_default_to_none(self):
@@ -56,9 +58,9 @@ class TestPositionAccountDetail:
             holding_id=1,
             account_id=1,
             account_name="Test Account",
-            quantity=10.0,
-            cost_basis_native=1400.0,
-            cost_basis=1400.0,
+            quantity=Decimal("10"),
+            cost_basis_native=Decimal("1400"),
+            cost_basis=Decimal("1400"),
         )
         assert account_detail.account_type is None
         assert account_detail.institution is None
@@ -75,15 +77,15 @@ class TestPositionAccountDetail:
             holding_id=1,
             account_id=1,
             account_name="Test Account",
-            quantity=10.0,
-            cost_basis_native=1400.0,
-            cost_basis=1400.0,
-            pnl=100.0,
+            quantity=Decimal("10"),
+            cost_basis_native=Decimal("1400"),
+            cost_basis=Decimal("1400"),
+            pnl=Decimal("100"),
         )
         data = account_detail.model_dump()
         assert data["holding_id"] == 1
         assert data["account_name"] == "Test Account"
-        assert data["pnl"] == 100.0
+        assert data["pnl"] == Decimal("100")
         assert "cost_basis_native" in data
 
 
@@ -95,15 +97,15 @@ class TestPositionResponse:
         position = PositionResponse(
             asset_id=1,
             symbol="AAPL",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
         )
         assert position.asset_id == 1
         assert position.symbol == "AAPL"
-        assert position.total_quantity == 10.0
-        assert position.total_cost_basis_native == 1400.0
-        assert position.total_cost_basis == 1400.0
+        assert position.total_quantity == Decimal("10")
+        assert position.total_cost_basis_native == Decimal("1400")
+        assert position.total_cost_basis == Decimal("1400")
 
     def test_all_fields(self):
         """Create with all fields populated."""
@@ -111,9 +113,9 @@ class TestPositionResponse:
             holding_id=1,
             account_id=1,
             account_name="Test Account",
-            quantity=10.0,
-            cost_basis_native=1400.0,
-            cost_basis=1400.0,
+            quantity=Decimal("10"),
+            cost_basis_native=Decimal("1400"),
+            cost_basis=Decimal("1400"),
         )
         position = PositionResponse(
             asset_id=1,
@@ -124,24 +126,24 @@ class TestPositionResponse:
             industry="Consumer Electronics",
             currency="USD",
             is_favorite=True,
-            current_price=150.0,
-            current_price_display=150.0,
-            previous_close_price=148.0,
-            day_change=2.0,
-            day_change_pct=1.35,
+            current_price=Decimal("150"),
+            current_price_display=Decimal("150"),
+            previous_close_price=Decimal("148"),
+            day_change=Decimal("2"),
+            day_change_pct=Decimal("1.35"),
             day_change_date="2026-02-03",
             is_market_closed=False,
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_market_value_native=1500.0,
-            total_pnl_native=100.0,
-            avg_cost_per_unit_native=140.0,
-            total_cost_basis=1400.0,
-            total_market_value=1500.0,
-            current_value=1500.0,
-            total_pnl=100.0,
-            total_pnl_pct=7.14,
-            avg_cost_per_unit=140.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_market_value_native=Decimal("1500"),
+            total_pnl_native=Decimal("100"),
+            avg_cost_per_unit_native=Decimal("140"),
+            total_cost_basis=Decimal("1400"),
+            total_market_value=Decimal("1500"),
+            current_value=Decimal("1500"),
+            total_pnl=Decimal("100"),
+            total_pnl_pct=Decimal("7.14"),
+            avg_cost_per_unit=Decimal("140"),
             display_currency="USD",
             account_count=1,
             accounts=[account],
@@ -151,12 +153,12 @@ class TestPositionResponse:
         assert position.category == "Technology"
         assert position.industry == "Consumer Electronics"
         assert position.is_favorite is True
-        assert position.current_price == 150.0
-        assert position.day_change == 2.0
-        assert position.day_change_pct == 1.35
-        assert position.total_market_value == 1500.0
-        assert position.total_pnl == 100.0
-        assert position.total_pnl_pct == 7.14
+        assert position.current_price == Decimal("150")
+        assert position.day_change == Decimal("2")
+        assert position.day_change_pct == Decimal("1.35")
+        assert position.total_market_value == Decimal("1500")
+        assert position.total_pnl == Decimal("100")
+        assert position.total_pnl_pct == Decimal("7.14")
         assert position.account_count == 1
         assert len(position.accounts) == 1
 
@@ -165,17 +167,17 @@ class TestPositionResponse:
         position = PositionResponse(
             asset_id=1,
             symbol="AAPL",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
         )
         assert position.name is None
         assert position.asset_class is None
         assert position.currency == "USD"
         assert position.is_favorite is False
         assert position.is_market_closed is False
-        assert position.avg_cost_per_unit_native == 0
-        assert position.avg_cost_per_unit == 0
+        assert position.avg_cost_per_unit_native == Decimal("0")
+        assert position.avg_cost_per_unit == Decimal("0")
         assert position.display_currency == "USD"
         assert position.account_count == 0
         assert position.accounts == []
@@ -186,24 +188,24 @@ class TestPositionResponse:
             holding_id=1,
             account_id=1,
             account_name="Account A",
-            quantity=5.0,
-            cost_basis_native=700.0,
-            cost_basis=700.0,
+            quantity=Decimal("5"),
+            cost_basis_native=Decimal("700"),
+            cost_basis=Decimal("700"),
         )
         account2 = PositionAccountDetail(
             holding_id=2,
             account_id=2,
             account_name="Account B",
-            quantity=5.0,
-            cost_basis_native=700.0,
-            cost_basis=700.0,
+            quantity=Decimal("5"),
+            cost_basis_native=Decimal("700"),
+            cost_basis=Decimal("700"),
         )
         position = PositionResponse(
             asset_id=1,
             symbol="AAPL",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
             account_count=2,
             accounts=[account1, account2],
         )
@@ -218,17 +220,17 @@ class TestPositionResponse:
             asset_id=1,
             symbol="AAPL",
             name="Apple Inc.",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
-            total_pnl=100.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
+            total_pnl=Decimal("100"),
             accounts=[],
         )
         data = position.model_dump()
         assert data["asset_id"] == 1
         assert data["symbol"] == "AAPL"
         assert data["name"] == "Apple Inc."
-        assert data["total_pnl"] == 100.0
+        assert data["total_pnl"] == Decimal("100")
         assert "accounts" in data
         assert isinstance(data["accounts"], list)
 
@@ -237,23 +239,23 @@ class TestPositionResponse:
         position = PositionResponse(
             asset_id=1,
             symbol="AAPL",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
-            total_market_value=1500.0,
-            current_value=1500.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
+            total_market_value=Decimal("1500"),
+            current_value=Decimal("1500"),
         )
-        assert position.current_value == 1500.0
-        assert position.total_market_value == 1500.0
+        assert position.current_value == Decimal("1500")
+        assert position.total_market_value == Decimal("1500")
 
     def test_pnl_calculations_nullable(self):
         """P&L fields can be null when price data unavailable."""
         position = PositionResponse(
             asset_id=1,
             symbol="AAPL",
-            total_quantity=10.0,
-            total_cost_basis_native=1400.0,
-            total_cost_basis=1400.0,
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
             total_market_value=None,
             total_pnl=None,
             total_pnl_pct=None,
