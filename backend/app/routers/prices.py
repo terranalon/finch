@@ -1,20 +1,24 @@
 """Prices API router - manage asset price updates."""
 
 from decimal import Decimal
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Asset
+from app.schemas.price import (
+    HistoricalPriceResponse,
+    PriceUpdateResponse,
+    SingleAssetPriceResponse,
+)
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
 
-@router.post("/update", response_model=dict[str, Any])
+@router.post("/update", response_model=PriceUpdateResponse)
 async def update_all_prices(
     background_tasks: BackgroundTasks,
     asset_class: str | None = None,
@@ -50,7 +54,7 @@ async def update_all_prices(
         }
 
 
-@router.post("/update/{asset_id}", response_model=dict[str, Any])
+@router.post("/update/{asset_id}", response_model=SingleAssetPriceResponse)
 async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
     """
     Update price for a specific asset.
@@ -91,7 +95,7 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
         )
 
 
-@router.get("/historical/{symbol}")
+@router.get("/historical/{symbol}", response_model=HistoricalPriceResponse)
 async def get_historical_prices(
     symbol: str,
     period: str = "1mo",
