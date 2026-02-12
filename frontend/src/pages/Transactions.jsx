@@ -80,10 +80,10 @@ function Transactions() {
         cashRes.json(),
       ])
 
-      setTrades(tradesData)
-      setDividends(dividendsData)
-      setForex(forexData)
-      setCashActivity(cashData)
+      setTrades(tradesData.items)
+      setDividends(dividendsData.items)
+      setForex(forexData.items)
+      setCashActivity(cashData.items)
     } catch (err) {
       setError(err.message)
     } finally {

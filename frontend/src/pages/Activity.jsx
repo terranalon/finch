@@ -760,10 +760,10 @@ export default function Activity() {
 
         // Transform and merge all transactions
         const allTransactions = [
-          ...tradesData.map(transformTrade),
-          ...dividendsData.map(transformDividend),
-          ...forexData.map(transformForex),
-          ...cashData.map(transformCash),
+          ...tradesData.items.map(transformTrade),
+          ...dividendsData.items.map(transformDividend),
+          ...forexData.items.map(transformForex),
+          ...cashData.items.map(transformCash),
         ];
 
         // Sort by date descending

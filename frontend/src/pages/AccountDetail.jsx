@@ -1748,11 +1748,12 @@ export default function AccountDetail() {
           api(`/snapshots/account/${id}?limit=100&display_currency=${accountCurrency}`),
         ]);
 
-        const positionsData = await positionsRes.json();
-        const tradesData = await tradesRes.json();
-        const dividendsData = await dividendsRes.json();
-        const forexData = await forexRes.json();
-        const cashData = await cashRes.json();
+        const positionsRaw = await positionsRes.json();
+        const positionsData = positionsRaw.items;
+        const tradesData = (await tradesRes.json()).items;
+        const dividendsData = (await dividendsRes.json()).items;
+        const forexData = (await forexRes.json()).items;
+        const cashData = (await cashRes.json()).items;
 
         // Process coverage data
         let coverageData = null;
