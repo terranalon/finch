@@ -10,6 +10,7 @@ Provides endpoints for:
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -180,6 +181,29 @@ class DetailedImportResult(BaseModel):
     stats: dict
     breakdown: dict  # new, transferred, skipped counts
     old_sources_affected: list[int]  # Sources that had transactions transferred
+
+
+class BatchFinalizeResponse(BaseModel):
+    """Response for POST /api/broker-data/finalize-batch/{account_id}."""
+
+    status: str
+    message: str
+    session_id: str
+    sources_finalized: int
+    date_range: dict[str, str]
+    synthetic_cleanup: dict[str, Any]
+    holdings_reconstruction: dict[str, Any]
+    validation: dict[str, Any] | None = None
+
+
+class DeleteSourceResponse(BaseModel):
+    """Response for DELETE /api/broker-data/source/{source_id}."""
+
+    status: str
+    message: str
+    source_id: int
+    deleted: dict[str, int]
+    holdings: dict[str, int]
 
 
 # Endpoints
@@ -604,14 +628,14 @@ async def upload_broker_file(
         )
 
 
-@router.post("/finalize-batch/{account_id}")
+@router.post("/finalize-batch/{account_id}", response_model=BatchFinalizeResponse)
 async def finalize_batch_upload(
     account_id: int,
     session_id: str = Query(..., description="The batch session ID to finalize"),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Finalize a batch upload session: reconstruct holdings and generate snapshots.
 
     This should be called after all files for a historical import have been
@@ -819,13 +843,13 @@ async def get_data_coverage(
     return CoverageResponse(brokers=result)
 
 
-@router.delete("/source/{source_id}")
+@router.delete("/source/{source_id}", response_model=DeleteSourceResponse)
 async def delete_data_source(
     source_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Delete a data source and all associated data (must belong to user's account).
 
     This performs a CASCADE DELETE:
