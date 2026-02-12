@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
+from app.schemas.snapshot import SnapshotCreateResponse, SnapshotPointResponse
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
 from app.services.portfolio.snapshot_service import SnapshotService
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
@@ -17,14 +18,14 @@ from app.services.shared.currency_conversion_helper import CurrencyConversionHel
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
 
-@router.post("/create")
+@router.post("/create", response_model=SnapshotCreateResponse)
 async def create_snapshot(
     background_tasks: BackgroundTasks,
     snapshot_date: date | None = None,
     run_async: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """
     Create a portfolio snapshot for user's accounts.
 
@@ -52,7 +53,7 @@ async def create_snapshot(
     return {"status": "completed", "message": "Snapshot created successfully", **stats}
 
 
-@router.get("/account/{account_id}")
+@router.get("/account/{account_id}", response_model=list[SnapshotPointResponse])
 async def get_account_snapshots(
     account_id: int,
     start_date: date | None = None,
@@ -63,7 +64,7 @@ async def get_account_snapshots(
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[dict]:
+):
     """
     Get historical snapshots for a specific account (must belong to user).
 
@@ -93,7 +94,7 @@ async def get_account_snapshots(
     ]
 
 
-@router.get("/portfolio")
+@router.get("/portfolio", response_model=list[SnapshotPointResponse])
 async def get_portfolio_snapshots(
     start_date: date | None = None,
     end_date: date | None = None,
@@ -104,7 +105,7 @@ async def get_portfolio_snapshots(
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[dict]:
+):
     """
     Get aggregated portfolio snapshots across user's accounts.
 
