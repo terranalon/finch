@@ -70,8 +70,9 @@ class TestGetTrades:
             fees=Decimal("5"),
         )
         svc = TransactionViewService(db)
-        trades = svc.get_trades([test_account.id])
+        trades, total = svc.get_trades([test_account.id])
         assert len(trades) == 1
+        assert total == 1
         assert trades[0].total == Decimal("1505")  # 10*150 + 5
 
     def test_bit2c_currency_override(self, db, test_account, test_asset, test_holding):
@@ -82,12 +83,15 @@ class TestGetTrades:
             notes="Bit2C Import - some info",
         )
         svc = TransactionViewService(db)
-        trades = svc.get_trades([test_account.id])
+        trades, total = svc.get_trades([test_account.id])
+        assert total == 1
         assert trades[0].currency == "ILS"
 
     def test_empty_accounts_returns_empty(self, db):
         svc = TransactionViewService(db)
-        assert svc.get_trades([]) == []
+        items, total = svc.get_trades([])
+        assert items == []
+        assert total == 0
 
 
 class TestGetDividends:
@@ -101,8 +105,9 @@ class TestGetDividends:
             price_per_unit=None,
         )
         svc = TransactionViewService(db)
-        divs = svc.get_dividends([test_account.id])
+        divs, total = svc.get_dividends([test_account.id])
         assert len(divs) == 1
+        assert total == 1
         assert divs[0].amount == Decimal("25.50")
         assert divs[0].symbol == "AAPL"
 
@@ -141,8 +146,9 @@ class TestGetForex:
             price_per_unit=None,
         )
         svc = TransactionViewService(db)
-        forex = svc.get_forex([test_account.id])
+        forex, total = svc.get_forex([test_account.id])
         assert len(forex) == 1
+        assert total == 1
         assert forex[0].from_currency == "USD"
 
     def test_legacy_format_parses_notes(self, db, test_account, cash_holding):
@@ -156,8 +162,9 @@ class TestGetForex:
             price_per_unit=None,
         )
         svc = TransactionViewService(db)
-        forex = svc.get_forex([test_account.id])
+        forex, total = svc.get_forex([test_account.id])
         assert len(forex) == 1
+        assert total == 1
         assert forex[0].from_currency == "ILS"
         assert forex[0].from_amount == Decimal("1500")
         assert forex[0].to_currency == "USD"
@@ -175,8 +182,9 @@ class TestGetCashActivity:
             price_per_unit=None,
         )
         svc = TransactionViewService(db)
-        cash = svc.get_cash_activity([test_account.id])
+        cash, total = svc.get_cash_activity([test_account.id])
         assert len(cash) == 1
+        assert total == 1
         assert cash[0].amount == Decimal("5000")
         assert cash[0].type == "Deposit"
 

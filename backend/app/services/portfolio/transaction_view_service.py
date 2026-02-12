@@ -36,10 +36,11 @@ class TransactionViewService:
         display_currency: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[TradeItem]:
+    ) -> tuple[list[TradeItem], int]:
         if not account_ids:
-            return []
+            return [], 0
 
+        total_count = self._repo.count_trades(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_trades(
             account_ids,
             account_id=account_id,
@@ -85,7 +86,7 @@ class TransactionViewService:
                 ),
             ]
 
-        return trades
+        return trades, total_count
 
     def get_dividends(
         self,
@@ -95,10 +96,11 @@ class TransactionViewService:
         symbol: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[DividendItem]:
+    ) -> tuple[list[DividendItem], int]:
         if not account_ids:
-            return []
+            return [], 0
 
+        total = self._repo.count_dividends(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_dividends(
             account_ids,
             account_id=account_id,
@@ -107,7 +109,7 @@ class TransactionViewService:
             offset=offset,
         )
 
-        return [
+        items = [
             DividendItem(
                 id=txn.id,
                 date=txn.date,
@@ -121,6 +123,7 @@ class TransactionViewService:
             )
             for txn, _, asset, account in rows
         ]
+        return items, total
 
     def get_forex(
         self,
@@ -129,19 +132,22 @@ class TransactionViewService:
         account_id: int | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[ForexItem]:
+    ) -> tuple[list[ForexItem], int]:
         if not account_ids:
-            return []
+            return [], 0
 
-        rows = self._repo.find_forex(account_ids, account_id=account_id, limit=limit, offset=offset)
+        # Load all rows to get accurate count after deduplication
+        all_rows = self._repo.find_forex(
+            account_ids, account_id=account_id, limit=10000, offset=0,
+        )
 
-        forex_list: list[ForexItem] = []
+        all_forex: list[ForexItem] = []
         seen_legacy_pairs: set[tuple[str, ...]] = set()
 
-        for txn, _, asset, account in rows:
+        for txn, _, asset, account in all_rows:
             if txn.to_holding_id is not None:
-                forex_list = [
-                    *forex_list,
+                all_forex = [
+                    *all_forex,
                     self._build_new_format_forex(txn, asset, account),
                 ]
             else:
@@ -154,8 +160,8 @@ class TransactionViewService:
                     continue
                 seen_legacy_pairs.add(pair_key)
 
-                forex_list = [
-                    *forex_list,
+                all_forex = [
+                    *all_forex,
                     ForexItem(
                         id=txn.id,
                         date=txn.date,
@@ -169,7 +175,8 @@ class TransactionViewService:
                     ),
                 ]
 
-        return forex_list
+        total = len(all_forex)
+        return all_forex[offset : offset + limit], total
 
     def _build_new_format_forex(
         self, txn: Transaction, asset: Asset, account: Account
@@ -200,10 +207,11 @@ class TransactionViewService:
         display_currency: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[CashActivityItem]:
+    ) -> tuple[list[CashActivityItem], int]:
         if not account_ids:
-            return []
+            return [], 0
 
+        total = self._repo.count_cash_activity(account_ids, account_id=account_id)
         rows = self._repo.find_cash_activity(
             account_ids, account_id=account_id, limit=limit, offset=offset
         )
@@ -236,7 +244,7 @@ class TransactionViewService:
                 ),
             ]
 
-        return items
+        return items, total
 
     def _compute_cash_values(
         self, txn: Transaction, asset: Asset
