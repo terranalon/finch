@@ -140,3 +140,12 @@ class ResetPasswordRequest(BaseModel):
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         return _validate_password_strength(v)
+
+
+class MfaRequiredResponse(BaseModel):
+    """Returned when login requires MFA verification."""
+
+    mfa_required: bool = True
+    temp_token: str
+    methods: list[str]
+    primary_method: str | None = None
