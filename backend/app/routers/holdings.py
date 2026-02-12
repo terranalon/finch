@@ -1,7 +1,6 @@
 """Holdings API router."""
 
 from dataclasses import asdict
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -13,12 +12,13 @@ from app.models import Account, Asset, Holding
 from app.models.user import User
 from app.schemas import Holding as HoldingSchema
 from app.schemas import HoldingCreate, HoldingUpdate
+from app.schemas.holding import HoldingListItem, ReconstructionStatsResponse
 from app.services.portfolio.holding_service import HoldingService
 
 router = APIRouter(prefix="/api/holdings", tags=["holdings"])
 
 
-@router.get("")
+@router.get("", response_model=list[HoldingListItem])
 async def list_holdings(
     skip: int = 0,
     limit: int = 100,
@@ -28,7 +28,7 @@ async def list_holdings(
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[dict[str, Any]]:
+):
     """Get list of holdings with optional filters (filtered by user's accounts)."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -177,12 +177,12 @@ async def delete_holding(
     return None
 
 
-@router.post("/reconstruct/{account_id}")
+@router.post("/reconstruct/{account_id}", response_model=ReconstructionStatsResponse)
 async def reconstruct_holdings(
     account_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Reconstruct holdings for an account from transaction history (must belong to user)."""
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:

@@ -48,3 +48,54 @@ class Holding(HoldingBase):
     closed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+# --- List endpoint response schemas ---
+
+
+class HoldingAccountInfo(BaseModel):
+    """Account info nested in a holding list item."""
+
+    id: int
+    name: str
+    type: str | None = None
+    institution: str | None = None
+    currency: str | None = None
+
+
+class HoldingAssetInfo(BaseModel):
+    """Asset info nested in a holding list item."""
+
+    id: int
+    symbol: str
+    name: str | None = None
+    asset_class: str | None = None
+    category: str | None = None
+
+
+class HoldingListItem(BaseModel):
+    """Single item returned by GET /api/holdings."""
+
+    id: int
+    account_id: int
+    asset_id: int
+    quantity: float
+    cost_basis: float
+    strategy_horizon: str | None = None
+    tags: str | None = None
+    is_active: bool
+    closed_at: str | None = None
+    created_at: str
+    updated_at: str
+    account: HoldingAccountInfo
+    asset: HoldingAssetInfo
+
+
+class ReconstructionStatsResponse(BaseModel):
+    """Response for POST /api/holdings/reconstruct/{account_id}."""
+
+    account_id: int
+    holdings_updated: int
+    holdings_activated: int
+    holdings_deactivated: int
+    reconstructed_count: int
