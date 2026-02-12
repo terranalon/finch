@@ -47,7 +47,6 @@ def parsed_xlsx(parser: ManualParser, sample_xlsx_content: bytes) -> "BrokerImpo
 
 
 class TestManualParserMetadata:
-
     def test_broker_type(self, parser: ManualParser):
         assert parser.broker_type() == "manual"
 
@@ -62,7 +61,6 @@ class TestManualParserMetadata:
 
 
 class TestManualParserDateRange:
-
     def test_extract_date_range_csv(self, parser: ManualParser, sample_csv_content: bytes):
         start, end = parser.extract_date_range(sample_csv_content)
         assert start == date(2025, 1, 15)
@@ -84,7 +82,6 @@ class TestManualParserDateRange:
 
 
 class TestManualParserCSVStructure:
-
     def test_total_records(self, parsed_csv: "BrokerImportData"):
         assert parsed_csv.total_records == 15
 
@@ -106,9 +103,10 @@ class TestManualParserCSVStructure:
 
 
 class TestManualParserBuySell:
-
     def test_buy_aapl(self, parsed_csv: "BrokerImportData"):
-        buys = [t for t in parsed_csv.transactions if t.symbol == "AAPL" and t.transaction_type == "Buy"]
+        buys = [
+            t for t in parsed_csv.transactions if t.symbol == "AAPL" and t.transaction_type == "Buy"
+        ]
         assert len(buys) == 1
         assert buys[0].trade_date == date(2025, 1, 15)
         assert buys[0].quantity == Decimal("10")
@@ -118,7 +116,9 @@ class TestManualParserBuySell:
         assert buys[0].currency == "USD"
 
     def test_sell_spy(self, parsed_csv: "BrokerImportData"):
-        sells = [t for t in parsed_csv.transactions if t.symbol == "SPY" and t.transaction_type == "Sell"]
+        sells = [
+            t for t in parsed_csv.transactions if t.symbol == "SPY" and t.transaction_type == "Sell"
+        ]
         assert len(sells) == 1
         assert sells[0].quantity == Decimal("5")
         assert sells[0].price_per_unit == Decimal("465.20")
@@ -138,7 +138,6 @@ class TestManualParserBuySell:
 
 
 class TestManualParserCash:
-
     def test_deposit(self, parsed_csv: "BrokerImportData"):
         deposits = [t for t in parsed_csv.cash_transactions if t.transaction_type == "Deposit"]
         assert len(deposits) == 1
@@ -146,13 +145,14 @@ class TestManualParserCash:
         assert deposits[0].currency == "USD"
 
     def test_withdrawal_negative(self, parsed_csv: "BrokerImportData"):
-        withdrawals = [t for t in parsed_csv.cash_transactions if t.transaction_type == "Withdrawal"]
+        withdrawals = [
+            t for t in parsed_csv.cash_transactions if t.transaction_type == "Withdrawal"
+        ]
         assert len(withdrawals) == 1
         assert withdrawals[0].amount == Decimal("-2000.00")
 
 
 class TestManualParserDividends:
-
     def test_dividend(self, parsed_csv: "BrokerImportData"):
         divs = [d for d in parsed_csv.dividends if d.transaction_type == "Dividend"]
         assert len(divs) == 2
@@ -172,7 +172,6 @@ class TestManualParserDividends:
 
 
 class TestManualParserXLSX:
-
     def test_xlsx_total_records(self, parsed_xlsx: "BrokerImportData"):
         assert parsed_xlsx.total_records == 15
 
@@ -181,13 +180,16 @@ class TestManualParserXLSX:
         assert parsed_xlsx.end_date == date(2025, 9, 1)
 
     def test_xlsx_buy_aapl(self, parsed_xlsx: "BrokerImportData"):
-        buys = [t for t in parsed_xlsx.transactions if t.symbol == "AAPL" and t.transaction_type == "Buy"]
+        buys = [
+            t
+            for t in parsed_xlsx.transactions
+            if t.symbol == "AAPL" and t.transaction_type == "Buy"
+        ]
         assert len(buys) == 1
         assert buys[0].quantity == Decimal("10")
 
 
 class TestManualParserValidation:
-
     def test_validate_valid_csv(self, parser: ManualParser, sample_csv_content: bytes):
         is_valid, error = parser.validate_file(sample_csv_content, "data.csv")
         assert is_valid is True

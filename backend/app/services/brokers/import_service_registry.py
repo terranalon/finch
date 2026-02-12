@@ -43,7 +43,11 @@ class BrokerImportServiceRegistry:
         )
 
         # Register services - each service declares which broker types it handles
-        for service_class in [IsraeliSecuritiesImportService, CryptoImportService, ManualImportService]:
+        for service_class in [
+            IsraeliSecuritiesImportService,
+            CryptoImportService,
+            ManualImportService,
+        ]:
             for broker_type in service_class.supported_broker_types():
                 cls._services[broker_type] = service_class
 
