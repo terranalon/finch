@@ -223,7 +223,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 )
 
                 # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                dedup_result, _ = check_and_transfer_ownership(
+                    self.db, content_hash, source_id, account_id
+                )
                 if dedup_result != DedupResult.NEW:
                     dedup_result.update_stats(stats)
                     continue
@@ -373,7 +375,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 )
 
                 # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                dedup_result, _ = check_and_transfer_ownership(
+                    self.db, content_hash, source_id, account_id
+                )
                 if dedup_result != DedupResult.NEW:
                     dedup_result.update_stats(stats)
                     continue
@@ -472,7 +476,9 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
                 )
 
                 # Check for existing transaction and handle ownership transfer
-                dedup_result, _ = check_and_transfer_ownership(self.db, content_hash, source_id)
+                dedup_result, _ = check_and_transfer_ownership(
+                    self.db, content_hash, source_id, account_id
+                )
                 if dedup_result != DedupResult.NEW:
                     dedup_result.update_stats(stats)
                     continue

@@ -247,6 +247,7 @@ class CryptoImportService(BaseBrokerImportService):
                     amount=txn.amount,
                     external_txn_id=txn.external_transaction_id,
                     notes=txn.notes,
+                    account_id=account_id,
                 )
                 result.update_stats(stats)
 
@@ -290,6 +291,7 @@ class CryptoImportService(BaseBrokerImportService):
                     amount=cash_txn.amount,
                     fees=cash_txn.fees,
                     notes=cash_txn.notes,
+                    account_id=account_id,
                 )
                 result.update_stats(stats)
 
@@ -330,6 +332,7 @@ class CryptoImportService(BaseBrokerImportService):
                     fees=div.fees,
                     external_txn_id=div.external_transaction_id,
                     notes=div.notes,
+                    account_id=account_id,
                 )
                 result.update_stats(stats)
 

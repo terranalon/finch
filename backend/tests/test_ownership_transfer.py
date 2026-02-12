@@ -142,7 +142,7 @@ def test_holding(db_session, test_account, test_asset):
 class TestOwnershipTransfer:
     """Test ownership transfer for overlapping imports."""
 
-    def test_new_transaction_returns_new_result(self, db_session, test_holding):
+    def test_new_transaction_returns_new_result(self, db_session, test_holding, test_account):
         """A transaction with no matching hash should return NEW."""
         result, txn = create_or_transfer_transaction(
             db=db_session,
@@ -154,6 +154,7 @@ class TestOwnershipTransfer:
             quantity=Decimal("1.5"),
             price=Decimal("40000.00"),
             fees=Decimal("10.00"),
+            account_id=test_account.id,
         )
 
         assert result == DedupResult.NEW
@@ -188,6 +189,7 @@ class TestOwnershipTransfer:
             price=Decimal("40000.00"),
             fees=Decimal("10.00"),
             external_txn_id="KRAKEN-TXN-001",
+            account_id=test_account.id,
         )
         assert result1 == DedupResult.NEW
         db_session.flush()
@@ -204,6 +206,7 @@ class TestOwnershipTransfer:
             price=Decimal("40000.00"),
             fees=Decimal("10.00"),
             external_txn_id="KRAKEN-TXN-001",
+            account_id=test_account.id,
         )
 
         assert result2 == DedupResult.SKIPPED
@@ -238,6 +241,7 @@ class TestOwnershipTransfer:
             price=Decimal("50000.00"),
             fees=Decimal("15.00"),
             external_txn_id="KRAKEN-TXN-002",
+            account_id=test_account.id,
         )
         assert result1 == DedupResult.NEW
         assert txn1.broker_source_id == source1.id
@@ -268,6 +272,7 @@ class TestOwnershipTransfer:
             price=Decimal("50000.00"),
             fees=Decimal("15.00"),
             external_txn_id="KRAKEN-TXN-002",
+            account_id=test_account.id,
         )
 
         assert result2 == DedupResult.TRANSFERRED
@@ -333,6 +338,7 @@ class TestOwnershipTransfer:
                 price=price,
                 fees=Decimal("10.00"),
                 external_txn_id=ext_id,
+                account_id=test_account.id,
             )
             if result == DedupResult.NEW:
                 stats_2024["new"] += 1
@@ -384,6 +390,7 @@ class TestOwnershipTransfer:
                 price=price,
                 fees=Decimal("10.00"),
                 external_txn_id=ext_id,
+                account_id=test_account.id,
             )
             if result == DedupResult.NEW:
                 stats_overlap["new"] += 1
@@ -428,9 +435,7 @@ class TestOwnershipTransfer:
         assert len(old_source_txns) == 1
         assert old_source_txns[0].external_transaction_id == "KRAKEN-003"
 
-    def test_cross_account_creates_independent_transactions(
-        self, db_session, test_user
-    ):
+    def test_cross_account_creates_independent_transactions(self, db_session, test_user):
         """Uploading same data for two different accounts should create separate transactions."""
         # Create two separate accounts
         portfolio = Portfolio(user_id=test_user.id, name="Test Cross-Account Portfolio")
@@ -515,15 +520,7 @@ class TestOwnershipTransfer:
         assert txn_b.id != txn_a.id  # Different transaction objects
 
         # Verify each account has its own transaction
-        txns_a = (
-            db_session.query(Transaction)
-            .filter(Transaction.holding_id == holding_a.id)
-            .all()
-        )
-        txns_b = (
-            db_session.query(Transaction)
-            .filter(Transaction.holding_id == holding_b.id)
-            .all()
-        )
+        txns_a = db_session.query(Transaction).filter(Transaction.holding_id == holding_a.id).all()
+        txns_b = db_session.query(Transaction).filter(Transaction.holding_id == holding_b.id).all()
         assert len(txns_a) == 1
         assert len(txns_b) == 1

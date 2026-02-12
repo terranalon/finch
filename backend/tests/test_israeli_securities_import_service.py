@@ -10,6 +10,7 @@ from app.services.brokers.base_broker_parser import (
     ParsedTransaction,
 )
 from app.services.brokers.shared.israeli_import_service import IsraeliSecuritiesImportService
+from app.services.shared.transaction_hash_service import DedupResult
 
 
 class TestSymbolResolution:
@@ -159,11 +160,10 @@ class TestImportTransactions:
         mock_holding = MagicMock()
         mock_holding.id = 1
 
-        # First call: asset lookup, second: holding lookup, third: duplicate check
+        # First call: asset lookup, second: holding lookup
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             mock_asset,  # Asset found
             mock_holding,  # Holding found
-            None,  # No duplicate
         ]
 
         transactions = [
@@ -179,7 +179,13 @@ class TestImportTransactions:
             ),
         ]
 
-        with patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)):
+        with (
+            patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)),
+            patch(
+                "app.services.brokers.shared.israeli_import_service.check_and_transfer_ownership",
+                return_value=(DedupResult.NEW, None),
+            ),
+        ):
             stats = service._import_transactions(account_id=1, transactions=transactions)
 
         assert stats["total"] == 1
@@ -187,8 +193,6 @@ class TestImportTransactions:
 
     def test_import_transactions_skips_duplicates(self):
         """Test that duplicate transactions are skipped via hash-based dedup."""
-        from app.services.shared.transaction_hash_service import DedupResult
-
         mock_db = MagicMock()
         service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
@@ -237,12 +241,11 @@ class TestImportCashTransactions:
         mock_db = MagicMock()
         service = IsraeliSecuritiesImportService(mock_db, "meitav")
 
-        # Mock: asset not found (create), holding not found (create), no duplicate
+        # Mock: asset not found (create), holding not found (create)
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             None,  # Cash asset not found
             None,  # Another query for TASE number
             None,  # Holding not found
-            None,  # No duplicate
         ]
 
         cash_transactions = [
@@ -254,7 +257,13 @@ class TestImportCashTransactions:
             ),
         ]
 
-        stats = service._import_cash_transactions(account_id=1, cash_transactions=cash_transactions)
+        with patch(
+            "app.services.brokers.shared.israeli_import_service.check_and_transfer_ownership",
+            return_value=(DedupResult.NEW, None),
+        ):
+            stats = service._import_cash_transactions(
+                account_id=1, cash_transactions=cash_transactions
+            )
 
         assert stats["total"] == 1
         assert stats["imported"] == 1
@@ -274,7 +283,6 @@ class TestImportDividends:
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             mock_asset,
             mock_holding,
-            None,  # No duplicate
         ]
 
         dividends = [
@@ -287,7 +295,13 @@ class TestImportDividends:
             ),
         ]
 
-        with patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)):
+        with (
+            patch.object(service, "_resolve_symbol", return_value=("TEVA.TA", None)),
+            patch(
+                "app.services.brokers.shared.israeli_import_service.check_and_transfer_ownership",
+                return_value=(DedupResult.NEW, None),
+            ),
+        ):
             stats = service._import_dividends(account_id=1, dividends=dividends)
 
         assert stats["total"] == 1

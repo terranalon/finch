@@ -130,6 +130,7 @@ class ManualImportService(BaseBrokerImportService):
                     fees=txn.fees,
                     amount=txn.amount,
                     notes=f"Manual Import - {txn.notes or txn.transaction_type}",
+                    account_id=account_id,
                 )
                 result.update_stats(stats)
 
@@ -168,6 +169,7 @@ class ManualImportService(BaseBrokerImportService):
                     amount=cash_txn.amount,
                     fees=cash_txn.fees,
                     notes=f"Manual Import - {cash_txn.notes or cash_txn.transaction_type}",
+                    account_id=account_id,
                 )
                 result.update_stats(stats)
 
