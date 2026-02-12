@@ -40,7 +40,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
-        total_count = self._repo.count_trades(account_ids, account_id=account_id, symbol=symbol)
+        total = self._repo.count_trades(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_trades(
             account_ids,
             account_id=account_id,
@@ -54,7 +54,7 @@ class TransactionViewService:
             qty = txn.quantity or Decimal("0")
             price = txn.price_per_unit or Decimal("0")
             fees = txn.fees or Decimal("0")
-            total = (qty * price) + fees
+            trade_total = (qty * price) + fees
 
             native_currency = _resolve_native_currency(asset, txn.notes)
 
@@ -62,13 +62,14 @@ class TransactionViewService:
                 convert = CurrencyConversionHelper.convert_value
                 price = convert(self._db, price, native_currency, display_currency, txn.date)
                 fees = convert(self._db, fees, native_currency, display_currency, txn.date)
-                total = convert(self._db, total, native_currency, display_currency, txn.date)
+                trade_total = convert(
+                    self._db, trade_total, native_currency, display_currency, txn.date
+                )
                 output_currency = display_currency
             else:
                 output_currency = native_currency
 
-            trades = [
-                *trades,
+            trades.append(
                 TradeItem(
                     id=txn.id,
                     date=txn.date,
@@ -79,14 +80,14 @@ class TransactionViewService:
                     quantity=qty,
                     price_per_unit=price,
                     fees=fees,
-                    total=total,
+                    total=trade_total,
                     currency=output_currency,
                     account_name=account.name,
                     notes=txn.notes,
                 ),
-            ]
+            )
 
-        return trades, total_count
+        return trades, total
 
     def get_dividends(
         self,
@@ -138,7 +139,10 @@ class TransactionViewService:
 
         # Load all rows to get accurate count after deduplication
         all_rows = self._repo.find_forex(
-            account_ids, account_id=account_id, limit=10000, offset=0,
+            account_ids,
+            account_id=account_id,
+            limit=10000,
+            offset=0,
         )
 
         all_forex: list[ForexItem] = []
@@ -146,10 +150,7 @@ class TransactionViewService:
 
         for txn, _, asset, account in all_rows:
             if txn.to_holding_id is not None:
-                all_forex = [
-                    *all_forex,
-                    self._build_new_format_forex(txn, asset, account),
-                ]
+                all_forex.append(self._build_new_format_forex(txn, asset, account))
             else:
                 parsed = self.parse_legacy_forex_notes(txn.notes)
                 if not parsed:
@@ -160,8 +161,7 @@ class TransactionViewService:
                     continue
                 seen_legacy_pairs.add(pair_key)
 
-                all_forex = [
-                    *all_forex,
+                all_forex.append(
                     ForexItem(
                         id=txn.id,
                         date=txn.date,
@@ -173,7 +173,7 @@ class TransactionViewService:
                         account_name=account.name,
                         notes=txn.notes,
                     ),
-                ]
+                )
 
         total = len(all_forex)
         return all_forex[offset : offset + limit], total
@@ -229,8 +229,7 @@ class TransactionViewService:
             else:
                 output_currency = native_currency
 
-            items = [
-                *items,
+            items.append(
                 CashActivityItem(
                     id=txn.id,
                     date=txn.date,
@@ -242,7 +241,7 @@ class TransactionViewService:
                     account_name=account.name,
                     notes=txn.notes,
                 ),
-            ]
+            )
 
         return items, total
 
