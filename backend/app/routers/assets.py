@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Asset, AssetPrice, ExchangeRate
 from app.schemas.asset import Asset as AssetSchema
-from app.schemas.asset import AssetCreate, AssetUpdate
+from app.schemas.asset import AssetCreate, AssetMarketResponse, AssetUpdate
 from app.services.shared.asset_metadata_service import AssetMetadataService
 from app.services.shared.currency_service import CurrencyService
 
@@ -38,14 +38,14 @@ async def list_assets(
     return assets
 
 
-@router.get("/market")
+@router.get("/market", response_model=list[AssetMarketResponse])
 async def list_assets_with_changes(
     skip: int = 0,
     limit: int = Query(default=100, le=500),
     asset_class: str = None,
     display_currency: str = Query(default="USD", pattern="^[A-Z]{3}$"),
     db: Session = Depends(get_db),
-) -> list[dict]:
+):
     """
     Get list of assets with price change data.
 
