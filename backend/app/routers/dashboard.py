@@ -11,6 +11,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
+from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse
 from app.services.portfolio.dashboard_service import DashboardService
 from app.services.portfolio.types import (
     AccountValue,
@@ -38,7 +39,7 @@ _EMPTY_SUMMARY = {
 }
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     display_currency: str = Query(
         "USD", description="Currency for displaying values", pattern="^[A-Z]{3}$"
@@ -46,7 +47,7 @@ async def get_dashboard_summary(
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Get portfolio dashboard summary with aggregated data."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -56,11 +57,11 @@ async def get_dashboard_summary(
     return _format_summary(db, summary, display_currency)
 
 
-@router.get("/benchmark")
+@router.get("/benchmark", response_model=BenchmarkResponse)
 async def get_benchmark_performance(
     period: str = Query("1mo", description="Time period: 1mo, 3mo, 6mo, 1y, ytd, max"),
     symbol: str = Query("SPY", description="Benchmark symbol (default: SPY for S&P 500)"),
-) -> dict:
+):
     """
     Get benchmark historical performance data.
 
