@@ -92,9 +92,8 @@ def test_portfolio(db_session, test_user):
 
 @pytest.fixture
 def test_account(db_session, test_portfolio):
-    """Create a test account."""
+    """Create a test account linked to the portfolio."""
     account = Account(
-        portfolio_id=test_portfolio.id,
         name="Test Kraken Transfer Account",
         account_type="Crypto",
         institution="Kraken",
@@ -102,6 +101,8 @@ def test_account(db_session, test_portfolio):
         currency="USD",
     )
     db_session.add(account)
+    db_session.flush()
+    test_portfolio.accounts.append(account)
     db_session.commit()
     db_session.refresh(account)
     return account
@@ -426,3 +427,103 @@ class TestOwnershipTransfer:
         )
         assert len(old_source_txns) == 1
         assert old_source_txns[0].external_transaction_id == "KRAKEN-003"
+
+    def test_cross_account_creates_independent_transactions(
+        self, db_session, test_user
+    ):
+        """Uploading same data for two different accounts should create separate transactions."""
+        # Create two separate accounts
+        portfolio = Portfolio(user_id=test_user.id, name="Test Cross-Account Portfolio")
+        db_session.add(portfolio)
+        db_session.flush()
+
+        account_a = Account(
+            name="Test Account A",
+            account_type="Manual",
+            institution="Manual",
+            broker_type="manual",
+            currency="USD",
+        )
+        account_b = Account(
+            name="Test Account B",
+            account_type="Manual",
+            institution="Manual",
+            broker_type="manual",
+            currency="USD",
+        )
+        db_session.add_all([account_a, account_b])
+        db_session.flush()
+        portfolio.accounts.extend([account_a, account_b])
+        db_session.flush()
+
+        asset = Asset(
+            symbol="TEST_CROSS",
+            name="Test Cross Asset",
+            asset_class="Stock",
+            currency="USD",
+        )
+        db_session.add(asset)
+        db_session.flush()
+
+        holding_a = Holding(
+            account_id=account_a.id,
+            asset_id=asset.id,
+            quantity=Decimal("0"),
+            cost_basis=Decimal("0"),
+            is_active=False,
+        )
+        holding_b = Holding(
+            account_id=account_b.id,
+            asset_id=asset.id,
+            quantity=Decimal("0"),
+            cost_basis=Decimal("0"),
+            is_active=False,
+        )
+        db_session.add_all([holding_a, holding_b])
+        db_session.flush()
+
+        # Import same transaction for account A
+        result_a, txn_a = create_or_transfer_transaction(
+            db=db_session,
+            holding_id=holding_a.id,
+            source_id=None,
+            account_id=account_a.id,
+            txn_date=date(2025, 1, 15),
+            txn_type="Buy",
+            symbol="TEST_CROSS",
+            quantity=Decimal("10"),
+            price=Decimal("100.00"),
+            fees=Decimal("5.00"),
+        )
+        assert result_a == DedupResult.NEW
+        db_session.flush()
+
+        # Import same transaction for account B -- must also be NEW
+        result_b, txn_b = create_or_transfer_transaction(
+            db=db_session,
+            holding_id=holding_b.id,
+            source_id=None,
+            account_id=account_b.id,
+            txn_date=date(2025, 1, 15),
+            txn_type="Buy",
+            symbol="TEST_CROSS",
+            quantity=Decimal("10"),
+            price=Decimal("100.00"),
+            fees=Decimal("5.00"),
+        )
+        assert result_b == DedupResult.NEW  # NOT TRANSFERRED
+        assert txn_b.id != txn_a.id  # Different transaction objects
+
+        # Verify each account has its own transaction
+        txns_a = (
+            db_session.query(Transaction)
+            .filter(Transaction.holding_id == holding_a.id)
+            .all()
+        )
+        txns_b = (
+            db_session.query(Transaction)
+            .filter(Transaction.holding_id == holding_b.id)
+            .all()
+        )
+        assert len(txns_a) == 1
+        assert len(txns_b) == 1
