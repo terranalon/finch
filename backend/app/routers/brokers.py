@@ -315,7 +315,7 @@ async def import_broker_data(
         default=True,
         description="Use staged import for better UI responsiveness (IBKR only)",
     ),
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -407,7 +407,7 @@ async def import_broker_data(
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)
 async def import_ibkr_snapshot(
     account_id: int,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

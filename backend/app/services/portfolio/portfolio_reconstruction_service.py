@@ -574,7 +574,7 @@ class PortfolioReconstructionService:
         }
 
     @staticmethod
-    def validate_reconstruction(db: Session, account_id: int, as_of_date: date = None) -> dict:
+    def validate_reconstruction(db: Session, account_id: int, as_of_date: date | None = None) -> dict:
         """
         Validate reconstruction accuracy by comparing with current holdings.
 
