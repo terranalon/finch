@@ -4,21 +4,19 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.schemas.common import StatusResponse
 
-class PriceUpdateResponse(BaseModel):
+
+class PriceUpdateResponse(StatusResponse):
     """Response for POST /api/prices/update."""
 
-    status: str
-    message: str
     asset_class: str | None = None
     stats: dict[str, Any] | None = None
 
 
-class SingleAssetPriceResponse(BaseModel):
+class SingleAssetPriceResponse(StatusResponse):
     """Response for POST /api/prices/update/{asset_id}."""
 
-    status: str
-    message: str
     asset_id: int
     symbol: str
     price: float | None = None

@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, PlainSerializer
 
 # Decimal that serializes as float in JSON responses (preserves numeric wire format)
 JsonDecimal = Annotated[
@@ -20,15 +20,13 @@ class PositionAccountDetail(BaseModel):
     account_type: str | None = None
     institution: str | None = None
     quantity: JsonDecimal
-    cost_basis_native: JsonDecimal = Field(..., description="Cost basis in asset's native currency")
-    market_value_native: JsonDecimal | None = Field(
-        None, description="Market value in native currency"
-    )
-    pnl_native: JsonDecimal | None = Field(None, description="P&L in native currency")
-    cost_basis: JsonDecimal = Field(..., description="Cost basis in display currency")
-    market_value: JsonDecimal | None = Field(None, description="Market value in display currency")
-    pnl: JsonDecimal | None = Field(None, description="P&L in display currency")
-    pnl_pct: JsonDecimal | None = Field(None, description="P&L percentage")
+    cost_basis_native: JsonDecimal
+    market_value_native: JsonDecimal | None = None
+    pnl_native: JsonDecimal | None = None
+    cost_basis: JsonDecimal
+    market_value: JsonDecimal | None = None
+    pnl: JsonDecimal | None = None
+    pnl_pct: JsonDecimal | None = None
     strategy_horizon: str | None = None
 
 
@@ -46,9 +44,7 @@ class PositionResponse(BaseModel):
 
     # Price data
     current_price: JsonDecimal | None = None
-    current_price_display: JsonDecimal | None = Field(
-        None, description="Current price in display currency"
-    )
+    current_price_display: JsonDecimal | None = None
     previous_close_price: JsonDecimal | None = None
     day_change: JsonDecimal | None = None
     day_change_pct: JsonDecimal | None = None
@@ -65,7 +61,7 @@ class PositionResponse(BaseModel):
     # Aggregated values (display currency)
     total_cost_basis: JsonDecimal
     total_market_value: JsonDecimal | None = None
-    current_value: JsonDecimal | None = Field(None, description="Alias for total_market_value")
+    current_value: JsonDecimal | None = None  # Alias for total_market_value
     total_pnl: JsonDecimal | None = None
     total_pnl_pct: JsonDecimal | None = None
     avg_cost_per_unit: JsonDecimal = Decimal("0")

@@ -36,6 +36,7 @@ from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.common import StatusResponse
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 from app.services.brokers.ibkr.synthetic_import_service import delete_synthetic_sources
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
@@ -133,11 +134,9 @@ class SupportedBrokerResponse(BaseModel):
     api_enabled: bool
 
 
-class UploadResponse(BaseModel):
+class UploadResponse(StatusResponse):
     """Response model for successful upload."""
 
-    status: str
-    message: str
     source_id: int
     date_range: dict  # start_date, end_date
     stats: dict  # transactions, etc.
@@ -171,11 +170,9 @@ class PreImportAnalysis(BaseModel):
     requires_confirmation: bool
 
 
-class DetailedImportResult(BaseModel):
+class DetailedImportResult(StatusResponse):
     """Response model for import with ownership transfer details."""
 
-    status: str
-    message: str
     source_id: int
     date_range: dict
     stats: dict
@@ -183,11 +180,9 @@ class DetailedImportResult(BaseModel):
     old_sources_affected: list[int]  # Sources that had transactions transferred
 
 
-class BatchFinalizeResponse(BaseModel):
+class BatchFinalizeResponse(StatusResponse):
     """Response for POST /api/broker-data/finalize-batch/{account_id}."""
 
-    status: str
-    message: str
     session_id: str
     sources_finalized: int
     date_range: dict[str, str]
@@ -196,11 +191,9 @@ class BatchFinalizeResponse(BaseModel):
     validation: dict[str, Any] | None = None
 
 
-class DeleteSourceResponse(BaseModel):
+class DeleteSourceResponse(StatusResponse):
     """Response for DELETE /api/broker-data/source/{source_id}."""
 
-    status: str
-    message: str
     source_id: int
     deleted: dict[str, int]
     holdings: dict[str, int]

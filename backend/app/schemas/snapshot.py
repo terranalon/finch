@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.common import StatusResponse
+
 
 class SnapshotPointResponse(BaseModel):
     """Single snapshot data point (after currency conversion)."""
@@ -13,7 +15,7 @@ class SnapshotPointResponse(BaseModel):
     currency: str | None = None
 
 
-class SnapshotCreateResponse(BaseModel):
+class SnapshotCreateResponse(StatusResponse):
     """Response for POST /api/snapshots/create.
 
     When run_async=True: {status, message, date}
@@ -22,6 +24,3 @@ class SnapshotCreateResponse(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-
-    status: str
-    message: str

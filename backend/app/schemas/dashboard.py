@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from app.schemas.snapshot import SnapshotPointResponse
+
 
 class DashboardAccountResponse(BaseModel):
     """Single account in dashboard summary."""
@@ -41,16 +43,6 @@ class TopHoldingResponse(BaseModel):
     market_value: float
 
 
-class HistoricalPerformancePoint(BaseModel):
-    """Single point in historical performance series."""
-
-    date: str
-    value: float | None = None
-    value_usd: float | None = None
-    value_ils: float | None = None
-    currency: str | None = None
-
-
 class DashboardSummaryResponse(BaseModel):
     """Response for GET /api/dashboard/summary."""
 
@@ -64,7 +56,7 @@ class DashboardSummaryResponse(BaseModel):
     accounts: list[DashboardAccountResponse]
     asset_allocation: list[AssetAllocationResponse]
     top_holdings: list[TopHoldingResponse]
-    historical_performance: list[HistoricalPerformancePoint]
+    historical_performance: list[SnapshotPointResponse]
 
 
 class BenchmarkDataPoint(BaseModel):

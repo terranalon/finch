@@ -64,3 +64,10 @@ class MessageResponse(BaseModel):
     """
 
     message: str
+
+
+class StatusResponse(BaseModel):
+    """Base for responses that carry a status and message."""
+
+    status: str
+    message: str

@@ -8,6 +8,7 @@ from app.schemas.common import (
     ErrorResponse,
     MessageResponse,
     PaginatedResponse,
+    StatusResponse,
 )
 from app.schemas.dashboard import (
     BenchmarkResponse,
@@ -74,6 +75,7 @@ __all__ = [
     "ErrorResponse",
     "MessageResponse",
     "PaginatedResponse",
+    "StatusResponse",
     # Dashboard schemas
     "BenchmarkResponse",
     "DashboardSummaryResponse",

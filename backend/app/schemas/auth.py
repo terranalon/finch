@@ -4,6 +4,8 @@ import re
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.schemas.common import MessageResponse as MessageResponse  # re-export
+
 
 def _validate_password_strength(v: str) -> str:
     """Shared password validation logic."""
@@ -78,12 +80,6 @@ class TokenRefresh(BaseModel):
     """Schema for token refresh."""
 
     refresh_token: str
-
-
-class MessageResponse(BaseModel):
-    """Schema for simple message response."""
-
-    message: str
 
 
 class UserPreferencesUpdate(BaseModel):
