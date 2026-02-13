@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas import Holding as HoldingSchema
 from app.schemas import HoldingCreate, HoldingUpdate
 from app.schemas.common import PaginatedResponse
-from app.schemas.holding import HoldingDetailResponse
+from app.schemas.holding import HoldingDetailResponse, ReconstructionStatsResponse
 from app.services.portfolio.holding_service import HoldingService
 
 router = APIRouter(prefix="/api/holdings", tags=["holdings"])
@@ -181,12 +181,12 @@ async def delete_holding(
     return None
 
 
-@router.post("/reconstruct/{account_id}")
+@router.post("/reconstruct/{account_id}", response_model=ReconstructionStatsResponse)
 async def reconstruct_holdings(
     account_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Reconstruct holdings for an account from transaction history (must belong to user)."""
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:

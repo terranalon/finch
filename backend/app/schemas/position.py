@@ -1,6 +1,14 @@
 """Position response schemas."""
 
-from pydantic import BaseModel, Field
+from decimal import Decimal
+from typing import Annotated
+
+from pydantic import BaseModel, PlainSerializer
+
+# Decimal that serializes as float in JSON responses (preserves numeric wire format)
+JsonDecimal = Annotated[
+    Decimal, PlainSerializer(lambda v: float(v), return_type=float, when_used="json")
+]
 
 
 class PositionAccountDetail(BaseModel):
@@ -11,14 +19,14 @@ class PositionAccountDetail(BaseModel):
     account_name: str
     account_type: str | None = None
     institution: str | None = None
-    quantity: float
-    cost_basis_native: float = Field(..., description="Cost basis in asset's native currency")
-    market_value_native: float | None = Field(None, description="Market value in native currency")
-    pnl_native: float | None = Field(None, description="P&L in native currency")
-    cost_basis: float = Field(..., description="Cost basis in display currency")
-    market_value: float | None = Field(None, description="Market value in display currency")
-    pnl: float | None = Field(None, description="P&L in display currency")
-    pnl_pct: float | None = Field(None, description="P&L percentage")
+    quantity: JsonDecimal
+    cost_basis_native: JsonDecimal
+    market_value_native: JsonDecimal | None = None
+    pnl_native: JsonDecimal | None = None
+    cost_basis: JsonDecimal
+    market_value: JsonDecimal | None = None
+    pnl: JsonDecimal | None = None
+    pnl_pct: JsonDecimal | None = None
     strategy_horizon: str | None = None
 
 
@@ -35,30 +43,28 @@ class PositionResponse(BaseModel):
     is_favorite: bool = False
 
     # Price data
-    current_price: float | None = None
-    current_price_display: float | None = Field(
-        None, description="Current price in display currency"
-    )
-    previous_close_price: float | None = None
-    day_change: float | None = None
-    day_change_pct: float | None = None
+    current_price: JsonDecimal | None = None
+    current_price_display: JsonDecimal | None = None
+    previous_close_price: JsonDecimal | None = None
+    day_change: JsonDecimal | None = None
+    day_change_pct: JsonDecimal | None = None
     day_change_date: str | None = None
     is_market_closed: bool = False
 
     # Aggregated values (native currency)
-    total_quantity: float
-    total_cost_basis_native: float
-    total_market_value_native: float | None = None
-    total_pnl_native: float | None = None
-    avg_cost_per_unit_native: float = 0
+    total_quantity: JsonDecimal
+    total_cost_basis_native: JsonDecimal
+    total_market_value_native: JsonDecimal | None = None
+    total_pnl_native: JsonDecimal | None = None
+    avg_cost_per_unit_native: JsonDecimal = Decimal("0")
 
     # Aggregated values (display currency)
-    total_cost_basis: float
-    total_market_value: float | None = None
-    current_value: float | None = Field(None, description="Alias for total_market_value")
-    total_pnl: float | None = None
-    total_pnl_pct: float | None = None
-    avg_cost_per_unit: float = 0
+    total_cost_basis: JsonDecimal
+    total_market_value: JsonDecimal | None = None
+    current_value: JsonDecimal | None = None  # Alias for total_market_value
+    total_pnl: JsonDecimal | None = None
+    total_pnl_pct: JsonDecimal | None = None
+    avg_cost_per_unit: JsonDecimal = Decimal("0")
 
     display_currency: str = "USD"
     account_count: int = 0

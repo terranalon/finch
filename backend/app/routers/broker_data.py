@@ -10,6 +10,7 @@ Provides endpoints for:
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -35,6 +36,7 @@ from app.models.historical_snapshot import HistoricalSnapshot
 from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.common import StatusResponse
 from app.services.brokers.broker_parser_registry import BrokerParserRegistry
 from app.services.brokers.ibkr.synthetic_import_service import delete_synthetic_sources
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
@@ -132,11 +134,9 @@ class SupportedBrokerResponse(BaseModel):
     api_enabled: bool
 
 
-class UploadResponse(BaseModel):
+class UploadResponse(StatusResponse):
     """Response model for successful upload."""
 
-    status: str
-    message: str
     source_id: int
     date_range: dict  # start_date, end_date
     stats: dict  # transactions, etc.
@@ -170,16 +170,33 @@ class PreImportAnalysis(BaseModel):
     requires_confirmation: bool
 
 
-class DetailedImportResult(BaseModel):
+class DetailedImportResult(StatusResponse):
     """Response model for import with ownership transfer details."""
 
-    status: str
-    message: str
     source_id: int
     date_range: dict
     stats: dict
     breakdown: dict  # new, transferred, skipped counts
     old_sources_affected: list[int]  # Sources that had transactions transferred
+
+
+class BatchFinalizeResponse(StatusResponse):
+    """Response for POST /api/broker-data/finalize-batch/{account_id}."""
+
+    session_id: str
+    sources_finalized: int
+    date_range: dict[str, str]
+    synthetic_cleanup: dict[str, Any]
+    holdings_reconstruction: dict[str, Any]
+    validation: dict[str, Any] | None = None
+
+
+class DeleteSourceResponse(StatusResponse):
+    """Response for DELETE /api/broker-data/source/{source_id}."""
+
+    source_id: int
+    deleted: dict[str, int]
+    holdings: dict[str, int]
 
 
 # Endpoints
@@ -604,14 +621,14 @@ async def upload_broker_file(
         )
 
 
-@router.post("/finalize-batch/{account_id}")
+@router.post("/finalize-batch/{account_id}", response_model=BatchFinalizeResponse)
 async def finalize_batch_upload(
     account_id: int,
     session_id: str = Query(..., description="The batch session ID to finalize"),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Finalize a batch upload session: reconstruct holdings and generate snapshots.
 
     This should be called after all files for a historical import have been
@@ -819,13 +836,13 @@ async def get_data_coverage(
     return CoverageResponse(brokers=result)
 
 
-@router.delete("/source/{source_id}")
+@router.delete("/source/{source_id}", response_model=DeleteSourceResponse)
 async def delete_data_source(
     source_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+):
     """Delete a data source and all associated data (must belong to user's account).
 
     This performs a CASCADE DELETE:

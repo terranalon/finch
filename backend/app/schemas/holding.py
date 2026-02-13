@@ -92,3 +92,13 @@ class HoldingDetailResponse(BaseModel):
     updated_at: str
     account: HoldingAccountInfoResponse
     asset: HoldingAssetInfoResponse
+
+
+class ReconstructionStatsResponse(BaseModel):
+    """Response for POST /api/holdings/reconstruct/{account_id}."""
+
+    account_id: int
+    holdings_updated: int
+    holdings_activated: int
+    holdings_deactivated: int
+    reconstructed_count: int

@@ -21,6 +21,7 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     MessageResponse,
+    MfaRequiredResponse,
     ResendVerificationRequest,
     ResetPasswordRequest,
     TokenRefresh,
@@ -187,9 +188,9 @@ def _clear_failed_attempts(user: User):
     user.locked_until = None
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse | MfaRequiredResponse)
 @limiter.limit("5/minute")
-def login(request: Request, data: UserLogin, db: Session = Depends(get_db)) -> dict:
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     """Login and get access/refresh tokens."""
     ip_address, user_agent = SecurityAuditService.get_request_info(request)
 
