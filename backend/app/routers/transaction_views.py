@@ -37,7 +37,7 @@ async def list_trades(
     """Get list of trade transactions (Buy/Sell) for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
@@ -69,7 +69,7 @@ async def list_dividends(
     """Get list of dividend and income transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
@@ -102,7 +102,7 @@ async def list_forex(
     """Get list of forex conversion transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
@@ -134,7 +134,7 @@ async def list_cash_activity(
     """Get list of cash activity transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 

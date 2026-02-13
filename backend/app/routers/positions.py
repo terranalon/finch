@@ -31,7 +31,7 @@ async def list_positions(
     """Get positions aggregated by asset across all user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     positions, total = PositionService(db).get_positions(
         allowed_account_ids,

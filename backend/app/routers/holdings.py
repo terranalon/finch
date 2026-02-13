@@ -33,7 +33,7 @@ async def list_holdings(
     """Get list of holdings with optional filters (filtered by user's accounts)."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     if account_id is not None and account_id not in allowed_account_ids:
         raise HTTPException(status_code=404, detail="Account not found")

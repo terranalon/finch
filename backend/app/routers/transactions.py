@@ -36,7 +36,7 @@ async def list_transactions(
     """Get list of transactions with optional filters (filtered by user's accounts)."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     query = (
         db.query(Transaction)
