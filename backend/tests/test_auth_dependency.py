@@ -26,12 +26,12 @@ def test_app():
     User.__table__.create(engine, checkfirst=True)
     Session.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     app = FastAPI()
 
     def override_get_db():
-        db = TestingSessionLocal()
+        db = testing_session_local()
         try:
             yield db
         finally:
@@ -44,7 +44,7 @@ def test_app():
         return {"user_id": user.id, "email": user.email}
 
     # Create test user
-    db = TestingSessionLocal()
+    db = testing_session_local()
     user = User(email="test@example.com", username="test_auth_dep", password_hash="hash")
     db.add(user)
     db.commit()

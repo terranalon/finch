@@ -48,12 +48,12 @@ def test_db():
     )
 
     engine = create_engine(test_db_url)
-    TestSession = sessionmaker(bind=engine)
+    test_session = sessionmaker(bind=engine)
 
     # Create all tables
     Base.metadata.create_all(engine)
 
-    session = TestSession()
+    session = test_session()
     yield session
 
     # Cleanup
@@ -210,7 +210,7 @@ class TestStagingTableUtilities:
 
         # Verify tables exist
         for table in ["assets", "holdings", "transactions", "daily_cash_balance"]:
-            result = test_db.execute(text(f"SELECT 1 FROM staging.{table} LIMIT 1"))
+            test_db.execute(text(f"SELECT 1 FROM staging.{table} LIMIT 1"))
             # No error means table exists
 
     def test_copy_production_to_staging(self, test_db, sample_account):

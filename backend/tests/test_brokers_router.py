@@ -781,7 +781,7 @@ class TestApiImportTriggersSnapshotGeneration:
         with (
             patch("app.routers.brokers._import_crypto_broker") as mock_import,
             patch("app.routers.brokers.update_snapshot_status") as mock_status,
-            patch("app.routers.brokers.generate_snapshots_background") as mock_bg,
+            patch("app.routers.brokers.generate_snapshots_background") as _mock_bg,
         ):
             # Mock successful import with date_range
             mock_import.return_value = {
@@ -832,7 +832,7 @@ class TestApiImportTriggersSnapshotGeneration:
         with (
             patch("app.routers.brokers.IBKRFlexImportService") as mock_flex,
             patch("app.routers.brokers.update_snapshot_status") as mock_status,
-            patch("app.routers.brokers.generate_snapshots_background") as mock_bg,
+            patch("app.routers.brokers.generate_snapshots_background") as _mock_bg,
         ):
             mock_flex.import_all.return_value = {
                 "status": "completed",
