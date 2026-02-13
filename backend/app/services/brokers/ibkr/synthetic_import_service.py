@@ -17,6 +17,10 @@ from app.services.brokers.ibkr.import_service import IBKRImportService
 from app.services.brokers.ibkr.models import IBKRPosition
 from app.services.brokers.ibkr.parser import IBKRParser
 from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
+from app.services.shared.transaction_hash_service import (
+    DedupResult,
+    create_or_transfer_transaction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,17 +219,19 @@ class IBKRSyntheticImportService:
                 if not cash_asset:
                     continue
                 cash_holding = _find_or_create_holding(db, account_id, cash_asset.id)
-                cash_txn = Transaction(
+                result, _ = create_or_transfer_transaction(
+                    db=db,
                     holding_id=cash_holding.id,
-                    broker_source_id=source.id,
-                    date=today,
-                    type="Deposit",
+                    source_id=source.id,
+                    account_id=account_id,
+                    txn_date=today,
+                    txn_type="Deposit",
+                    symbol=cash.symbol,
                     quantity=cash.balance,
                     amount=cash.balance,
                     fees=Decimal("0"),
                     notes=f"Synthetic cash balance from IBKR snapshot ({cash.currency})",
                 )
-                db.add(cash_txn)
 
             for position in positions_data:
                 quantity = position.quantity
@@ -252,19 +258,22 @@ class IBKRSyntheticImportService:
                 holding = _find_or_create_holding(db, account_id, asset.id)
                 price_per_unit = abs(cost_basis / quantity)
 
-                txn = Transaction(
+                result, txn = create_or_transfer_transaction(
+                    db=db,
                     holding_id=holding.id,
-                    broker_source_id=source.id,
-                    date=today,
-                    type="Buy",
+                    source_id=source.id,
+                    account_id=account_id,
+                    txn_date=today,
+                    txn_type="Buy",
+                    symbol=position.symbol,
                     quantity=abs(quantity),
-                    price_per_unit=price_per_unit,
+                    price=price_per_unit,
                     amount=abs(cost_basis),
                     fees=Decimal("0"),
                     notes="Synthetic transaction from IBKR position snapshot",
                 )
-                db.add(txn)
-                stats["positions_imported"] += 1
+                if result in (DedupResult.NEW, DedupResult.TRANSFERRED):
+                    stats["positions_imported"] += 1
 
             source.import_stats = {
                 "snapshot_positions": _build_snapshot_positions(positions_data),

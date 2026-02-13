@@ -66,23 +66,35 @@ def check_and_transfer_ownership(
     db: "Session",
     content_hash: str,
     source_id: int | None,
+    account_id: int | None = None,
 ) -> tuple[DedupResult, "Transaction | None"]:
     """Check for existing transaction by hash and handle ownership transfer.
 
     Implements the latest-wins policy: if a transaction exists under a different
     source, ownership is transferred to the new source.
 
+    Deduplication is scoped to the account level when account_id is provided,
+    preventing cross-account hash collisions from stealing transactions.
+
     Args:
         db: Database session
         content_hash: SHA256 hash of transaction content
         source_id: New broker source ID
+        account_id: Account ID to scope dedup check (prevents cross-account matches)
 
     Returns:
         Tuple of (DedupResult, existing_transaction or None)
     """
-    from app.models import Transaction
+    from app.models import Holding, Transaction
 
-    existing = db.query(Transaction).filter(Transaction.content_hash == content_hash).first()
+    query = db.query(Transaction).filter(Transaction.content_hash == content_hash)
+
+    if account_id is not None:
+        query = query.join(Holding, Transaction.holding_id == Holding.id).filter(
+            Holding.account_id == account_id
+        )
+
+    existing = query.first()
 
     if not existing:
         return DedupResult.NEW, None
@@ -111,6 +123,8 @@ def create_or_transfer_transaction(
     to_holding_id: int | None = None,
     to_amount: Decimal | None = None,
     exchange_rate: Decimal | None = None,
+    # Account scoping for deduplication
+    account_id: int | None = None,
 ) -> tuple[DedupResult, "Transaction"]:
     """Create a transaction with automatic hash-based deduplication.
 
@@ -137,6 +151,7 @@ def create_or_transfer_transaction(
         to_holding_id: Target holding ID (for Forex Conversion)
         to_amount: Target amount (for Forex Conversion)
         exchange_rate: Exchange rate (for Forex Conversion)
+        account_id: Account ID to scope dedup check (prevents cross-account matches)
 
     Returns:
         Tuple of (DedupResult, Transaction)
@@ -164,7 +179,9 @@ def create_or_transfer_transaction(
     )
 
     # Check for existing transaction and handle ownership transfer
-    dedup_result, existing = check_and_transfer_ownership(db, content_hash, source_id)
+    dedup_result, existing = check_and_transfer_ownership(
+        db, content_hash, source_id, account_id
+    )
 
     if dedup_result != DedupResult.NEW:
         return dedup_result, existing
