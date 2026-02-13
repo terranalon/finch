@@ -82,7 +82,7 @@ class HoldingListItem(BaseModel):
     quantity: float
     cost_basis: float
     strategy_horizon: str | None = None
-    tags: str | None = None
+    tags: list | None = None
     is_active: bool
     closed_at: str | None = None
     created_at: str

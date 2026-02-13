@@ -29,7 +29,7 @@ class HoldingDetail:
     quantity: float
     cost_basis: float
     strategy_horizon: str | None
-    tags: str | None
+    tags: list | None
     is_active: bool
     closed_at: str | None
     created_at: str
