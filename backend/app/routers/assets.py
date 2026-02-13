@@ -34,23 +34,17 @@ async def list_assets(
     total = query.count()
     assets = query.order_by(Asset.symbol).offset(skip).limit(limit).all()
 
-    return PaginatedResponse(
-        items=assets,
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(assets)) < total,
-    )
+    return PaginatedResponse.create(items=assets, total=total, skip=skip, limit=limit)
 
 
 @router.get("/market", response_model=PaginatedResponse[AssetMarketResponse])
 async def list_assets_with_changes(
     skip: int = Query(0, ge=0),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=500),
     asset_class: str = None,
-    display_currency: str = Query(default="USD", pattern="^[A-Z]{3}$"),
+    display_currency: str = Query("USD", pattern="^[A-Z]{3}$"),
     db: Session = Depends(get_db),
-) -> PaginatedResponse:
+):
     """Get list of assets with price change data."""
     query = db.query(Asset)
 
@@ -247,13 +241,7 @@ async def list_assets_with_changes(
             }
         )
 
-    return PaginatedResponse(
-        items=result,
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(result)) < total,
-    )
+    return PaginatedResponse.create(items=result, total=total, skip=skip, limit=limit)
 
 
 @router.get("/search", response_model=list[AssetSchema])

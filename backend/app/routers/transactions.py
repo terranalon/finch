@@ -66,13 +66,7 @@ async def list_transactions(
     total = query.count()
     items = query.offset(skip).limit(limit).all()
 
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(items)) < total,
-    )
+    return PaginatedResponse.create(items=items, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{transaction_id}", response_model=TransactionSchema)

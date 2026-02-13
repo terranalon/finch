@@ -48,12 +48,8 @@ async def list_holdings(
         limit=limit,
     )
 
-    return PaginatedResponse(
-        items=[asdict(h) for h in items],
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(items)) < total,
+    return PaginatedResponse.create(
+        items=[asdict(h) for h in items], total=total, skip=skip, limit=limit
     )
 
 

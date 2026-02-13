@@ -25,6 +25,23 @@ class PaginatedResponse(BaseModel, Generic[T]):
     limit: int = Field(..., description="Maximum items per page")
     has_more: bool = Field(..., description="Whether more items exist")
 
+    @classmethod
+    def create(
+        cls,
+        items: list[T],
+        total: int,
+        skip: int,
+        limit: int,
+    ) -> "PaginatedResponse[T]":
+        """Build a paginated response, computing has_more automatically."""
+        return cls(
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+            has_more=(skip + len(items)) < total,
+        )
+
 
 class ErrorDetail(BaseModel):
     """Detailed error information for a specific field or issue.

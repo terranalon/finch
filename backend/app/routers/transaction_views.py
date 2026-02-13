@@ -27,13 +27,13 @@ async def list_trades(
     symbol: str | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     display_currency: str = Query(
-        default=None, description="Currency for displaying values (converts from native currency)"
+        None, description="Currency for displaying values (converts from native currency)"
     ),
-    limit: int = Query(default=100, ge=1, le=500),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginatedResponse:
+):
     """Get list of trade transactions (Buy/Sell) for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -51,12 +51,8 @@ async def list_trades(
         offset=skip,
     )
 
-    return PaginatedResponse(
-        items=[TradeResponse(**asdict(t)) for t in trades],
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(trades)) < total,
+    return PaginatedResponse.create(
+        items=[TradeResponse(**asdict(t)) for t in trades], total=total, skip=skip, limit=limit
     )
 
 
@@ -65,11 +61,11 @@ async def list_dividends(
     account_id: int | None = None,
     symbol: str | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
-    limit: int = Query(default=100, ge=1, le=500),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginatedResponse:
+):
     """Get list of dividend and income transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -86,12 +82,11 @@ async def list_dividends(
         offset=skip,
     )
 
-    return PaginatedResponse(
+    return PaginatedResponse.create(
         items=[DividendResponse(**asdict(d)) for d in dividends],
         total=total,
         skip=skip,
         limit=limit,
-        has_more=(skip + len(dividends)) < total,
     )
 
 
@@ -99,11 +94,11 @@ async def list_dividends(
 async def list_forex(
     account_id: int | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
-    limit: int = Query(default=100, ge=1, le=500),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginatedResponse:
+):
     """Get list of forex conversion transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -119,12 +114,8 @@ async def list_forex(
         offset=skip,
     )
 
-    return PaginatedResponse(
-        items=[ForexResponse(**asdict(f)) for f in forex],
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(forex)) < total,
+    return PaginatedResponse.create(
+        items=[ForexResponse(**asdict(f)) for f in forex], total=total, skip=skip, limit=limit
     )
 
 
@@ -133,13 +124,13 @@ async def list_cash_activity(
     account_id: int | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     display_currency: str = Query(
-        default=None, description="Currency for displaying values (converts from native currency)"
+        None, description="Currency for displaying values (converts from native currency)"
     ),
-    limit: int = Query(default=100, ge=1, le=500),
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginatedResponse:
+):
     """Get list of cash activity transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -156,10 +147,6 @@ async def list_cash_activity(
         offset=skip,
     )
 
-    return PaginatedResponse(
-        items=[CashActivityResponse(**asdict(c)) for c in cash],
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(cash)) < total,
+    return PaginatedResponse.create(
+        items=[CashActivityResponse(**asdict(c)) for c in cash], total=total, skip=skip, limit=limit
     )

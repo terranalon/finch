@@ -27,7 +27,7 @@ async def list_positions(
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginatedResponse:
+):
     """Get positions aggregated by asset across all user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -56,10 +56,4 @@ async def list_positions(
             currency_svc, pos["current_price"], pos["currency"], display_currency
         )
 
-    return PaginatedResponse(
-        items=result,
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + len(result)) < total,
-    )
+    return PaginatedResponse.create(items=result, total=total, skip=skip, limit=limit)
