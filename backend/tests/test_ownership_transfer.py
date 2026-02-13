@@ -459,7 +459,7 @@ class TestOwnershipTransfer:
         db_session.add_all([account_a, account_b])
         db_session.flush()
         portfolio.accounts.extend([account_a, account_b])
-        db_session.flush()
+        db_session.commit()
 
         asset = Asset(
             symbol="TEST_CROSS",

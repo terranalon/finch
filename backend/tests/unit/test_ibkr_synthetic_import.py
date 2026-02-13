@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Account
 from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
+from app.services.shared.transaction_hash_service import DedupResult
 
 AAPL_POSITION = IBKRPosition(
     symbol="AAPL",
@@ -75,12 +76,19 @@ def mock_db_with_account():
 class TestSyntheticImportService:
     """Tests for IBKRSyntheticImportService."""
 
+    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
     @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_creates_synthetic_source(
-        self, mock_client, mock_parser, mock_import_service, mock_reconstruct, mock_db_with_account
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
     ):
         """import_snapshot should create a BrokerDataSource with source_type='synthetic'."""
         mock_client.fetch_flex_report.return_value = b"<xml>data</xml>"
@@ -91,6 +99,7 @@ class TestSyntheticImportService:
         mock_import_service._import_cash_balances.return_value = {"holdings_created": 1}
         mock_import_service._find_or_create_asset.return_value = (MagicMock(id=10), False)
         mock_reconstruct.return_value = {"holdings_updated": 1}
+        mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
 
         stats = IBKRSyntheticImportService.import_snapshot(
             mock_db_with_account, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -103,12 +112,19 @@ class TestSyntheticImportService:
         assert source_added is not None
         assert source_added.source_type == "synthetic"
 
+    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
     @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_creates_buy_transactions_from_positions(
-        self, mock_client, mock_parser, mock_import_service, mock_reconstruct, mock_db_with_account
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
     ):
         """Each position should generate a synthetic Buy transaction."""
         mock_client.fetch_flex_report.return_value = b"<xml>data</xml>"
@@ -119,6 +135,7 @@ class TestSyntheticImportService:
         mock_import_service._import_cash_balances.return_value = {}
         mock_import_service._find_or_create_asset.return_value = (MagicMock(id=10), False)
         mock_reconstruct.return_value = {"holdings_updated": 2}
+        mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
 
         stats = IBKRSyntheticImportService.import_snapshot(
             mock_db_with_account, account_id=1, flex_token="token", flex_query_id="query_id"
@@ -126,12 +143,19 @@ class TestSyntheticImportService:
 
         assert stats["positions_imported"] == 2
 
+    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
     @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
     @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_stores_snapshot_data_for_validation(
-        self, mock_client, mock_parser, mock_import_service, mock_reconstruct, mock_db_with_account
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
     ):
         """Snapshot data should be stored in import_stats for later validation."""
         mock_client.fetch_flex_report.return_value = b"<xml>data</xml>"
@@ -142,6 +166,7 @@ class TestSyntheticImportService:
         mock_import_service._import_cash_balances.return_value = {}
         mock_import_service._find_or_create_asset.return_value = (MagicMock(id=10), False)
         mock_reconstruct.return_value = {"holdings_updated": 1}
+        mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
 
         IBKRSyntheticImportService.import_snapshot(
             mock_db_with_account, account_id=1, flex_token="token", flex_query_id="query_id"
