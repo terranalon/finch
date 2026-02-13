@@ -64,7 +64,7 @@ class Asset(AssetBase):
 
 
 class AssetMarketResponse(BaseModel):
-    """Response item for GET /api/assets/market with price change data."""
+    """Asset with price change data for market view."""
 
     id: int
     symbol: str

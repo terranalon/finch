@@ -577,11 +577,11 @@ export default function Assets() {
         if (!assetsRes.ok) throw new Error('Failed to fetch assets');
 
         const assetsData = await assetsRes.json();
-        setAssets(assetsData);
+        setAssets(assetsData.items);
 
         if (positionsRes.ok) {
           const positionsData = await positionsRes.json();
-          setPositions(positionsData);
+          setPositions(positionsData.items);
         }
       } catch (err) {
         setError(err.message);

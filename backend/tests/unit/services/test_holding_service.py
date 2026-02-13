@@ -12,28 +12,34 @@ class TestListHoldings:
         self, db, test_account, test_asset, test_holding
     ):
         svc = HoldingService(db)
-        results = svc.list_holdings([test_account.id])
+        results, total = svc.list_holdings([test_account.id])
         assert len(results) == 1
+        assert total == 1
         assert results[0].id == test_holding.id
         assert results[0].account.name == "Test Account"
         assert results[0].asset.symbol == "AAPL"
 
     def test_filters_by_account_id(self, db, test_account, test_asset, test_holding):
         svc = HoldingService(db)
-        results = svc.list_holdings([test_account.id], account_id=test_account.id)
+        results, total = svc.list_holdings([test_account.id], account_id=test_account.id)
         assert len(results) == 1
+        assert total == 1
 
     def test_filters_by_active_status(self, db, test_account, test_asset, test_holding):
         svc = HoldingService(db)
-        active = svc.list_holdings([test_account.id], is_active=True)
+        active, active_total = svc.list_holdings([test_account.id], is_active=True)
         assert len(active) == 1
+        assert active_total == 1
 
-        inactive = svc.list_holdings([test_account.id], is_active=False)
+        inactive, inactive_total = svc.list_holdings([test_account.id], is_active=False)
         assert len(inactive) == 0
+        assert inactive_total == 0
 
     def test_empty_accounts_returns_empty(self, db):
         svc = HoldingService(db)
-        assert svc.list_holdings([]) == []
+        items, total = svc.list_holdings([])
+        assert items == []
+        assert total == 0
 
 
 class TestReconstructHoldings:

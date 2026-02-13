@@ -11,60 +11,47 @@ from app.database import get_db
 from app.models import Asset, AssetPrice, ExchangeRate
 from app.schemas.asset import Asset as AssetSchema
 from app.schemas.asset import AssetCreate, AssetMarketResponse, AssetUpdate
+from app.schemas.common import PaginatedResponse
 from app.services.shared.asset_metadata_service import AssetMetadataService
 from app.services.shared.currency_service import CurrencyService
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
 
-@router.get("", response_model=list[AssetSchema])
+@router.get("", response_model=PaginatedResponse[AssetSchema])
 async def list_assets(
-    skip: int = 0, limit: int = 100, asset_class: str = None, db: Session = Depends(get_db)
-):
-    """
-    Get list of assets.
-
-    Query Parameters:
-        - skip: Number of records to skip (pagination)
-        - limit: Maximum number of records to return
-        - asset_class: Filter by asset class
-    """
-    query = db.query(Asset)
-
-    if asset_class is not None:
-        query = query.filter(Asset.asset_class == asset_class)
-
-    assets = query.order_by(Asset.symbol).offset(skip).limit(limit).all()
-    return assets
-
-
-@router.get("/market", response_model=list[AssetMarketResponse])
-async def list_assets_with_changes(
-    skip: int = 0,
-    limit: int = Query(default=100, le=500),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
     asset_class: str = None,
-    display_currency: str = Query(default="USD", pattern="^[A-Z]{3}$"),
     db: Session = Depends(get_db),
 ):
-    """
-    Get list of assets with price change data.
-
-    Returns assets with computed day/week/month price changes based on
-    historical price data from the asset_prices table.
-
-    For Cash/Forex assets, shows exchange rate to the display currency.
-
-    Query Parameters:
-        - skip: Number of records to skip (pagination)
-        - limit: Maximum number of records to return (max 500)
-        - asset_class: Filter by asset class
-        - display_currency: Currency for displaying forex rates (default: USD)
-    """
+    """Get list of assets."""
     query = db.query(Asset)
 
     if asset_class is not None:
         query = query.filter(Asset.asset_class == asset_class)
 
+    total = query.count()
+    assets = query.order_by(Asset.symbol).offset(skip).limit(limit).all()
+
+    return PaginatedResponse.create(items=assets, total=total, skip=skip, limit=limit)
+
+
+@router.get("/market", response_model=PaginatedResponse[AssetMarketResponse])
+async def list_assets_with_changes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    asset_class: str = None,
+    display_currency: str = Query("USD", pattern="^[A-Z]{3}$"),
+    db: Session = Depends(get_db),
+):
+    """Get list of assets with price change data."""
+    query = db.query(Asset)
+
+    if asset_class is not None:
+        query = query.filter(Asset.asset_class == asset_class)
+
+    total = query.count()
     assets = query.order_by(Asset.symbol).offset(skip).limit(limit).all()
 
     # Get reference dates for price comparison
@@ -254,7 +241,7 @@ async def list_assets_with_changes(
             }
         )
 
-    return result
+    return PaginatedResponse.create(items=result, total=total, skip=skip, limit=limit)
 
 
 @router.get("/search", response_model=list[AssetSchema])

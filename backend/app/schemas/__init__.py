@@ -23,7 +23,7 @@ from app.schemas.historical_snapshot import (
 from app.schemas.holding import (
     Holding,
     HoldingCreate,
-    HoldingListItem,
+    HoldingDetailResponse,
     HoldingUpdate,
     ReconstructionStatsResponse,
 )
@@ -82,7 +82,7 @@ __all__ = [
     # Holding schemas
     "Holding",
     "HoldingCreate",
-    "HoldingListItem",
+    "HoldingDetailResponse",
     "HoldingUpdate",
     "ReconstructionStatsResponse",
     # HoldingLot schemas

@@ -1047,7 +1047,7 @@ export default function Overview() {
         if (cashRes.ok) {
           const cashData = await cashRes.json();
           // Transform to {date, amount} format (positive = deposit, negative = withdrawal)
-          const flows = cashData.map((tx) => ({
+          const flows = cashData.items.map((tx) => ({
             date: tx.date,
             amount: tx.type === 'Deposit' ? parseFloat(tx.amount) : -parseFloat(tx.amount),
           }));
@@ -1055,7 +1055,7 @@ export default function Overview() {
         }
 
         setPortfolioData(summaryData);
-        setPositions(positionsData);
+        setPositions(positionsData.items);
       } catch (err) {
         console.error('Error fetching overview data:', err);
         setError(err.message);

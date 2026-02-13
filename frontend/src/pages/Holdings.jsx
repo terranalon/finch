@@ -496,7 +496,7 @@ function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
         if (res.ok) {
           const data = await res.json();
           // Transform to expected format
-          const txData = data.map((t) => ({
+          const txData = data.items.map((t) => ({
             id: t.id,
             date: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             type: t.action === 'Buy' ? 'BUY' : 'SELL',
@@ -824,7 +824,7 @@ export default function Holdings() {
           accountsRes.json(),
         ]);
 
-        setPositions(positionsData);
+        setPositions(positionsData.items);
         setAccounts(accountsResponse.items);
       } catch (err) {
         console.error('Error fetching holdings data:', err);

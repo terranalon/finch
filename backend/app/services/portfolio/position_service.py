@@ -24,15 +24,20 @@ class PositionService:
         self._db = db
         self._currency = CurrencyService(db)
 
-    def get_positions(self, account_ids: list[int]) -> list[PositionResult]:
+    def get_positions(
+        self,
+        account_ids: list[int],
+        *,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[list[PositionResult], int]:
         """Build aggregated positions for the given accounts.
 
         Returns positions sorted by total market value (USD) descending.
-        All monetary values are in USD or asset-native currency (Decimals).
-        Display-currency conversion is the caller's responsibility.
+        Pagination is applied after aggregation (positions are grouped by asset).
         """
         if not account_ids:
-            return []
+            return [], 0
 
         holdings_query = (
             self._db.query(Holding, Account, Asset)
@@ -65,7 +70,9 @@ class PositionService:
             else r.total_cost_basis_usd,
             reverse=True,
         )
-        return results
+
+        total = len(results)
+        return results[skip : skip + limit], total
 
 
 # ------------------------------------------------------------------

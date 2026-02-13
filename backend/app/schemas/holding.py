@@ -50,11 +50,10 @@ class Holding(HoldingBase):
     updated_at: datetime
 
 
-# --- List endpoint response schemas ---
+class HoldingAccountInfoResponse(BaseModel):
+    """Account info nested in holding detail."""
 
-
-class HoldingAccountInfo(BaseModel):
-    """Account info nested in a holding list item."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
@@ -63,8 +62,10 @@ class HoldingAccountInfo(BaseModel):
     currency: str | None = None
 
 
-class HoldingAssetInfo(BaseModel):
-    """Asset info nested in a holding list item."""
+class HoldingAssetInfoResponse(BaseModel):
+    """Asset info nested in holding detail."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     symbol: str
@@ -73,8 +74,10 @@ class HoldingAssetInfo(BaseModel):
     category: str | None = None
 
 
-class HoldingListItem(BaseModel):
-    """Single item returned by GET /api/holdings."""
+class HoldingDetailResponse(BaseModel):
+    """Detailed holding with account and asset info for list endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     account_id: int
@@ -82,13 +85,13 @@ class HoldingListItem(BaseModel):
     quantity: float
     cost_basis: float
     strategy_horizon: str | None = None
-    tags: list | None = None
+    tags: dict[str, Any] | None = None
     is_active: bool
     closed_at: str | None = None
     created_at: str
     updated_at: str
-    account: HoldingAccountInfo
-    asset: HoldingAssetInfo
+    account: HoldingAccountInfoResponse
+    asset: HoldingAssetInfoResponse
 
 
 class ReconstructionStatsResponse(BaseModel):

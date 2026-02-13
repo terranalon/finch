@@ -11,6 +11,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models import Asset, Holding, Transaction
 from app.models.user import User
+from app.schemas.common import PaginatedResponse
 from app.schemas.transaction import Transaction as TransactionSchema
 from app.schemas.transaction import TransactionCreateRequest, TransactionUpdate
 from app.services.portfolio.transaction_service import TransactionService
@@ -19,33 +20,23 @@ from app.services.portfolio.transaction_types import TransactionError
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
-@router.get("", response_model=list[TransactionSchema])
+@router.get("", response_model=PaginatedResponse[TransactionSchema])
 async def list_transactions(
     holding_id: int | None = None,
     account_id: int | None = None,
     transaction_type: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get list of transactions with optional filters (filtered by user's accounts).
-
-    Filters:
-    - holding_id: Filter by specific holding
-    - account_id: Filter by account (via holding)
-    - transaction_type: Filter by type (Buy, Sell, Dividend, etc.)
-    - start_date: Transactions on or after this date
-    - end_date: Transactions on or before this date
-    - portfolio_id: Filter by specific portfolio (must belong to user)
-    """
+    """Get list of transactions with optional filters (filtered by user's accounts)."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     query = (
         db.query(Transaction)
@@ -71,7 +62,11 @@ async def list_transactions(
         query = query.filter(Transaction.date <= end_date)
 
     query = query.order_by(desc(Transaction.date), desc(Transaction.id))
-    return query.offset(offset).limit(limit).all()
+
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+
+    return PaginatedResponse.create(items=items, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{transaction_id}", response_model=TransactionSchema)
