@@ -1,6 +1,7 @@
 """Transaction data access layer for view queries."""
 
 from collections.abc import Sequence
+from datetime import date
 
 from sqlalchemy import desc
 from sqlalchemy.orm import Query, Session
@@ -153,4 +154,40 @@ class TransactionRepository:
             .offset(offset)
             .limit(limit)
             .all()
+        )
+
+    def find_with_holdings_and_assets_by_account(
+        self, account_id: int, *, as_of_date: date | None = None
+    ) -> list[tuple[Transaction, Holding, Asset]]:
+        """Find transactions with Holding and Asset for an account.
+
+        If as_of_date is provided, only includes transactions on or before that date.
+        Ordered chronologically by (date, id).
+        """
+        query = (
+            self._db.query(Transaction, Holding, Asset)
+            .join(Holding, Transaction.holding_id == Holding.id)
+            .join(Asset, Holding.asset_id == Asset.id)
+            .filter(Holding.account_id == account_id)
+        )
+        if as_of_date is not None:
+            query = query.filter(Transaction.date <= as_of_date)
+        return query.order_by(Transaction.date, Transaction.id).all()
+
+    def count_by_account(self, account_id: int) -> int:
+        """Count transactions for an account (existence check)."""
+        return (
+            self._db.query(Transaction)
+            .join(Transaction.holding)
+            .filter(Holding.account_id == account_id)
+            .limit(1)
+            .count()
+        )
+
+    def find_first_by_holding(self, holding_id: int) -> Transaction | None:
+        """Find first transaction for a holding (existence check)."""
+        return (
+            self._db.query(Transaction)
+            .filter(Transaction.holding_id == holding_id)
+            .first()
         )
