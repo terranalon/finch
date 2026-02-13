@@ -10,7 +10,7 @@ import pytest
 from app.services.brokers.kraken.parser import KrakenParser
 
 if TYPE_CHECKING:
-    from app.schemas.broker_import import BrokerImportData
+    from app.services.brokers.base_broker_parser import BrokerImportData
 
 
 @pytest.fixture
