@@ -30,9 +30,9 @@ class HoldingService:
         is_active: bool | None = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> list[HoldingDetail]:
+    ) -> tuple[list[HoldingDetail], int]:
         if not account_ids:
-            return []
+            return [], 0
 
         query = (
             self._db.query(Holding, Account, Asset)
@@ -48,9 +48,10 @@ class HoldingService:
         if is_active is not None:
             query = query.filter(Holding.is_active == is_active)
 
+        total = query.count()
         results = query.offset(skip).limit(limit).all()
 
-        return [
+        items = [
             HoldingDetail(
                 id=holding.id,
                 account_id=holding.account_id,
@@ -80,6 +81,7 @@ class HoldingService:
             )
             for holding, account, asset in results
         ]
+        return items, total
 
     def reconstruct_holdings(self, account_id: int) -> ReconstructionStats:
         from app.services.portfolio.portfolio_reconstruction_service import (

@@ -48,3 +48,47 @@ class Holding(HoldingBase):
     closed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class HoldingAccountInfoResponse(BaseModel):
+    """Account info nested in holding detail."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    type: str | None = None
+    institution: str | None = None
+    currency: str | None = None
+
+
+class HoldingAssetInfoResponse(BaseModel):
+    """Asset info nested in holding detail."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    symbol: str
+    name: str | None = None
+    asset_class: str | None = None
+    category: str | None = None
+
+
+class HoldingDetailResponse(BaseModel):
+    """Detailed holding with account and asset info for list endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    account_id: int
+    asset_id: int
+    quantity: float
+    cost_basis: float
+    strategy_horizon: str | None = None
+    tags: dict[str, Any] | None = None
+    is_active: bool
+    closed_at: str | None = None
+    created_at: str
+    updated_at: str
+    account: HoldingAccountInfoResponse
+    asset: HoldingAssetInfoResponse

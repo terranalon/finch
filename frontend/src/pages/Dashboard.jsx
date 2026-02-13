@@ -69,7 +69,7 @@ function Dashboard() {
       if (!response.ok) throw new Error('Failed to fetch positions')
       const data = await response.json()
       // Filter out zero-quantity positions
-      setPositions(data.filter(p => p.total_quantity !== 0))
+      setPositions(data.items.filter(p => p.total_quantity !== 0))
     } catch (err) {
       console.error('Error fetching positions:', err)
     }

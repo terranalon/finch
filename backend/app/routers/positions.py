@@ -7,6 +7,8 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
+from app.schemas.common import PaginatedResponse
+from app.schemas.position import PositionResponse
 from app.services.portfolio.position_service import PositionService
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
 from app.services.shared.currency_service import CurrencyService
@@ -15,21 +17,27 @@ from app.services.shared.response_formatters import convert_price, format_positi
 router = APIRouter(prefix="/api/positions", tags=["positions"])
 
 
-@router.get("")
+@router.get("", response_model=PaginatedResponse[PositionResponse])
 async def list_positions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
     display_currency: str = Query(
         "USD", description="Currency for displaying values", pattern="^[A-Z]{3}$"
     ),
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[dict]:
+):
     """Get positions aggregated by asset across all user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
-    positions = PositionService(db).get_positions(allowed_account_ids)
+    positions, total = PositionService(db).get_positions(
+        allowed_account_ids,
+        skip=skip,
+        limit=limit,
+    )
     result = [format_position(p) for p in positions]
 
     if display_currency != "USD":
@@ -48,4 +56,4 @@ async def list_positions(
             currency_svc, pos["current_price"], pos["currency"], display_currency
         )
 
-    return result
+    return PaginatedResponse.create(items=result, total=total, skip=skip, limit=limit)

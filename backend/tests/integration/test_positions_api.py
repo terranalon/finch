@@ -18,14 +18,19 @@ class TestPositionsAPI:
         """Returns empty list when user has no holdings."""
         response = auth_client.get("/api/positions")
         assert response.status_code == 200
-        assert response.json() == []
+        data = response.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+        assert data["has_more"] is False
 
     def test_list_positions_returns_aggregated_holdings(self, auth_client, seed_holdings):
         """Returns holdings aggregated by asset."""
         response = auth_client.get("/api/positions")
         assert response.status_code == 200
 
-        positions = response.json()
+        data = response.json()
+        assert data["total"] >= 1
+        positions = data["items"]
         assert len(positions) >= 1
 
         # Check required fields
@@ -44,7 +49,7 @@ class TestPositionsAPI:
     def test_list_positions_includes_pnl_calculations(self, auth_client, seed_holdings):
         """Positions include P&L calculations."""
         response = auth_client.get("/api/positions")
-        positions = response.json()
+        positions = response.json()["items"]
         position = positions[0]
 
         # P&L should be calculated (current price 150 * 10 qty - 1400 cost = 100)
@@ -54,7 +59,7 @@ class TestPositionsAPI:
     def test_list_positions_includes_day_change(self, auth_client, seed_holdings):
         """Positions include day change from previous close."""
         response = auth_client.get("/api/positions")
-        positions = response.json()
+        positions = response.json()["items"]
         position = positions[0]
 
         # Day change should be calculated (150 current - 148 previous = 2)
@@ -65,7 +70,7 @@ class TestPositionsAPI:
         """Can filter positions by portfolio ID."""
         response = auth_client.get(f"/api/positions?portfolio_id={test_portfolio.id}")
         assert response.status_code == 200
-        positions = response.json()
+        positions = response.json()["items"]
         assert len(positions) >= 1
 
     def test_list_positions_converts_currency(self, auth_client, seed_holdings, db):
@@ -82,7 +87,7 @@ class TestPositionsAPI:
 
         response = auth_client.get("/api/positions?display_currency=ILS")
         assert response.status_code == 200
-        positions = response.json()
+        positions = response.json()["items"]
 
         if positions:
             # Values should be converted
@@ -91,7 +96,7 @@ class TestPositionsAPI:
     def test_list_positions_includes_account_breakdown(self, auth_client, seed_holdings):
         """Each position includes breakdown by account."""
         response = auth_client.get("/api/positions")
-        positions = response.json()
+        positions = response.json()["items"]
         position = positions[0]
 
         assert "accounts" in position

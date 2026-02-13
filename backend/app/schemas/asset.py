@@ -61,3 +61,25 @@ class Asset(AssetBase):
     last_fetched_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class AssetMarketResponse(BaseModel):
+    """Asset with price change data for market view."""
+
+    id: int
+    symbol: str
+    name: str | None = None
+    asset_class: str | None = None
+    category: str | None = None
+    industry: str | None = None
+    currency: str | None = None
+    is_favorite: bool = False
+    last_fetched_price: float | None = None
+    last_fetched_at: str | None = None
+    data_source: str | None = None
+    change_1d: float | None = None
+    change_1d_pct: float | None = None
+    change_1w: float | None = None
+    change_1w_pct: float | None = None
+    change_1m: float | None = None
+    change_1m_pct: float | None = None

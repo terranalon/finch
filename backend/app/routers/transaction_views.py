@@ -9,6 +9,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
+from app.schemas.common import PaginatedResponse
 from app.schemas.transaction_views import (
     CashActivityResponse,
     DividendResponse,
@@ -20,133 +21,132 @@ from app.services.portfolio.transaction_view_service import TransactionViewServi
 router = APIRouter(prefix="/api/transactions", tags=["transaction-views"])
 
 
-@router.get("/trades", response_model=list[TradeResponse])
+@router.get("/trades", response_model=PaginatedResponse[TradeResponse])
 async def list_trades(
     account_id: int | None = None,
     symbol: str | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     display_currency: str = Query(
-        default=None, description="Currency for displaying values (converts from native currency)"
+        None, description="Currency for displaying values (converts from native currency)"
     ),
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[TradeResponse]:
-    """Get list of trade transactions (Buy/Sell) for user's accounts.
-
-    Returns enriched trade data with computed totals.
-    If display_currency is provided, converts price_per_unit and total to that currency.
-    """
+):
+    """Get list of trade transactions (Buy/Sell) for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
     svc = TransactionViewService(db)
-    trades = svc.get_trades(
+    trades, total = svc.get_trades(
         allowed_account_ids,
         account_id=account_id,
         symbol=symbol,
         display_currency=display_currency,
         limit=limit,
-        offset=offset,
+        offset=skip,
     )
-    return [TradeResponse(**asdict(t)) for t in trades]
+
+    return PaginatedResponse.create(
+        items=[TradeResponse(**asdict(t)) for t in trades], total=total, skip=skip, limit=limit
+    )
 
 
-@router.get("/dividends", response_model=list[DividendResponse])
+@router.get("/dividends", response_model=PaginatedResponse[DividendResponse])
 async def list_dividends(
     account_id: int | None = None,
     symbol: str | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[DividendResponse]:
-    """Get list of dividend and income transactions for user's accounts.
-
-    Includes: Dividend, Tax (excludes Dividend Cash which is the cash-side duplicate).
-    Interest is shown in Cash Activity instead.
-    """
+):
+    """Get list of dividend and income transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
     svc = TransactionViewService(db)
-    dividends = svc.get_dividends(
+    dividends, total = svc.get_dividends(
         allowed_account_ids,
         account_id=account_id,
         symbol=symbol,
         limit=limit,
-        offset=offset,
+        offset=skip,
     )
-    return [DividendResponse(**asdict(d)) for d in dividends]
+
+    return PaginatedResponse.create(
+        items=[DividendResponse(**asdict(d)) for d in dividends],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
-@router.get("/forex", response_model=list[ForexResponse])
+@router.get("/forex", response_model=PaginatedResponse[ForexResponse])
 async def list_forex(
     account_id: int | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[ForexResponse]:
-    """Get list of forex conversion transactions for user's accounts.
-
-    Returns single record per conversion with from/to currencies and amounts.
-    For legacy data (paired transactions), parses info from notes field.
-    """
+):
+    """Get list of forex conversion transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
     svc = TransactionViewService(db)
-    forex = svc.get_forex(
+    forex, total = svc.get_forex(
         allowed_account_ids,
         account_id=account_id,
         limit=limit,
-        offset=offset,
+        offset=skip,
     )
-    return [ForexResponse(**asdict(f)) for f in forex]
+
+    return PaginatedResponse.create(
+        items=[ForexResponse(**asdict(f)) for f in forex], total=total, skip=skip, limit=limit
+    )
 
 
-@router.get("/cash", response_model=list[CashActivityResponse])
+@router.get("/cash", response_model=PaginatedResponse[CashActivityResponse])
 async def list_cash_activity(
     account_id: int | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     display_currency: str = Query(
-        default=None, description="Currency for displaying values (converts from native currency)"
+        None, description="Currency for displaying values (converts from native currency)"
     ),
-    limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[CashActivityResponse]:
-    """Get list of cash activity transactions for user's accounts.
-
-    Includes: Deposit, Withdrawal, Fee, Transfer (excludes Trade Settlement which is shown in Trades).
-    If display_currency is provided, converts amount to that currency.
-    """
+):
+    """Get list of cash activity transactions for user's accounts."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
     svc = TransactionViewService(db)
-    cash = svc.get_cash_activity(
+    cash, total = svc.get_cash_activity(
         allowed_account_ids,
         account_id=account_id,
         display_currency=display_currency,
         limit=limit,
-        offset=offset,
+        offset=skip,
     )
-    return [CashActivityResponse(**asdict(c)) for c in cash]
+
+    return PaginatedResponse.create(
+        items=[CashActivityResponse(**asdict(c)) for c in cash], total=total, skip=skip, limit=limit
+    )

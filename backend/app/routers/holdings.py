@@ -1,7 +1,6 @@
 """Holdings API router."""
 
 from dataclasses import asdict
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -13,32 +12,34 @@ from app.models import Account, Asset, Holding
 from app.models.user import User
 from app.schemas import Holding as HoldingSchema
 from app.schemas import HoldingCreate, HoldingUpdate
+from app.schemas.common import PaginatedResponse
+from app.schemas.holding import HoldingDetailResponse
 from app.services.portfolio.holding_service import HoldingService
 
 router = APIRouter(prefix="/api/holdings", tags=["holdings"])
 
 
-@router.get("")
+@router.get("", response_model=PaginatedResponse[HoldingDetailResponse])
 async def list_holdings(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
     account_id: int = None,
     asset_id: int = None,
     is_active: bool = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[dict[str, Any]]:
+):
     """Get list of holdings with optional filters (filtered by user's accounts)."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
-        return []
+        return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     if account_id is not None and account_id not in allowed_account_ids:
         raise HTTPException(status_code=404, detail="Account not found")
 
     svc = HoldingService(db)
-    results = svc.list_holdings(
+    items, total = svc.list_holdings(
         allowed_account_ids,
         account_id=account_id,
         asset_id=asset_id,
@@ -46,7 +47,10 @@ async def list_holdings(
         skip=skip,
         limit=limit,
     )
-    return [asdict(h) for h in results]
+
+    return PaginatedResponse.create(
+        items=[asdict(h) for h in items], total=total, skip=skip, limit=limit
+    )
 
 
 @router.get("/{holding_id}", response_model=HoldingSchema)
