@@ -205,4 +205,4 @@ class TestMessageResponse:
     def test_message_response_missing_message(self):
         """Test validation error when message is missing."""
         with pytest.raises(ValidationError):
-            MessageResponse()
+            MessageResponse()  # ty: ignore[missing-argument] — intentionally testing validation error

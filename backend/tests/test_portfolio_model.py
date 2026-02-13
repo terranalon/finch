@@ -15,9 +15,9 @@ def db_session():
 
     engine = create_engine("sqlite:///:memory:")
     # Create all tables User references (for cascade deletes)
-    User.__table__.create(engine, checkfirst=True)
-    Portfolio.__table__.create(engine, checkfirst=True)
-    UserSession.__table__.create(engine, checkfirst=True)
+    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    UserSession.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
     test_session = sessionmaker(bind=engine)
     session = test_session()
     yield session

@@ -24,9 +24,9 @@ def client_with_user():
     )
 
     # Create auth tables
-    User.__table__.create(engine, checkfirst=True)
-    UserSession.__table__.create(engine, checkfirst=True)
-    Portfolio.__table__.create(engine, checkfirst=True)
+    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    UserSession.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
 
     # Create minimal accounts table for testing (just what we need)
     with engine.connect() as conn:

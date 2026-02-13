@@ -65,16 +65,16 @@ def auth_client():
     )
 
     # Create all auth-related tables
-    User.__table__.create(engine, checkfirst=True)
-    Session.__table__.create(engine, checkfirst=True)
-    Portfolio.__table__.create(engine, checkfirst=True)
-    EmailVerificationToken.__table__.create(engine, checkfirst=True)
-    PasswordResetToken.__table__.create(engine, checkfirst=True)
-    UserMfa.__table__.create(engine, checkfirst=True)
-    EmailOtpCode.__table__.create(engine, checkfirst=True)
-    UserRecoveryCode.__table__.create(engine, checkfirst=True)
-    MfaTempSession.__table__.create(engine, checkfirst=True)
-    SecurityAuditLog.__table__.create(engine, checkfirst=True)
+    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    Session.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    EmailVerificationToken.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    PasswordResetToken.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    UserMfa.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    EmailOtpCode.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    UserRecoveryCode.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    MfaTempSession.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    SecurityAuditLog.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
 
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

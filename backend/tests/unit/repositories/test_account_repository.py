@@ -40,7 +40,7 @@ def engine():
     def visit_jsonb(self, type_, **kw):
         return original_visit_json(self, JSON(), **kw)
 
-    SQLiteTypeCompiler.visit_JSONB = visit_jsonb
+    SQLiteTypeCompiler.visit_JSONB = visit_jsonb  # ty: ignore[unresolved-attribute] — SQLite JSONB type compiler extension
 
     Base.metadata.create_all(engine)
     return engine

@@ -110,7 +110,7 @@ class TestBit2CParserEnglish:
         # Check first buy transaction has expected fields
         buy = buy_txns[0]
         assert buy.symbol in ("BTC", "ETH", "LTC", "USDC")
-        assert buy.quantity > 0
+        assert buy.quantity > 0  # ty: ignore[unsupported-operator] — Decimal supports comparison
         assert buy.currency == "ILS"
 
     def test_parse_en_2025_deposits(self, parser: Bit2CParser, sample_en_2025: bytes):
@@ -222,6 +222,7 @@ class TestBit2CParserValidation:
         """Test validation rejects wrong extension."""
         is_valid, error = parser.validate_file(sample_en_2024, "report.csv")
         assert is_valid is False
+        assert error is not None
         assert "Unsupported file type" in error
 
     def test_validate_invalid_content(self, parser: Bit2CParser):
@@ -259,12 +260,12 @@ class TestBit2CParserDualEntry:
 
         # Find corresponding settlements by matching notes
         for buy in buy_trades:
-            trade_id = buy.raw_data.get("id", "")
+            trade_id = buy.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
             matching_settlements = [
                 s
                 for s in result.cash_transactions
                 if s.transaction_type == "Trade Settlement"
-                and f"Settlement for {buy.symbol} Buy - {trade_id}" in s.notes
+                and f"Settlement for {buy.symbol} Buy - {trade_id}" in s.notes  # ty: ignore[unsupported-operator] — str supports in
             ]
             assert len(matching_settlements) == 1
             settlement = matching_settlements[0]
@@ -286,12 +287,12 @@ class TestBit2CParserDualEntry:
 
         # Find corresponding settlements by matching notes
         for sell in sell_trades:
-            trade_id = sell.raw_data.get("id", "")
+            trade_id = sell.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
             matching_settlements = [
                 s
                 for s in result.cash_transactions
                 if s.transaction_type == "Trade Settlement"
-                and f"Settlement for {sell.symbol} Sell - {trade_id}" in s.notes
+                and f"Settlement for {sell.symbol} Sell - {trade_id}" in s.notes  # ty: ignore[unsupported-operator] — str supports in
             ]
             assert len(matching_settlements) == 1
             settlement = matching_settlements[0]
@@ -308,7 +309,7 @@ class TestBit2CParserDualEntry:
         trades_with_fees = [t for t in result.transactions if t.fees and t.fees > 0]
 
         for trade in trades_with_fees:
-            trade_id = trade.raw_data.get("id", "")
+            trade_id = trade.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
             txn_type = trade.transaction_type
             symbol = trade.symbol
 
@@ -317,7 +318,7 @@ class TestBit2CParserDualEntry:
                 s
                 for s in result.cash_transactions
                 if s.transaction_type == "Trade Settlement"
-                and f"Settlement for {symbol} {txn_type} - {trade_id}" in s.notes
+                and f"Settlement for {symbol} {txn_type} - {trade_id}" in s.notes  # ty: ignore[unsupported-operator] — str supports in
             ]
 
             if len(matching_settlements) == 1:

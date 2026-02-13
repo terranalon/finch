@@ -211,11 +211,11 @@ class TestTransfers:
         transfers = [t for t in parsed_result.transactions if t.transaction_type == "Transfer"]
         assert len(transfers) == 2
 
-        positive_transfer = next(t for t in transfers if t.quantity > 0)
+        positive_transfer = next(t for t in transfers if t.quantity > 0)  # ty: ignore[unsupported-operator] — Decimal supports comparison
         assert positive_transfer.symbol == "BTC"
         assert positive_transfer.quantity == Decimal("0.00100000")
 
-        negative_transfer = next(t for t in transfers if t.quantity < 0)
+        negative_transfer = next(t for t in transfers if t.quantity < 0)  # ty: ignore[unsupported-operator] — Decimal supports comparison
         assert negative_transfer.symbol == "BTC"
         assert negative_transfer.quantity == Decimal("-0.00100000")
 
@@ -256,6 +256,7 @@ class TestKrakenParserValidation:
         """Test validation rejects wrong extension."""
         is_valid, error = parser.validate_file(sample_csv_content, "ledgers.xlsx")
         assert is_valid is False
+        assert error is not None
         assert "Unsupported file type" in error
 
     def test_validate_invalid_content(self, parser: KrakenParser):

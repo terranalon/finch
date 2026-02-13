@@ -67,6 +67,7 @@ class TestBatchUploadStaging:
             status="staged",
             import_stats={"session_id": session_id, "total_records": 50},
         )
+        assert source.import_stats is not None
         assert source.import_stats["session_id"] == session_id
 
     @patch("app.routers.broker_data.delete_synthetic_sources")
