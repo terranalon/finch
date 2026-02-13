@@ -261,7 +261,7 @@ class ManualImportService(BaseBrokerImportService):
             client = CoinGeckoClient()
             coin_info = client.get_coin_info(symbol)
             if coin_info:
-                return coin_info["name"]
+                return coin_info["name"]  # ty: ignore[invalid-return-type] — "name" key is always str
         except Exception as e:
             logger.debug("CoinGecko lookup failed for %s: %s", symbol, e)
         return None

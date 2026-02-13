@@ -220,7 +220,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     _check_account_lockout(user, db, ip_address, user_agent)
 
     # Verify password
-    if not AuthService.verify_password(data.password, user.password_hash):
+    if not user.password_hash or not AuthService.verify_password(data.password, user.password_hash):
         _record_failed_login(user, db, ip_address, user_agent, "invalid_password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -452,7 +452,9 @@ def change_password(
     ip_address, user_agent = SecurityAuditService.get_request_info(request)
 
     # Verify current password
-    if not AuthService.verify_password(data.current_password, current_user.password_hash):
+    if not current_user.password_hash or not AuthService.verify_password(
+        data.current_password, current_user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",

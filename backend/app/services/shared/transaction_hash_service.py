@@ -125,7 +125,7 @@ def create_or_transfer_transaction(
     exchange_rate: Decimal | None = None,
     # Account scoping for deduplication
     account_id: int | None = None,
-) -> tuple[DedupResult, "Transaction"]:
+) -> tuple[DedupResult, "Transaction | None"]:
     """Create a transaction with automatic hash-based deduplication.
 
     This is the canonical way to create transactions during broker imports.
@@ -179,9 +179,7 @@ def create_or_transfer_transaction(
     )
 
     # Check for existing transaction and handle ownership transfer
-    dedup_result, existing = check_and_transfer_ownership(
-        db, content_hash, source_id, account_id
-    )
+    dedup_result, existing = check_and_transfer_ownership(db, content_hash, source_id, account_id)
 
     if dedup_result != DedupResult.NEW:
         return dedup_result, existing

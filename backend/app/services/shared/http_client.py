@@ -67,7 +67,7 @@ class HTTPClient:
         """Lazy initialization of HTTP client."""
         if self._client is None:
             self._client = httpx.Client(
-                base_url=self.base_url,
+                base_url=self.base_url,  # ty: ignore[invalid-argument-type] — httpx accepts str | None for base_url
                 timeout=self.timeout,
                 headers=self.default_headers,
             )

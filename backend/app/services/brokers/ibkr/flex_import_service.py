@@ -6,6 +6,7 @@ Transactions are imported separately via manual XML file upload.
 
 import logging
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,7 @@ class IBKRFlexImportService:
     @staticmethod
     def import_all(
         db: Session, account_id: int, flex_token: str, flex_query_id: str
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Import open positions and cash from IBKR Flex Query API.
 
@@ -146,7 +147,7 @@ class IBKRFlexImportService:
         flex_query_id: str,
         start_date: date,
         end_date: date | None = None,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Import historical positions and cash by fetching multiple 365-day periods.
 

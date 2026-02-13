@@ -86,7 +86,7 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
             "asset_id": asset.id,
             "symbol": asset.symbol,
             "price": float(asset.last_fetched_price) if asset.last_fetched_price else None,
-            "updated_at": asset.last_price_update.isoformat() if asset.last_price_update else None,
+            "updated_at": asset.last_fetched_at.isoformat() if asset.last_fetched_at else None,
         }
     else:
         raise HTTPException(

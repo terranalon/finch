@@ -466,6 +466,10 @@ class PortfolioReconstructionService:
                 old_asset = db.get(Asset, asset_id)
                 new_asset = db.get(Asset, new_asset_id)
 
+                if not old_asset or not new_asset:
+                    logger.warning(f"Asset not found for merge: {asset_id} -> {new_asset_id}")
+                    continue
+
                 logger.info(
                     f"Merging {old_asset.symbol} ({holding['quantity']} shares) "
                     f"into {new_asset.symbol} due to corporate action"
@@ -526,6 +530,9 @@ class PortfolioReconstructionService:
         for holding in holdings:
             # Get price as of target date (or closest available)
             asset = db.get(Asset, holding["asset_id"])
+            if not asset:
+                logger.warning(f"Asset {holding['asset_id']} not found, skipping")
+                continue
 
             # For cash assets, price is always 1.0 in their own currency
             if asset.asset_class == "Cash":
@@ -574,7 +581,9 @@ class PortfolioReconstructionService:
         }
 
     @staticmethod
-    def validate_reconstruction(db: Session, account_id: int, as_of_date: date | None = None) -> dict:
+    def validate_reconstruction(
+        db: Session, account_id: int, as_of_date: date | None = None
+    ) -> dict:
         """
         Validate reconstruction accuracy by comparing with current holdings.
 
@@ -635,7 +644,7 @@ class PortfolioReconstructionService:
                 discrepancies.append(
                     {
                         "asset_id": asset_id,
-                        "symbol": asset.symbol,
+                        "symbol": asset.symbol if asset else "unknown",
                         "current_quantity": float(current_qty),
                         "reconstructed_quantity": float(recon_qty),
                         "difference": float(diff),

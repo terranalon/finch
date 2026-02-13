@@ -173,7 +173,7 @@ def copy_production_to_staging(db: Session, account_id: int) -> dict:
         FROM public.assets
     """)
     )
-    stats["assets"] = result.rowcount
+    stats["assets"] = result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     # Copy holdings for this account
     result = db.execute(
@@ -193,7 +193,7 @@ def copy_production_to_staging(db: Session, account_id: int) -> dict:
     """),
         {"account_id": account_id},
     )
-    stats["holdings"] = result.rowcount
+    stats["holdings"] = result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     # Copy transactions for this account's holdings
     result = db.execute(
@@ -219,7 +219,7 @@ def copy_production_to_staging(db: Session, account_id: int) -> dict:
     """),
         {"account_id": account_id},
     )
-    stats["transactions"] = result.rowcount
+    stats["transactions"] = result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     db.commit()
     logger.info(
@@ -309,7 +309,7 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
         )
     """)
     )
-    stats["assets_updated"] += result.rowcount
+    stats["assets_updated"] += result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     # Step 2: Merge holdings
     # For new holdings, always resolve asset_id via symbol lookup into production.
@@ -373,7 +373,7 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
     """),
         {"account_id": account_id},
     )
-    stats["holdings_updated"] += result.rowcount
+    stats["holdings_updated"] += result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     # Step 3: Merge transactions (only new ones - transactions are immutable)
     # st.holding_id contains a staging ID for new transactions, so we must
@@ -417,7 +417,7 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
         WHERE st.original_id IS NULL
     """)
     )
-    stats["transactions_inserted"] = result.rowcount
+    stats["transactions_inserted"] = result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     db.commit()
     logger.info(

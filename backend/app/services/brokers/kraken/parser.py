@@ -150,11 +150,11 @@ class KrakenParser(BaseBrokerParser):
                 if parsed:
                     category, data = parsed
                     if category == "cash":
-                        cash_transactions.append(data)
+                        cash_transactions.append(data)  # ty: ignore[invalid-argument-type] — narrowed by category tag
                     elif category == "dividend":
-                        dividends.append(data)
+                        dividends.append(data)  # ty: ignore[invalid-argument-type] — narrowed by category tag
                     else:  # crypto_deposit, crypto_withdrawal, transfer
-                        transactions.append(data)
+                        transactions.append(data)  # ty: ignore[invalid-argument-type] — narrowed by category tag
 
         # Process grouped trades (returns both crypto txns and trade settlements)
         for refid, trade_rows in trades_by_refid.items():

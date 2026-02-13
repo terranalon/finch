@@ -246,7 +246,7 @@ class TASEApiService:
 
         # Check if it was an insert or update
         # PostgreSQL returns rowcount for both, but we can check if the row existed
-        return "inserted" if result.rowcount > 0 else "updated"
+        return "inserted" if result.rowcount > 0 else "updated"  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
 
     def get_security_by_number(
         self, db: Session, security_number: int | str

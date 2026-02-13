@@ -189,7 +189,9 @@ class ManualParser(BaseBrokerParser):
             return "cash", ParsedCashTransaction(
                 date=trade_date,
                 transaction_type=txn_type,
-                amount=amount if txn_type == "Deposit" else -abs(amount),
+                amount=(amount or Decimal("0"))
+                if txn_type == "Deposit"
+                else -abs(amount or Decimal("0")),
                 currency=currency,
                 fees=fees,
                 notes=notes,

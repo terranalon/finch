@@ -90,6 +90,11 @@ async def create_holding(
         )
 
     account = db.query(Account).filter(Account.id == holding_data.account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account with id {holding_data.account_id} not found",
+        )
     if not account.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Account {account.name} is not active"

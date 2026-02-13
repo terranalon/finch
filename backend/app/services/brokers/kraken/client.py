@@ -348,12 +348,12 @@ class KrakenClient:
                     if parsed:
                         result_type, parsed_data = parsed
                         if result_type == "cash":
-                            cash_transactions.append(parsed_data)
+                            cash_transactions.append(parsed_data)  # ty: ignore[invalid-argument-type] — narrowed by result_type tag
                         elif result_type == "dividend":
-                            dividends.append(parsed_data)
+                            dividends.append(parsed_data)  # ty: ignore[invalid-argument-type] — narrowed by result_type tag
                         elif result_type in ("crypto_deposit", "crypto_withdrawal", "transfer"):
                             # Crypto deposits/withdrawals/transfers go to transactions list
-                            transactions.append(parsed_data)
+                            transactions.append(parsed_data)  # ty: ignore[invalid-argument-type] — narrowed by result_type tag
 
             offset += page_size
             if offset >= total:

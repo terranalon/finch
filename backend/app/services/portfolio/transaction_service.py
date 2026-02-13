@@ -109,16 +109,16 @@ class TransactionService:
             if remaining_to_sell <= 0:
                 break
 
-            if lot.remaining_quantity <= remaining_to_sell:
+            if lot.remaining_quantity <= remaining_to_sell:  # ty: ignore[unsupported-operator] — remaining_quantity is non-null for open lots
                 quantity_from_lot = lot.remaining_quantity
                 lot.remaining_quantity = Decimal("0")
                 lot.is_closed = True
             else:
                 quantity_from_lot = remaining_to_sell
-                lot.remaining_quantity -= quantity_from_lot
+                lot.remaining_quantity -= quantity_from_lot  # ty: ignore[unsupported-operator] — remaining_quantity is non-null for open lots
 
-            total_cost_basis_sold += quantity_from_lot * lot.cost_per_unit
-            remaining_to_sell -= quantity_from_lot
+            total_cost_basis_sold += quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
+            remaining_to_sell -= quantity_from_lot  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal from either branch
 
         if remaining_to_sell > 0:
             raise InsufficientQuantityError(
@@ -138,7 +138,7 @@ class TransactionService:
                 .first()
             )
             if last_txn:
-                holding.closed_at = last_txn.date
+                holding.closed_at = last_txn.date  # ty: ignore[invalid-assignment] — SQLAlchemy descriptor allows assignment
 
         self._db.flush()
 

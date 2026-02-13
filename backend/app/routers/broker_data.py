@@ -546,7 +546,8 @@ async def upload_broker_file(
         if session_id:
             # Batch mode: stage the source, skip reconstruction and snapshots
             source.status = "staged"
-            source.import_stats = {**(source.import_stats or {}), "session_id": session_id}
+            staged_stats: dict = {**(source.import_stats or {}), "session_id": session_id}
+            source.import_stats = staged_stats
             db.commit()
 
             logger.info(
@@ -554,7 +555,7 @@ async def upload_broker_file(
                 broker_type,
                 account_id,
                 session_id,
-                source.import_stats.get("total_records", 0),
+                staged_stats.get("total_records", 0),
                 start_date,
                 end_date,
             )
@@ -562,11 +563,11 @@ async def upload_broker_file(
             return UploadResponse(
                 status="staged",
                 message=f"File staged for batch import "
-                f"({source.import_stats.get('total_records', 0)} records). "
+                f"({staged_stats.get('total_records', 0)} records). "
                 f"Call finalize when all files are uploaded.",
                 source_id=source.id,
                 date_range={"start_date": str(start_date), "end_date": str(end_date)},
-                stats=source.import_stats or {},
+                stats=staged_stats,
             )
 
         # Single file mode: run reconstruction now (batch mode defers to finalize)
@@ -593,21 +594,22 @@ async def upload_broker_file(
             update_snapshot_status(db, account_id, "generating")
             background_tasks.add_task(generate_snapshots_background, account_id, snapshot_start)
 
+        final_stats: dict = source.import_stats or {}
         logger.info(
             "Uploaded %s file for account %d: %d records from %s to %s",
             broker_type,
             account_id,
-            source.import_stats.get("total_records", 0),
+            final_stats.get("total_records", 0),
             start_date,
             end_date,
         )
 
         return UploadResponse(
             status="completed",
-            message=f"Successfully imported {source.import_stats.get('total_records', 0)} records",
+            message=f"Successfully imported {final_stats.get('total_records', 0)} records",
             source_id=source.id,
             date_range={"start_date": str(start_date), "end_date": str(end_date)},
-            stats=source.import_stats or {},
+            stats=final_stats,
         )
 
     except Exception as e:
@@ -785,7 +787,7 @@ async def get_data_coverage(
             .group_by(Transaction.broker_source_id)
             .all()
         )
-        tx_counts_map = {row.broker_source_id: row.count for row in tx_counts_query}
+        tx_counts_map: dict[int, int] = {row.broker_source_id: row.count for row in tx_counts_query}  # ty: ignore[invalid-assignment] — SQLAlchemy labeled query returns int values
 
         # Calculate totals - handle both old format (int) and new format (dict with stats)
         def get_transaction_count(stats: dict | None) -> int:

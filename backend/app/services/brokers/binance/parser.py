@@ -102,7 +102,7 @@ class BinanceParser(BaseBrokerParser):
 
             reader = csv.DictReader(StringIO(content))
             rows = list(reader)
-            headers = reader.fieldnames or []
+            headers: list[str] = list(reader.fieldnames or [])
 
             return headers, rows
 
@@ -263,7 +263,7 @@ class BinanceParser(BaseBrokerParser):
             quantity=quantity,
             price_per_unit=price,
             amount=amount,
-            fees=fee,
+            fees=fee or Decimal("0"),
             currency=quote_asset,
             notes=f"Binance {side.lower()} - {pair}",
             raw_data=dict(row),

@@ -295,7 +295,7 @@ class StagedImportService:
                 "figi": getattr(pos, "figi", None),
             },
         )
-        return result.fetchone()[0]
+        return result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
     @staticmethod
     def _find_or_create_staging_holding(db: Session, account_id: int, staging_asset_id: int) -> int:
@@ -317,7 +317,7 @@ class StagedImportService:
             text("SELECT COALESCE(original_id, id) FROM staging.assets WHERE id = :id"),
             {"id": staging_asset_id},
         )
-        asset_id = result.fetchone()[0]
+        asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — SELECT COALESCE always returns a row
 
         # Create new holding
         result = db.execute(
@@ -335,7 +335,7 @@ class StagedImportService:
                 "staging_asset_id": staging_asset_id,
             },
         )
-        return result.fetchone()[0]
+        return result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
     @staticmethod
     def _import_position_to_staging(db: Session, account_id: int, pos) -> None:
@@ -401,7 +401,7 @@ class StagedImportService:
                     "currency": currency,
                 },
             )
-            staging_asset_id = result.fetchone()[0]
+            staging_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
         # Find or create holding
         staging_holding_id = StagedImportService._find_or_create_staging_holding(
@@ -545,7 +545,7 @@ class StagedImportService:
                 """),
                 {"symbol": currency, "name": f"{currency} Cash", "currency": currency},
             )
-            staging_asset_id = result.fetchone()[0]
+            staging_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
         staging_holding_id = StagedImportService._find_or_create_staging_holding(
             db, account_id, staging_asset_id
@@ -617,7 +617,7 @@ class StagedImportService:
                     "currency": from_currency,
                 },
             )
-            from_asset_id = result.fetchone()[0]
+            from_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
         # Find or create to_currency asset
         result = db.execute(
@@ -642,7 +642,7 @@ class StagedImportService:
                     "currency": to_currency,
                 },
             )
-            to_asset_id = result.fetchone()[0]
+            to_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
 
         from_holding_id = StagedImportService._find_or_create_staging_holding(
             db, account_id, from_asset_id
