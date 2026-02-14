@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/assets", tags=["assets"])
 async def list_assets(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
-    asset_class: str = None,
+    asset_class: str | None = Query(None, description="Filter by asset class"),
     q: str | None = Query(None, description="Search by symbol or name"),
     db: Session = Depends(get_db),
 ):
@@ -48,7 +48,7 @@ async def list_assets(
 async def list_assets_with_changes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    asset_class: str = None,
+    asset_class: str | None = Query(None, description="Filter by asset class"),
     display_currency: str = Query("USD", pattern="^[A-Z]{3}$"),
     db: Session = Depends(get_db),
 ):
@@ -376,11 +376,7 @@ async def toggle_favorite(asset_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{asset_id}/price", response_model=SingleAssetPriceResponse)
 async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
-    """
-    Update price for a specific asset.
-
-    Fetches the latest price from the market data provider.
-    """
+    """Fetch the latest price from the market data provider for a specific asset."""
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not asset:
@@ -393,19 +389,17 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset {asset.name} has no symbol"
         )
 
-    success = PriceFetcher.update_asset_price(db, asset)
-
-    if success:
-        return {
-            "status": "success",
-            "message": f"Price updated for {asset.symbol}",
-            "asset_id": asset.id,
-            "symbol": asset.symbol,
-            "price": float(asset.last_fetched_price) if asset.last_fetched_price else None,
-            "updated_at": asset.last_price_update.isoformat() if asset.last_price_update else None,
-        }
-    else:
+    if not PriceFetcher.update_asset_price(db, asset):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch price for {asset.symbol}",
         )
+
+    return {
+        "status": "success",
+        "message": f"Price updated for {asset.symbol}",
+        "asset_id": asset.id,
+        "symbol": asset.symbol,
+        "price": float(asset.last_fetched_price) if asset.last_fetched_price else None,
+        "updated_at": asset.last_price_update.isoformat() if asset.last_price_update else None,
+    }
