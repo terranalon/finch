@@ -183,12 +183,17 @@ class PortfolioReconstructionService:
                     )
 
             elif txn.type == "Forex Conversion":
-                # Forex conversions affect cash holdings (tracked in amount field)
-                # NOTE: Forex conversions are internal movements - they don't change
-                # total cost basis, just move value between currency holdings.
-                if txn.amount is not None:
-                    # Amount is positive for receiving currency, negative for sending
-                    h["quantity"] += txn.amount
+                if txn.to_holding_id is not None:
+                    # New format: subtract from source, add to destination
+                    if txn.amount is not None:
+                        h["quantity"] -= txn.amount
+                    PortfolioReconstructionService._apply_forex_to_destination(
+                        db, holdings_map, txn
+                    )
+                else:
+                    # Legacy fallback (pre-migration rows)
+                    if txn.amount is not None:
+                        h["quantity"] += txn.amount
 
             elif txn.type == "Deposit":
                 # Deposits add to holdings (prefer quantity for crypto precision)
@@ -722,6 +727,11 @@ class PortfolioReconstructionService:
                 # Process transaction
                 h = holdings_map[asset.id]
                 PortfolioReconstructionService._process_transaction(txn, asset, h)
+                # Handle forex destination (since _process_transaction has no db/map access)
+                if txn.type == "Forex Conversion" and txn.to_holding_id is not None:
+                    PortfolioReconstructionService._apply_forex_to_destination(
+                        db, holdings_map, txn
+                    )
 
                 txn_index += 1
 
@@ -762,6 +772,31 @@ class PortfolioReconstructionService:
 
             yield (current_date, snapshot)
             current_date += timedelta(days=1)
+
+    @staticmethod
+    def _apply_forex_to_destination(
+        db: Session, holdings_map: dict[int, dict], txn: "Transaction"
+    ) -> None:
+        """Add to_amount to the destination holding for new-format forex."""
+        from app.models import Asset, Holding
+
+        if txn.to_holding_id is None or txn.to_amount is None:
+            return
+        to_holding_obj = db.get(Holding, txn.to_holding_id)
+        if to_holding_obj is None:
+            return
+        to_asset_id = to_holding_obj.asset_id
+        if to_asset_id not in holdings_map:
+            to_asset = db.get(Asset, to_asset_id)
+            if to_asset is None:
+                return
+            holdings_map[to_asset_id] = {
+                "asset": to_asset,
+                "quantity": Decimal("0"),
+                "cost_basis": Decimal("0"),
+                "lots": [],
+            }
+        holdings_map[to_asset_id]["quantity"] += txn.to_amount
 
     @staticmethod
     def _process_transaction(txn, asset, h: dict) -> None:
@@ -814,8 +849,14 @@ class PortfolioReconstructionService:
                 h["cost_basis"] += abs(txn.amount)
 
         elif txn.type == "Forex Conversion":
-            if txn.amount is not None:
-                h["quantity"] += txn.amount
+            if txn.to_holding_id is not None:
+                # New format: subtract from source (destination handled by caller)
+                if txn.amount is not None:
+                    h["quantity"] -= txn.amount
+            else:
+                # Legacy fallback
+                if txn.amount is not None:
+                    h["quantity"] += txn.amount
 
         elif txn.type == "Deposit":
             deposit_qty = _resolve_quantity(txn)
