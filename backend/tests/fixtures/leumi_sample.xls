@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Sheet1">
+  <Table>
+   <Row>
+    <Cell><Data ss:Type="String">תנועות היסטוריות</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">דו"ח הופק בתאריך 15/01/2026 תיק מספר 123456</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">מספר נייר</Data></Cell>
+    <Cell><Data ss:Type="String">שם</Data></Cell>
+    <Cell><Data ss:Type="String">פעולה</Data></Cell>
+    <Cell><Data ss:Type="String">תאריך ביצוע</Data></Cell>
+    <Cell><Data ss:Type="String">תאריך תשלום</Data></Cell>
+    <Cell><Data ss:Type="String">כמות</Data></Cell>
+    <Cell><Data ss:Type="String">שער</Data></Cell>
+    <Cell><Data ss:Type="String">תמורה</Data></Cell>
+    <Cell><Data ss:Type="String">עמלה</Data></Cell>
+    <Cell><Data ss:Type="String">מס</Data></Cell>
+    <Cell><Data ss:Type="String">מטבע</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">קניה</Data></Cell>
+    <Cell><Data ss:Type="String">10/07/2025</Data></Cell>
+    <Cell><Data ss:Type="String">13/07/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">100</Data></Cell>
+    <Cell><Data ss:Type="Number">1523</Data></Cell>
+    <Cell><Data ss:Type="Number">15230</Data></Cell>
+    <Cell><Data ss:Type="Number">25</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">70281738</Data></Cell>
+    <Cell><Data ss:Type="String">(איי-שיירס אג"ח אוצר 20 שנה פלוס) TLT</Data></Cell>
+    <Cell><Data ss:Type="String">קניה</Data></Cell>
+    <Cell><Data ss:Type="String">15/08/2025</Data></Cell>
+    <Cell><Data ss:Type="String">18/08/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">50</Data></Cell>
+    <Cell><Data ss:Type="Number">87.50</Data></Cell>
+    <Cell><Data ss:Type="Number">4375</Data></Cell>
+    <Cell><Data ss:Type="Number">15</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">דולר ארה"ב</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">מכירה</Data></Cell>
+    <Cell><Data ss:Type="String">20/09/2025</Data></Cell>
+    <Cell><Data ss:Type="String">23/09/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">-50</Data></Cell>
+    <Cell><Data ss:Type="Number">1610</Data></Cell>
+    <Cell><Data ss:Type="Number">8050</Data></Cell>
+    <Cell><Data ss:Type="Number">20</Data></Cell>
+    <Cell><Data ss:Type="Number">5</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">70281738</Data></Cell>
+    <Cell><Data ss:Type="String">(איי-שיירס אג"ח אוצר 20 שנה פלוס) TLT</Data></Cell>
+    <Cell><Data ss:Type="String">דיבידנד</Data></Cell>
+    <Cell><Data ss:Type="String"></Data></Cell>
+    <Cell><Data ss:Type="String">01/10/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">50</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">35.50</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">8.88</Data></Cell>
+    <Cell><Data ss:Type="String">דולר ארה"ב</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">הטבה</Data></Cell>
+    <Cell><Data ss:Type="String">05/11/2025</Data></Cell>
+    <Cell><Data ss:Type="String">05/11/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">10</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">זיכוי שברים</Data></Cell>
+    <Cell><Data ss:Type="String">10/12/2025</Data></Cell>
+    <Cell><Data ss:Type="String">10/12/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">-0.5</Data></Cell>
+    <Cell><Data ss:Type="Number">1650</Data></Cell>
+    <Cell><Data ss:Type="Number">825</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">70281738</Data></Cell>
+    <Cell><Data ss:Type="String">(איי-שיירס אג"ח אוצר 20 שנה פלוס) TLT</Data></Cell>
+    <Cell><Data ss:Type="String">חישוב רווח/הפסד ו/או ניכוי המס</Data></Cell>
+    <Cell><Data ss:Type="String"></Data></Cell>
+    <Cell><Data ss:Type="String">15/12/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">12.30</Data></Cell>
+    <Cell><Data ss:Type="String">דולר ארה"ב</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">קניה וביטול</Data></Cell>
+    <Cell><Data ss:Type="String">20/12/2025</Data></Cell>
+    <Cell><Data ss:Type="String">20/12/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">1146885</Data></Cell>
+    <Cell><Data ss:Type="String">קסם ETF ת"א נפט וגז</Data></Cell>
+    <Cell><Data ss:Type="String">מידע-הטבה</Data></Cell>
+    <Cell><Data ss:Type="String">25/12/2025</Data></Cell>
+    <Cell><Data ss:Type="String">25/12/2025</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="Number">0</Data></Cell>
+    <Cell><Data ss:Type="String">ש"ח</Data></Cell>
+   </Row>
+  </Table>
+ </Worksheet>
+</Workbook>
