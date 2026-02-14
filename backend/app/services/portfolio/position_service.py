@@ -121,7 +121,9 @@ class _PositionAccumulator:
         cost_basis_native = holding.cost_basis
         pnl_native = (market_value_native - cost_basis_native) if price else None
         pnl_pct = (
-            (pnl_native / cost_basis_native * 100) if (price and cost_basis_native > 0) else None
+            (pnl_native / cost_basis_native * 100)
+            if (pnl_native is not None and price and cost_basis_native > 0)
+            else None
         )
 
         # Convert to USD

@@ -242,7 +242,7 @@ class BinanceClient:
 
             all_trades = self._signed_request("GET", "/api/v3/myTrades", params, weight=20)
 
-        return all_trades
+        return all_trades  # ty: ignore[invalid-return-type] — Binance API returns list for trade endpoints
 
     def get_deposit_history(
         self,
@@ -269,7 +269,7 @@ class BinanceClient:
         if end:
             params["endTime"] = int(end.timestamp() * 1000)
 
-        return self._signed_request("GET", "/sapi/v1/capital/deposit/hisrec", params, weight=1)
+        return self._signed_request("GET", "/sapi/v1/capital/deposit/hisrec", params, weight=1)  # ty: ignore[invalid-return-type] — Binance API returns list for history endpoints
 
     def get_withdrawal_history(
         self,
@@ -296,7 +296,7 @@ class BinanceClient:
         if end:
             params["endTime"] = int(end.timestamp() * 1000)
 
-        return self._signed_request("GET", "/sapi/v1/capital/withdraw/history", params, weight=1)
+        return self._signed_request("GET", "/sapi/v1/capital/withdraw/history", params, weight=1)  # ty: ignore[invalid-return-type] — Binance API returns list for history endpoints
 
     def fetch_all_data(
         self,

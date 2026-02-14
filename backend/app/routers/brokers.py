@@ -6,7 +6,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
@@ -102,7 +102,7 @@ def build_credential_data(
 ) -> dict[str, str]:
     """Build credential data dict from Pydantic model."""
     field1, field2 = get_credential_fields(credential_type)
-    if credential_type == CredentialType.API_KEY_SECRET:
+    if isinstance(credentials, ApiKeyCredentials):
         values = (credentials.api_key, credentials.api_secret)
     else:
         values = (credentials.flex_token, credentials.flex_query_id)
@@ -184,13 +184,29 @@ def _get_flex_query_credentials(
 
 def _update_last_import(account: Account, broker_key: str, db: Session) -> None:
     """Update last_import timestamp in account metadata."""
-    if not account.meta_data:
-        account.meta_data = {}
-    if broker_key not in account.meta_data:
-        account.meta_data[broker_key] = {}
-    account.meta_data[broker_key]["last_import"] = datetime.now().isoformat()
+    meta: dict = account.meta_data or {}
+    if broker_key not in meta:
+        meta[broker_key] = {}
+    meta[broker_key]["last_import"] = datetime.now().isoformat()
+    account.meta_data = meta
     flag_modified(account, "meta_data")
     db.commit()
+
+
+_INCREMENTAL_BUFFER_DAYS = 1
+
+
+def _get_incremental_start_date(account: Account, broker_key: str) -> date | None:
+    """Derive start_date for incremental import from last_import metadata.
+
+    Returns a date 1 day before the last import, or None if no prior import exists.
+    The buffer ensures no transactions are missed due to timezone edge cases.
+    """
+    last_import_str = (account.meta_data or {}).get(broker_key, {}).get("last_import")
+    if not last_import_str:
+        return None
+    last_import_dt = datetime.fromisoformat(last_import_str)
+    return (last_import_dt - timedelta(days=_INCREMENTAL_BUFFER_DAYS)).date()
 
 
 def _import_crypto_broker(
@@ -199,12 +215,14 @@ def _import_crypto_broker(
     api_key: str,
     api_secret: str,
     db: Session,
+    start_date: date | None = None,
 ) -> dict[str, Any]:
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
     client = config.create_client(api_key, api_secret)
 
-    logger.info(f"Fetching {config.name} data for account {account_id}")
-    broker_data = client.fetch_all_data()
+    mode = f"incremental from {start_date}" if start_date else "full history"
+    logger.info(f"Fetching {config.name} data for account {account_id} ({mode})")
+    broker_data = client.fetch_all_data(start_date=start_date)
 
     import_service = BrokerImportServiceRegistry.get_import_service(config.key, db)
     return import_service.import_data(account_id, broker_data, source_id=None)
@@ -315,7 +333,11 @@ async def import_broker_data(
         default=True,
         description="Use staged import for better UI responsiveness (IBKR only)",
     ),
-    background_tasks: BackgroundTasks = None,
+    full_import: bool = Query(
+        default=False,
+        description="Force full history import, ignoring last_import timestamp",
+    ),
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -343,7 +365,10 @@ async def import_broker_data(
     try:
         if config.credential_type == CredentialType.API_KEY_SECRET:
             api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
-            stats = _import_crypto_broker(account_id, config, api_key, api_secret, db)
+            start_date = None if full_import else _get_incremental_start_date(account, config.key)
+            stats = _import_crypto_broker(
+                account_id, config, api_key, api_secret, db, start_date=start_date
+            )
         elif config.credential_type == CredentialType.FLEX_QUERY:
             flex_token, flex_query_id = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
@@ -407,7 +432,7 @@ async def import_broker_data(
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)
 async def import_ibkr_snapshot(
     account_id: int,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -591,13 +616,13 @@ async def set_broker_credentials(
     cred_data = build_credential_data(credentials, config.credential_type)
 
     # Store credentials in account metadata
-    if not account.meta_data:
-        account.meta_data = {}
+    meta: dict = account.meta_data or {}
 
     # Preserve existing broker data (like last_import) while updating credentials
-    existing = account.meta_data.get(config.key, {})
+    existing = meta.get(config.key, {})
     existing.update(cred_data)
-    account.meta_data[config.key] = existing
+    meta[config.key] = existing
+    account.meta_data = meta
     flag_modified(account, "meta_data")
     db.commit()
 

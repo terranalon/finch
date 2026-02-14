@@ -157,7 +157,7 @@ async def get_deletion_preview(
 
     return DeletionPreview(
         portfolio_name=portfolio.name,
-        exclusive_accounts=exclusive,
+        exclusive_accounts=exclusive,  # ty: ignore[invalid-argument-type] — Pydantic coerces ORM objects via from_attributes
         shared_accounts=shared,
         warning=warning,
     )

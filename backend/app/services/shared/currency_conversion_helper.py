@@ -38,25 +38,24 @@ class CurrencyConversionHelper:
         if not conversion_date:
             conversion_date = date.today()
 
-        # Convert to Decimal if needed
-        if isinstance(value, float):
-            value = Decimal(str(value))
+        # Normalize to Decimal
+        decimal_value = Decimal(str(value))
 
         # Same currency - no conversion needed
         if from_currency == to_currency:
-            return value
+            return decimal_value
 
         # Get exchange rate
         rate = CurrencyService(db).get_exchange_rate(from_currency, to_currency, conversion_date)
 
         if rate:
-            return value * rate
+            return decimal_value * rate
         else:
             logger.warning(
                 f"No exchange rate for {from_currency}/{to_currency} on {conversion_date}, "
                 f"returning original value"
             )
-            return value
+            return decimal_value
 
     @staticmethod
     def convert_position_dict(

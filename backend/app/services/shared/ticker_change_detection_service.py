@@ -193,6 +193,10 @@ class TickerChangeDetectionService:
                 old_asset = db.query(Asset).get(asset_id)
                 new_asset = db.query(Asset).get(primary_id)
 
+                if not old_asset or not new_asset:
+                    logger.warning(f"Asset not found for merge: {asset_id} -> {primary_id}")
+                    continue
+
                 logger.info(
                     f"Merging {old_asset.symbol} ({holding['quantity']} shares) "
                     f"into {new_asset.symbol}"

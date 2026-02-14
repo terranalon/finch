@@ -172,7 +172,7 @@ class TransactionRepository:
         )
         if as_of_date is not None:
             query = query.filter(Transaction.date <= as_of_date)
-        return query.order_by(Transaction.date, Transaction.id).all()
+        return query.order_by(Transaction.date, Transaction.id).all()  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
 
     def count_by_account(self, account_id: int) -> int:
         """Count transactions for an account (existence check)."""
@@ -186,8 +186,4 @@ class TransactionRepository:
 
     def find_first_by_holding(self, holding_id: int) -> Transaction | None:
         """Find first transaction for a holding (existence check)."""
-        return (
-            self._db.query(Transaction)
-            .filter(Transaction.holding_id == holding_id)
-            .first()
-        )
+        return self._db.query(Transaction).filter(Transaction.holding_id == holding_id).first()

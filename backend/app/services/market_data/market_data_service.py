@@ -183,7 +183,7 @@ class MarketDataService:
 
         return AssetMetadata(
             symbol=symbol,
-            name=coin_info.get("name"),
+            name=str(coin_info.get("name", symbol)),
             asset_class="Crypto",
             sector=sector,
             industry=None,
@@ -201,9 +201,9 @@ class MarketDataService:
         if price is not None:
             return price, datetime.now()
 
-        # Fallback to CryptoCompare
+        # Fallback to CryptoCompare (use today's date for current price)
         logger.info(f"CoinGecko failed for {symbol}, trying CryptoCompare")
-        price = self._cryptocompare.get_current_price(symbol)
+        price = self._cryptocompare.get_historical_price(symbol, date.today())
         if price is not None:
             return price, datetime.now()
 

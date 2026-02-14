@@ -1,0 +1,72 @@
+name: Backend Checks
+
+on:
+  pull_request:
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.filter.outputs.backend_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for backend changes
+        id: filter
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD -- 'backend/' '.pre-commit-config.yaml')
+          if [ -n "$CHANGED" ]; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  lint-format-typecheck:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Determine changed Python files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=ACMR origin/main -- '*.py' | sed 's|^backend/||')
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$FILES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ -n "$FILES" ]; then
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check formatting (ruff format)
+        if: steps.changed.outputs.has_files == 'true'
+        run: echo "${{ steps.changed.outputs.files }}" | xargs uv run ruff format --check
+
+      - name: Lint (ruff check)
+        if: steps.changed.outputs.has_files == 'true'
+        run: echo "${{ steps.changed.outputs.files }}" | xargs uv run ruff check
+
+      - name: Type check (ty)
+        run: uv run ty check

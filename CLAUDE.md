@@ -8,6 +8,7 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 - **Never commit directly to main** -- always use feature branches and PRs
 - **Always launch Opus subagents** for complex reasoning tasks
 - Run `ruff check --fix . && ruff format .` in `backend/` before committing
+- Run `uv run ty check` in `backend/` before creating a PR -- type errors block CI
 
 ## Architecture
 
@@ -86,6 +87,56 @@ SQLAlchemy 2.0 with `Mapped[]` column declarations. Alembic for migrations:
 docker compose exec backend alembic upgrade head              # Apply migrations
 docker compose exec backend alembic revision --autogenerate -m "description"  # Generate
 docker compose exec backend alembic downgrade -1              # Rollback one
+```
+
+## Code Quality (enforced by CI)
+
+Pre-commit hooks and GitHub CI enforce these checks on all backend code:
+
+| Check | Tool | Pre-commit | CI |
+|-------|------|------------|-----|
+| Formatting | `ruff format` | Auto-fix | Hard gate |
+| Linting | `ruff check` | Auto-fix | Hard gate |
+| Type checking | `ty check` | Hard gate | Hard gate |
+
+Before creating a PR, verify locally:
+
+```bash
+cd backend
+ruff check --fix . && ruff format .
+uv run ty check
+```
+
+### CI workflows
+
+Two GitHub Actions workflows run on every PR:
+
+| Workflow | File | What it does |
+|----------|------|-------------|
+| **Backend Checks** | `backend-checks.yml` | Format, lint (changed files only), type check (full project) |
+| **Backend Tests** | `test.yml` | Full pytest suite against Postgres |
+
+Both workflows trigger on **all PRs** (no path filters). A lightweight `detect-changes` job
+runs first and checks whether `backend/` files were modified. If not, the expensive job is
+skipped -- skipped jobs count as passing for branch protection.
+
+**What to expect when creating a PR:**
+- Backend changes: all 4 jobs run (`detect-changes` x2, `lint-format-typecheck`, `backend-tests`)
+- Non-backend changes: only `detect-changes` x2 run (~3s each), everything else skips green
+
+### Type annotation conventions
+
+- All function parameters and return types must be annotated
+- Use `str | None` (not `Optional[str]`) for nullable types
+- Add null narrowing (`if x is None: raise/return`) before accessing attributes on nullable values
+- Use `# ty: ignore[rule-name]` only for confirmed false positives (document why in a comment)
+- SQLAlchemy forward reference strings (`Mapped["Model"]`) are suppressed globally via `unresolved-reference = "ignore"` in ty config
+
+### Pre-commit setup (one-time)
+
+```bash
+uv tool install pre-commit
+pre-commit install
 ```
 
 ## Code Conventions

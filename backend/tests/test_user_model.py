@@ -18,8 +18,8 @@ def db_session():
     User.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
     Session.__table__.create(engine, checkfirst=True)
-    TestSession = sessionmaker(bind=engine)
-    session = TestSession()
+    test_session = sessionmaker(bind=engine)
+    session = test_session()
     yield session
     session.close()
 

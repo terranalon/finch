@@ -251,7 +251,7 @@ class Bit2CParser(BaseBrokerParser):
                 first_amount,
                 to_decimal(row.get("second_amount")),
                 to_decimal(row.get("price")),
-                to_decimal(row.get("fee_amount"), Decimal("0")),
+                to_decimal(row.get("fee_amount"), Decimal("0")) or Decimal("0"),
                 raw_data,
             )
 

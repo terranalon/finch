@@ -210,6 +210,7 @@ class TestOwnershipTransfer:
         )
 
         assert result2 == DedupResult.SKIPPED
+        assert txn1 is not None and txn2 is not None
         assert txn2.id == txn1.id  # Same transaction
 
     def test_duplicate_different_source_transfers_ownership(
@@ -244,6 +245,7 @@ class TestOwnershipTransfer:
             account_id=test_account.id,
         )
         assert result1 == DedupResult.NEW
+        assert txn1 is not None
         assert txn1.broker_source_id == source1.id
         db_session.flush()
 
@@ -276,6 +278,7 @@ class TestOwnershipTransfer:
         )
 
         assert result2 == DedupResult.TRANSFERRED
+        assert txn1 is not None and txn2 is not None
         assert txn2.id == txn1.id  # Same transaction
         assert txn2.broker_source_id == source2.id  # Ownership transferred
 
@@ -517,6 +520,7 @@ class TestOwnershipTransfer:
             fees=Decimal("5.00"),
         )
         assert result_b == DedupResult.NEW  # NOT TRANSFERRED
+        assert txn_a is not None and txn_b is not None
         assert txn_b.id != txn_a.id  # Different transaction objects
 
         # Verify each account has its own transaction

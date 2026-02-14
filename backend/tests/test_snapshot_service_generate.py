@@ -193,6 +193,7 @@ class TestGenerateAccountSnapshots:
 
         # Old snapshot unchanged
         db_session.refresh(old_snapshot)
+        assert old_snapshot.total_value_usd is not None
         assert float(old_snapshot.total_value_usd) == 9999
 
 

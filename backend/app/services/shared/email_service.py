@@ -22,14 +22,13 @@ class EmailService:
         resend.api_key = settings.resend_api_key
 
         try:
-            response = resend.Emails.send(
-                {
-                    "from": f"{settings.email_from_name} <{settings.email_from_address}>",
-                    "to": [to_email],
-                    "subject": subject,
-                    "html": html_content,
-                }
-            )
+            params = {
+                "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content,
+            }
+            response = resend.Emails.send(params)  # ty: ignore[invalid-argument-type] — Resend SDK accepts dict params
             logger.info("Email sent to %s, id: %s", to_email, response.get("id"))
             return True
         except Exception:

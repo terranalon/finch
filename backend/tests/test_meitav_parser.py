@@ -111,7 +111,7 @@ class TestCurrencyNormalization:
         """Test normalizing empty string defaults to ILS."""
         parser = MeitavParser()
         assert parser._normalize_currency("") == "ILS"
-        assert parser._normalize_currency(None) == "ILS"
+        assert parser._normalize_currency(None) == "ILS"  # ty: ignore[invalid-argument-type] — tests None handling at runtime
 
     def test_normalize_unknown_currency(self):
         """Test normalizing unknown currency defaults to ILS."""
@@ -235,7 +235,7 @@ class TestTransactionParsing:
         assert txn.symbol == "TASE:1234567"
         assert txn.transaction_type == "Buy"
         assert txn.quantity == Decimal("50")
-        assert txn.price_per_unit == Decimal("150")  # Converted from Agorot
+        assert txn.price_per_unit == Decimal("150")
         assert txn.fees == Decimal("30.00")
 
     def test_parse_dividend_row(self):

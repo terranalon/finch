@@ -142,6 +142,11 @@ async def update_account(
     verify_account_ownership(account_id, current_user, db)
 
     db_account = db.query(Account).filter(Account.id == account_id).first()
+    if not db_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account with id {account_id} not found",
+        )
 
     update_data = account_update.model_dump(exclude_unset=True)
     if "name" in update_data:

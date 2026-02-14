@@ -178,9 +178,7 @@ class TestSnapshotRepository:
         db.commit()
 
         repo = SnapshotRepository(db)
-        rows = repo.find_aggregated_portfolio_history(
-            account_ids=[account1.id, account2.id]
-        )
+        rows = repo.find_aggregated_portfolio_history(account_ids=[account1.id, account2.id])
         assert len(rows) == 1
         assert rows[0].total_usd == Decimal("8000.00")
 
