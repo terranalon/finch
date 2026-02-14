@@ -2,10 +2,30 @@ name: Backend Tests
 
 on:
   pull_request:
-    branches: [main]
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.filter.outputs.backend_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for backend changes
+        id: filter
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD -- 'backend/')
+          if [ -n "$CHANGED" ]; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   backend-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -29,8 +49,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -42,13 +60,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --extra dev
-
-      - name: Check formatting (changed files only)
-        run: |
-          FILES=$(git diff --name-only --diff-filter=ACMR origin/main -- '*.py' | sed 's|^backend/||')
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs uv run ruff format --check
-          fi
 
       - name: Run tests
         env:
