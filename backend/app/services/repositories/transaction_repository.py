@@ -120,7 +120,7 @@ class TransactionRepository:
         """Build the shared join + filter query for transaction views."""
         query = (
             self._db.query(Transaction, Holding, Asset, Account)
-            .join(Holding, Transaction.holding_id == Holding.id)
+            .join(Transaction.holding)
             .join(Asset, Holding.asset_id == Asset.id)
             .join(Account, Holding.account_id == Account.id)
             .filter(
@@ -166,7 +166,7 @@ class TransactionRepository:
         """
         query = (
             self._db.query(Transaction, Holding, Asset)
-            .join(Holding, Transaction.holding_id == Holding.id)
+            .join(Transaction.holding)
             .join(Asset, Holding.asset_id == Asset.id)
             .filter(Holding.account_id == account_id)
         )

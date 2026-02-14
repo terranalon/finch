@@ -48,7 +48,7 @@ class SnapshotRepository:
             )
             .first()
         )
-        return Decimal(str(row.total_usd)) if row and row.total_usd else None
+        return Decimal(str(row.total_usd)) if row and row.total_usd is not None else None
 
     def find_aggregated_performance(
         self, account_ids: list[int], days: int = 30
