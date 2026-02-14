@@ -6,7 +6,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
@@ -205,8 +205,6 @@ def _get_incremental_start_date(account: Account, broker_key: str) -> date | Non
     last_import_str = (account.meta_data or {}).get(broker_key, {}).get("last_import")
     if not last_import_str:
         return None
-    from datetime import timedelta
-
     last_import_dt = datetime.fromisoformat(last_import_str)
     return (last_import_dt - timedelta(days=_INCREMENTAL_BUFFER_DAYS)).date()
 
@@ -222,13 +220,8 @@ def _import_crypto_broker(
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
     client = config.create_client(api_key, api_secret)
 
-    if start_date:
-        logger.info(
-            f"Fetching {config.name} data for account {account_id} "
-            f"(incremental from {start_date})"
-        )
-    else:
-        logger.info(f"Fetching {config.name} data for account {account_id} (full history)")
+    mode = f"incremental from {start_date}" if start_date else "full history"
+    logger.info(f"Fetching {config.name} data for account {account_id} ({mode})")
     broker_data = client.fetch_all_data(start_date=start_date)
 
     import_service = BrokerImportServiceRegistry.get_import_service(config.key, db)
@@ -372,9 +365,7 @@ async def import_broker_data(
     try:
         if config.credential_type == CredentialType.API_KEY_SECRET:
             api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
-            start_date = (
-                None if full_import else _get_incremental_start_date(account, config.key)
-            )
+            start_date = None if full_import else _get_incremental_start_date(account, config.key)
             stats = _import_crypto_broker(
                 account_id, config, api_key, api_secret, db, start_date=start_date
             )
