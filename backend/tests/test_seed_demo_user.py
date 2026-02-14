@@ -18,9 +18,9 @@ def db_session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    Session.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    User.__table__.create(engine, checkfirst=True)
+    Session.__table__.create(engine, checkfirst=True)
+    Portfolio.__table__.create(engine, checkfirst=True)
     session_local = sessionmaker(bind=engine)
     session = session_local()
     yield session

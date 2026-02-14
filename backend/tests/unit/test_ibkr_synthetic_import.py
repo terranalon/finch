@@ -110,7 +110,7 @@ class TestSyntheticImportService:
 
         source_added = _find_added_synthetic_source(mock_db_with_account)
         assert source_added is not None
-        assert source_added.source_type == "synthetic"  # ty: ignore[unresolved-attribute] — object has source_type at runtime
+        assert source_added.source_type == "synthetic"
 
     @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
     @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
@@ -174,8 +174,8 @@ class TestSyntheticImportService:
 
         source_added = _find_added_synthetic_source(mock_db_with_account)
         assert source_added is not None
-        assert "snapshot_positions" in source_added.import_stats  # ty: ignore[unresolved-attribute] — object has import_stats at runtime
-        snapshot = source_added.import_stats["snapshot_positions"]  # ty: ignore[unresolved-attribute] — object has import_stats at runtime
+        assert "snapshot_positions" in source_added.import_stats
+        snapshot = source_added.import_stats["snapshot_positions"]
         assert len(snapshot) == 1
         assert snapshot[0]["symbol"] == "AAPL"
         assert snapshot[0]["quantity"] == "100"

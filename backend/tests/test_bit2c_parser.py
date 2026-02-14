@@ -260,7 +260,7 @@ class TestBit2CParserDualEntry:
 
         # Find corresponding settlements by matching notes
         for buy in buy_trades:
-            trade_id = buy.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
+            trade_id = buy.raw_data.get("id", "")
             matching_settlements = [
                 s
                 for s in result.cash_transactions
@@ -287,7 +287,7 @@ class TestBit2CParserDualEntry:
 
         # Find corresponding settlements by matching notes
         for sell in sell_trades:
-            trade_id = sell.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
+            trade_id = sell.raw_data.get("id", "")
             matching_settlements = [
                 s
                 for s in result.cash_transactions
@@ -309,7 +309,7 @@ class TestBit2CParserDualEntry:
         trades_with_fees = [t for t in result.transactions if t.fees and t.fees > 0]
 
         for trade in trades_with_fees:
-            trade_id = trade.raw_data.get("id", "")  # ty: ignore[unresolved-attribute] — raw_data is dict at runtime
+            trade_id = trade.raw_data.get("id", "")
             txn_type = trade.transaction_type
             symbol = trade.symbol
 

@@ -91,7 +91,7 @@ def migrate_entities(db: DBSession) -> dict:
             ),
             {"portfolio_id": portfolio_id, "entity_id": entity_id},
         )
-        stats["accounts_updated"] += result.rowcount  # ty: ignore[unresolved-attribute] — SQLAlchemy Result has rowcount at runtime
+        stats["accounts_updated"] += result.rowcount
 
     db.commit()
     logger.info(f"Migration complete: {stats}")

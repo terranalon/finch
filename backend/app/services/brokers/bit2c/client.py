@@ -243,7 +243,7 @@ class Bit2CClient:
         supported_assets = ("NIS", "BTC", "ETH", "LTC", "USDC")
 
         for asset in supported_assets:
-            balance = result.get(asset, 0)  # ty: ignore[unresolved-attribute] — Balance endpoint always returns dict
+            balance = result.get(asset, 0)
             if balance and Decimal(str(balance)) > 0:
                 symbol = ASSET_NAME_MAP.get(asset, asset)
                 balances[symbol] = Decimal(str(balance))

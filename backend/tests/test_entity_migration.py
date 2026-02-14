@@ -20,9 +20,9 @@ def db_session():
     )
 
     # Create auth tables
-    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    UserSession.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    User.__table__.create(engine, checkfirst=True)
+    UserSession.__table__.create(engine, checkfirst=True)
+    Portfolio.__table__.create(engine, checkfirst=True)
 
     # Create mock entities table (simulating existing data)
     with engine.connect() as conn:

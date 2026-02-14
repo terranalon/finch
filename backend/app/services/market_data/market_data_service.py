@@ -181,10 +181,9 @@ class MarketDataService:
         categories = coin_info.get("categories", [])
         sector = categories[0] if categories else "Cryptocurrency"
 
-        coin_name = coin_info.get("name")
         return AssetMetadata(
             symbol=symbol,
-            name=coin_name if isinstance(coin_name, str) else None,
+            name=str(coin_info.get("name", symbol)),
             asset_class="Crypto",
             sector=sector,
             industry=None,

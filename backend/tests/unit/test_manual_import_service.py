@@ -42,11 +42,11 @@ def _setup_asset_holding(
     mock_holding = MagicMock(spec=Holding, id=holding_id)
 
     if use_find_by_symbol:
-        service._asset_repo.find_by_symbol.return_value = mock_asset  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_by_symbol.return_value = mock_asset  # ty: ignore[invalid-assignment] — mock patching
     else:
-        service._asset_repo.find_or_create.return_value = (mock_asset, False)  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_or_create.return_value = (mock_asset, False)  # ty: ignore[invalid-assignment] — mock patching
 
-    service._holding_repo.find_or_create.return_value = (mock_holding, False)  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+    service._holding_repo.find_or_create.return_value = (mock_holding, False)  # ty: ignore[invalid-assignment] — mock patching
     return mock_asset, mock_holding
 
 
@@ -145,7 +145,7 @@ class TestManualAssetResolution:
     def test_existing_asset_returns_from_db(self):
         service = _create_service()
         mock_asset = MagicMock(spec=Asset, id=1, symbol="AAPL")
-        service._asset_repo.find_by_symbol.return_value = mock_asset  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_by_symbol.return_value = mock_asset  # ty: ignore[invalid-assignment] — mock patching
 
         asset, created = service._find_or_create_asset("AAPL", "USD")
         assert asset == mock_asset
@@ -155,15 +155,15 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_yfinance_detected_stock(self, mock_yf, mock_cg):
         service = _create_service()
-        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment] — mock patching
 
         mock_yf.return_value = ("Stock", "Apple Inc.", "Technology", "Consumer Electronics")
         mock_new_asset = MagicMock(spec=Asset, id=5)
-        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment] — mock patching
 
         asset, created = service._find_or_create_asset("AAPL", "USD")
         assert created is True
-        service._asset_repo.find_or_create.assert_called_once_with(  # ty: ignore[unresolved-attribute] — mock assertion method
+        service._asset_repo.find_or_create.assert_called_once_with(
             "AAPL",
             name="Apple Inc.",
             asset_class="Stock",
@@ -177,16 +177,16 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_coingecko_detected_crypto(self, mock_yf, mock_cg):
         service = _create_service()
-        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment] — mock patching
 
         mock_yf.return_value = (None, None, None, None)
         mock_cg.return_value = "Bitcoin"
         mock_new_asset = MagicMock(spec=Asset, id=6)
-        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment] — mock patching
 
         asset, created = service._find_or_create_asset("BTC", "USD")
         assert created is True
-        service._asset_repo.find_or_create.assert_called_once_with(  # ty: ignore[unresolved-attribute] — mock assertion method
+        service._asset_repo.find_or_create.assert_called_once_with(
             "BTC",
             name="Bitcoin",
             asset_class="Crypto",
@@ -199,16 +199,16 @@ class TestManualAssetResolution:
     @patch("app.services.brokers.manual.import_service.ManualImportService._try_yfinance")
     def test_fallback_to_stock(self, mock_yf, mock_cg):
         service = _create_service()
-        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment] — mock patching
 
         mock_yf.return_value = (None, None, None, None)
         mock_cg.return_value = None
         mock_new_asset = MagicMock(spec=Asset, id=7)
-        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment,unresolved-attribute] — mock patching
+        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment] — mock patching
 
         asset, created = service._find_or_create_asset("UNKNOWN", "USD")
         assert created is True
-        service._asset_repo.find_or_create.assert_called_once_with(  # ty: ignore[unresolved-attribute] — mock assertion method
+        service._asset_repo.find_or_create.assert_called_once_with(
             "UNKNOWN",
             name="UNKNOWN",
             asset_class="Stock",

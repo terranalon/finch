@@ -101,6 +101,7 @@ exclude = [
 
 [tool.ty.rules]
 unresolved-reference = "ignore"
+unresolved-attribute = "warn"  # SQLAlchemy __table__.create(), result.rowcount, etc.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

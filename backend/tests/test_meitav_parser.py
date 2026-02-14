@@ -231,11 +231,11 @@ class TestTransactionParsing:
         assert result is not None
         txn_type, txn = result
         assert txn_type == "trade"
-        assert txn.trade_date == date(2024, 1, 15)  # ty: ignore[unresolved-attribute] — txn is ParsedTransaction when txn_type is "trade"
-        assert txn.symbol == "TASE:1234567"  # ty: ignore[unresolved-attribute] — txn is ParsedTransaction when txn_type is "trade"
+        assert txn.trade_date == date(2024, 1, 15)
+        assert txn.symbol == "TASE:1234567"
         assert txn.transaction_type == "Buy"
-        assert txn.quantity == Decimal("50")  # ty: ignore[unresolved-attribute] — txn is ParsedTransaction when txn_type is "trade"
-        assert txn.price_per_unit == Decimal("150")  # ty: ignore[unresolved-attribute] — txn is ParsedTransaction when txn_type is "trade"
+        assert txn.quantity == Decimal("50")
+        assert txn.price_per_unit == Decimal("150")
         assert txn.fees == Decimal("30.00")
 
     def test_parse_dividend_row(self):

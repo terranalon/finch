@@ -31,9 +31,9 @@ def test_db():
     )
 
     # Create auth tables
-    User.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    UserSession.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
-    Portfolio.__table__.create(engine, checkfirst=True)  # ty: ignore[unresolved-attribute] — SQLAlchemy Table has create()
+    User.__table__.create(engine, checkfirst=True)
+    UserSession.__table__.create(engine, checkfirst=True)
+    Portfolio.__table__.create(engine, checkfirst=True)
 
     # Create accounts table with all needed columns
     with engine.connect() as conn:
