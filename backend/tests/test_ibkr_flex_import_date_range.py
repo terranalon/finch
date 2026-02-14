@@ -201,7 +201,6 @@ def _run_staged_import(mocks, **overrides):
 
     with patch.object(StagedImportService, "_import_to_staging") as mock_staging:
         mock_staging.return_value = {
-            "positions": {},
             "transactions": {},
             "dividends": {},
             "transfers": {},

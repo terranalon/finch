@@ -20,7 +20,6 @@ from app.models import Account, Asset, Holding
 from app.services.brokers.ibkr.models import (
     IBKRCashBalance,
     IBKRDividend,
-    IBKRPosition,
     IBKRTransaction,
 )
 from app.services.shared.staged_import_service import StagedImportService
@@ -74,45 +73,6 @@ def sample_account(test_db):
     test_db.add(account)
     test_db.commit()
     return account
-
-
-@pytest.fixture
-def sample_positions_data():
-    """Sample positions data from IBKR parser."""
-    return [
-        IBKRPosition(
-            symbol="AAPL",
-            original_symbol="AAPL",
-            description="Apple Inc",
-            asset_category="STK",
-            asset_class="Stock",
-            listing_exchange="NASDAQ",
-            quantity=Decimal("100"),
-            cost_basis=Decimal("15000.00"),
-            currency="USD",
-            account_id="U12345",
-            needs_validation=False,
-            cusip="037833100",
-            isin="US0378331005",
-            conid="265598",
-        ),
-        IBKRPosition(
-            symbol="MSFT",
-            original_symbol="MSFT",
-            description="Microsoft Corporation",
-            asset_category="STK",
-            asset_class="Stock",
-            listing_exchange="NASDAQ",
-            quantity=Decimal("50"),
-            cost_basis=Decimal("17500.00"),
-            currency="USD",
-            account_id="U12345",
-            needs_validation=False,
-            cusip="594918104",
-            isin="US5949181045",
-            conid="272093",
-        ),
-    ]
 
 
 @pytest.fixture
@@ -273,7 +233,6 @@ class TestStagedImportService:
         mock_client,
         test_db,
         sample_account,
-        sample_positions_data,
         sample_transactions_data,
         sample_dividends_data,
         sample_cash_data,
@@ -448,7 +407,6 @@ class TestDataIntegrity:
         atomic_parser,
         atomic_client,
         test_db,
-        sample_positions_data,
         sample_transactions_data,
         sample_dividends_data,
         sample_cash_data,

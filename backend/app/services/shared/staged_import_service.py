@@ -71,7 +71,6 @@ class StagedImportService:
             "start_time": datetime.now().isoformat(),
             "status": "in_progress",
             "import_method": "staged",
-            "positions": {},
             "transactions": {},
             "dividends": {},
             "transfers": {},
@@ -139,7 +138,6 @@ class StagedImportService:
             import_stats = StagedImportService._import_to_staging(
                 db,
                 account_id,
-                positions_data=[],
                 transactions_data=transactions_data,
                 dividends_data=dividends_data,
                 transfers_data=transfers_data,
@@ -147,7 +145,7 @@ class StagedImportService:
                 cash_data=cash_data,
             )
 
-            for key in ("positions", "transactions", "dividends", "transfers", "forex", "cash"):
+            for key in ("transactions", "dividends", "transfers", "forex", "cash"):
                 stats[key] = import_stats.get(key, {})
 
             # Phase 4: Quick merge from staging to production
@@ -193,7 +191,6 @@ class StagedImportService:
     def _import_to_staging(
         db: Session,
         account_id: int,
-        positions_data: list,
         transactions_data: list,
         dividends_data: list,
         transfers_data: list,
@@ -207,21 +204,12 @@ class StagedImportService:
         to staging tables directly, avoiding ORM model bindings.
         """
         stats = {
-            "positions": {"total": len(positions_data), "imported": 0, "errors": []},
             "transactions": {"total": len(transactions_data), "imported": 0, "errors": []},
             "dividends": {"total": len(dividends_data), "imported": 0, "errors": []},
             "transfers": {"total": len(transfers_data), "imported": 0, "errors": []},
             "forex": {"total": len(forex_data), "imported": 0, "errors": []},
             "cash": {"total": len(cash_data), "imported": 0, "errors": []},
         }
-
-        # Import positions
-        for pos in positions_data:
-            try:
-                StagedImportService._import_position_to_staging(db, account_id, pos)
-                stats["positions"]["imported"] += 1
-            except Exception as e:
-                stats["positions"]["errors"].append(f"{getattr(pos, 'symbol', None)}: {str(e)}")
 
         # Import cash balances
         for cash in cash_data:
@@ -346,37 +334,6 @@ class StagedImportService:
             },
         )
         return result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
-
-    @staticmethod
-    def _import_position_to_staging(db: Session, account_id: int, pos) -> None:
-        """Import a single position to staging tables."""
-        # Skip forex pair positions
-        symbol = pos.symbol
-        currency_codes = {"USD", "CAD", "ILS", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD"}
-        if "." in symbol:
-            parts = symbol.split(".")
-            if len(parts) == 2 and parts[0] in currency_codes and parts[1] in currency_codes:
-                return
-
-        staging_asset_id = StagedImportService._find_or_create_staging_asset(db, pos)
-        staging_holding_id = StagedImportService._find_or_create_staging_holding(
-            db, account_id, staging_asset_id
-        )
-
-        # Update holding quantity and cost_basis
-        db.execute(
-            text("""
-                UPDATE staging.holdings
-                SET quantity = :quantity, cost_basis = :cost_basis, is_active = :is_active
-                WHERE id = :id
-            """),
-            {
-                "id": staging_holding_id,
-                "quantity": pos.quantity,
-                "cost_basis": pos.cost_basis,
-                "is_active": pos.quantity != 0,
-            },
-        )
 
     @staticmethod
     def _import_cash_to_staging(db: Session, account_id: int, cash) -> None:
