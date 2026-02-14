@@ -95,7 +95,7 @@ class HoldingDetailResponse(BaseModel):
 
 
 class ReconstructionStatsResponse(BaseModel):
-    """Response for POST /api/holdings/reconstruct/{account_id}."""
+    """Response for POST /api/accounts/{account_id}/reconstructed-holdings."""
 
     account_id: int
     holdings_updated: int
