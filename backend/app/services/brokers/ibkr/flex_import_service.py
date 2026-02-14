@@ -143,8 +143,9 @@ class IBKRFlexImportService:
             stats["holdings_reconstruction"] = reconstruct_and_update_holdings(db, account_id)
 
             # Step 7: Update asset prices (symbols from transactions)
-            all_symbols = {txn.symbol for txn in transactions if txn.symbol}
-            all_symbols |= {div.symbol for div in dividends if div.symbol}
+            all_symbols = {
+                item.symbol for items in (transactions, dividends) for item in items if item.symbol
+            }
             if all_symbols:
                 logger.info(f"Updating prices for {len(all_symbols)} symbols...")
                 stats["price_updates"] = IBKRImportService._update_asset_prices(
