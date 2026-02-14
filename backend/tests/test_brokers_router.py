@@ -863,7 +863,7 @@ class TestIncrementalImport:
 
     def _import_with_mocked_client(
         self, client, url: str, auth_headers: dict
-    ) -> tuple[MagicMock, MagicMock]:
+    ):
         """Run a crypto import with mocked broker client and import service.
 
         Returns the (mock_client, response) tuple so callers can assert
