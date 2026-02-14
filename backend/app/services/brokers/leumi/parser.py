@@ -69,7 +69,7 @@ class LeumiParser(BaseBrokerParser):
                 data_el = cell_el.find("ss:Data", ns)
                 cells[col_pos] = data_el.text if data_el is not None else ""
                 col_pos += 1
-            rows.append(cells)
+            rows = [*rows, cells]
 
         return rows
 
@@ -84,6 +84,14 @@ class LeumiParser(BaseBrokerParser):
 
     def extract_date_range(self, file_content: bytes) -> tuple[date, date]:
         rows = self._parse_xml_rows(file_content)
+        return self._date_range_from_rows(rows)
+
+    def _date_range_from_rows(self, rows: list[dict[int, str]]) -> tuple[date, date]:
+        """Extract min/max dates from pre-parsed rows.
+
+        Scans execution_date (col 4) and payment_date (col 5) across
+        all data rows (skipping title, metadata, and header rows).
+        """
         dates: list[date] = []
 
         for row in rows[3:]:  # Skip title, metadata, header rows
@@ -249,7 +257,7 @@ class LeumiParser(BaseBrokerParser):
             else:
                 transactions = [*transactions, txn]
 
-        start_date, end_date = self.extract_date_range(file_content)
+        start_date, end_date = self._date_range_from_rows(rows)
 
         return BrokerImportData(
             start_date=start_date,

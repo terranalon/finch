@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services.brokers.base_broker_parser import BrokerImportData
 from app.services.brokers.leumi.parser import LeumiParser
 
 
@@ -74,8 +75,6 @@ class TestLeumiParserParse:
         return parser.parse(sample_file_content)
 
     def test_returns_broker_import_data(self, parsed):
-        from app.services.brokers.base_broker_parser import BrokerImportData
-
         assert isinstance(parsed, BrokerImportData)
 
     def test_has_transactions(self, parsed):
