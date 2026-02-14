@@ -2,11 +2,30 @@ name: Backend Tests
 
 on:
   pull_request:
-    paths:
-      - 'backend/**'
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.filter.outputs.backend_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for backend changes
+        id: filter
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD -- 'backend/')
+          if [ -n "$CHANGED" ]; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   backend-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
 
     services:
