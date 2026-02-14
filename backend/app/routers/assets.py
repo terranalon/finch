@@ -12,6 +12,8 @@ from app.models import Asset, AssetPrice, ExchangeRate
 from app.schemas.asset import Asset as AssetSchema
 from app.schemas.asset import AssetCreate, AssetMarketResponse, AssetUpdate
 from app.schemas.common import PaginatedResponse
+from app.schemas.price import SingleAssetPriceResponse
+from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.shared.asset_metadata_service import AssetMetadataService
 from app.services.shared.currency_service import CurrencyService
 
@@ -23,13 +25,18 @@ async def list_assets(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     asset_class: str = None,
+    q: str | None = Query(None, description="Search by symbol or name"),
     db: Session = Depends(get_db),
 ):
-    """Get list of assets."""
+    """Get list of assets, optionally filtered by class or search term."""
     query = db.query(Asset)
 
     if asset_class is not None:
         query = query.filter(Asset.asset_class == asset_class)
+
+    if q is not None:
+        search_term = f"%{q}%"
+        query = query.filter(or_(Asset.symbol.ilike(search_term), Asset.name.ilike(search_term)))
 
     total = query.count()
     assets = query.order_by(Asset.symbol).offset(skip).limit(limit).all()
@@ -244,26 +251,11 @@ async def list_assets_with_changes(
     return PaginatedResponse.create(items=result, total=total, skip=skip, limit=limit)
 
 
-@router.get("/search", response_model=list[AssetSchema])
-async def search_assets(q: str, limit: int = 10, db: Session = Depends(get_db)):
-    """
-    Search assets by symbol or name (for autocomplete).
-
-    Query Parameters:
-        - q: Search query (symbol or name)
-        - limit: Maximum number of results to return (default: 10)
-    """
-    search_term = f"%{q}%"
-
-    assets = (
-        db.query(Asset)
-        .filter(or_(Asset.symbol.ilike(search_term), Asset.name.ilike(search_term)))
-        .order_by(Asset.symbol)
-        .limit(limit)
-        .all()
-    )
-
-    return assets
+@router.get("/favorites", response_model=list[AssetSchema])
+async def list_favorites(db: Session = Depends(get_db)):
+    """Get all favorite assets."""
+    favorites = db.query(Asset).filter(Asset.is_favorite.is_(True)).order_by(Asset.symbol).all()
+    return favorites
 
 
 @router.get("/{asset_id}", response_model=AssetSchema)
@@ -366,7 +358,7 @@ async def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     return None
 
 
-@router.post("/{asset_id}/favorite", response_model=AssetSchema)
+@router.put("/{asset_id}/favorite", response_model=AssetSchema)
 async def toggle_favorite(asset_id: int, db: Session = Depends(get_db)):
     """Toggle the favorite status of an asset."""
     db_asset = db.query(Asset).filter(Asset.id == asset_id).first()
@@ -382,8 +374,38 @@ async def toggle_favorite(asset_id: int, db: Session = Depends(get_db)):
     return db_asset
 
 
-@router.get("/favorites/list", response_model=list[AssetSchema])
-async def list_favorites(db: Session = Depends(get_db)):
-    """Get all favorite assets."""
-    favorites = db.query(Asset).filter(Asset.is_favorite.is_(True)).order_by(Asset.symbol).all()
-    return favorites
+@router.patch("/{asset_id}/price", response_model=SingleAssetPriceResponse)
+async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
+    """
+    Update price for a specific asset.
+
+    Fetches the latest price from the market data provider.
+    """
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
+        )
+
+    if not asset.symbol:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset {asset.name} has no symbol"
+        )
+
+    success = PriceFetcher.update_asset_price(db, asset)
+
+    if success:
+        return {
+            "status": "success",
+            "message": f"Price updated for {asset.symbol}",
+            "asset_id": asset.id,
+            "symbol": asset.symbol,
+            "price": float(asset.last_fetched_price) if asset.last_fetched_price else None,
+            "updated_at": asset.last_price_update.isoformat() if asset.last_price_update else None,
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch price for {asset.symbol}",
+        )
