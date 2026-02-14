@@ -19,6 +19,7 @@ from app.schemas.account import Account as AccountSchema
 from app.schemas.portfolio import (
     DeletionPreview,
     PortfolioCreate,
+    PortfolioPatch,
     PortfolioUpdate,
     PortfolioWithAccountCount,
 )
