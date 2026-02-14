@@ -246,6 +246,11 @@ class PortfolioReconstructionService:
                         f"Staking reward for {asset.symbol} on {txn.date}: {txn.quantity} tokens"
                     )
 
+            elif txn.type == "Bonus":
+                # Bonus shares add to holdings with no cost basis impact
+                if txn.quantity is not None:
+                    h["quantity"] += txn.quantity
+
             elif txn.type == "Transfer":
                 # Internal transfers (e.g., Kraken staking auto-allocation)
                 # Positive = receiving, negative = sending; no cost basis impact
@@ -848,6 +853,11 @@ class PortfolioReconstructionService:
                 h["quantity"] += txn.amount
 
         elif txn.type == "Staking":
+            if txn.quantity is not None:
+                h["quantity"] += txn.quantity
+
+        elif txn.type == "Bonus":
+            # Bonus shares add to holdings with no cost basis impact
             if txn.quantity is not None:
                 h["quantity"] += txn.quantity
 
