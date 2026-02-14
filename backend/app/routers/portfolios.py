@@ -216,7 +216,7 @@ async def patch_portfolio(
             detail=f"Portfolio with id {portfolio_id} not found",
         )
 
-    if patch.is_default is not None and patch.is_default:
+    if patch.is_default:
         db.query(Portfolio).filter(
             Portfolio.user_id == current_user.id,
             Portfolio.is_default == True,  # noqa: E712

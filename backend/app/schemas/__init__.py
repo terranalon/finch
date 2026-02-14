@@ -37,6 +37,7 @@ from app.schemas.market_data import (
 from app.schemas.portfolio import (
     Portfolio,
     PortfolioCreate,
+    PortfolioPatch,
     PortfolioUpdate,
     PortfolioWithAccountCount,
 )
@@ -92,6 +93,7 @@ __all__ = [
     # Portfolio schemas
     "Portfolio",
     "PortfolioCreate",
+    "PortfolioPatch",
     "PortfolioUpdate",
     "PortfolioWithAccountCount",
     # Position schemas
