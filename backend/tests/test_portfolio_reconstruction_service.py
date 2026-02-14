@@ -3,7 +3,7 @@
 import os
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -82,10 +82,10 @@ def account_with_transactions(db_session):
     # Create account
     account = Account(
         name="Test Recon Account",
-        portfolio_id=portfolio.id,
         account_type="brokerage",
         currency="USD",
     )
+    account.portfolios.append(portfolio)
     db_session.add(account)
     db_session.flush()
 
@@ -377,7 +377,8 @@ class TestApplyCorporateActionsToSnapshot:
         assert result[0]["asset_id"] == 100
         assert result[0]["quantity"] == Decimal("10")
 
-    def test_merges_old_asset_into_new_asset(self):
+    @patch("app.services.portfolio.portfolio_reconstruction_service.AssetRepository")
+    def test_merges_old_asset_into_new_asset(self, mock_asset_repo_cls):
         """Should merge holding from old asset into new asset."""
         # Mock the database
         mock_db = MagicMock()
@@ -386,7 +387,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.get.return_value = mock_new_asset
+        mock_asset_repo_cls.return_value.find_by_id.return_value = mock_new_asset
 
         # Create mock corporate action
         action = MagicMock()
@@ -417,7 +418,8 @@ class TestApplyCorporateActionsToSnapshot:
         assert result[0]["quantity"] == Decimal("100")
         assert result[0]["cost_basis"] == Decimal("5000")
 
-    def test_accumulates_when_both_old_and_new_exist(self):
+    @patch("app.services.portfolio.portfolio_reconstruction_service.AssetRepository")
+    def test_accumulates_when_both_old_and_new_exist(self, mock_asset_repo_cls):
         """Should combine quantities when snapshot has both old and new asset."""
         mock_db = MagicMock()
         mock_new_asset = MagicMock()
@@ -425,7 +427,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.get.return_value = mock_new_asset
+        mock_asset_repo_cls.return_value.find_by_id.return_value = mock_new_asset
 
         action = MagicMock()
         action.old_asset_id = 100
@@ -495,7 +497,8 @@ class TestApplyCorporateActionsToSnapshot:
         assert result[0]["asset_id"] == 100
         assert result[0]["symbol"] == "OLD"
 
-    def test_preserves_unaffected_holdings(self):
+    @patch("app.services.portfolio.portfolio_reconstruction_service.AssetRepository")
+    def test_preserves_unaffected_holdings(self, mock_asset_repo_cls):
         """Should preserve holdings not affected by corporate actions."""
         mock_db = MagicMock()
         mock_new_asset = MagicMock()
@@ -503,7 +506,7 @@ class TestApplyCorporateActionsToSnapshot:
         mock_new_asset.name = "New Corp"
         mock_new_asset.asset_class = "Stock"
         mock_new_asset.currency = "USD"
-        mock_db.get.return_value = mock_new_asset
+        mock_asset_repo_cls.return_value.find_by_id.return_value = mock_new_asset
 
         # Action only affects asset 100
         action = MagicMock()

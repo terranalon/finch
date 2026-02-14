@@ -5,11 +5,18 @@ from unittest.mock import patch
 
 import pytest
 
+from app.config import settings
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfa
 from app.rate_limiter import limiter
 from app.services.auth import MfaService
+
+# Ensure MFA encryption key is set for tests
+if not settings.mfa_encryption_key:
+    from cryptography.fernet import Fernet
+
+    settings.mfa_encryption_key = Fernet.generate_key().decode()
 
 
 def _create_verified_user(

@@ -237,6 +237,10 @@ class MeitavParser(BaseBrokerParser):
 
         is_tax_record = is_tax_code(security_number)
 
+        # Skip cash/tax positions (999xxx security numbers)
+        if is_tax_record:
+            return None
+
         # Get cost basis (already in ILS)
         cost_basis = row.get("עלות")
         if cost_basis is not None:
@@ -244,15 +248,10 @@ class MeitavParser(BaseBrokerParser):
 
         # Determine asset class from Hebrew security type
         security_type = row.get("סוג נייר", "").strip()
-        if is_tax_record:
-            # Tax records (withholding tax, tax receipts, etc.)
-            asset_class = "Tax"
-            symbol = f"TAX:{security_number}"
-        else:
-            asset_class = SECURITY_TYPE_MAP.get(security_type, "Stock")
-            # Use security number as temporary symbol
-            # Will be resolved to Yahoo symbol during import
-            symbol = f"TASE:{security_number}"
+        asset_class = SECURITY_TYPE_MAP.get(security_type, "Stock")
+        # Use security number as temporary symbol
+        # Will be resolved to Yahoo symbol during import
+        symbol = f"TASE:{security_number}"
 
         # Currency - normalize Hebrew currency names
         currency = self._normalize_currency(row.get("מטבע", ""))

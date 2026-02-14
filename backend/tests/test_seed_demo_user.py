@@ -31,13 +31,12 @@ def test_create_demo_user(db_session):
     """Test creating demo user with portfolio."""
     from scripts.seed_demo_user import create_demo_user
 
-    user, portfolio, _ = create_demo_user(db_session)
+    user, us_portfolio, il_portfolio = create_demo_user(db_session)
 
     assert user.email == "demo@finch.com"
     assert user.is_active is True
-    assert portfolio is not None
-    assert portfolio.name == "Demo Portfolio"
-    assert portfolio.user_id == user.id
+    assert us_portfolio.name == "US Investments"
+    assert us_portfolio.user_id == user.id
 
 
 def test_create_demo_user_idempotent(db_session):

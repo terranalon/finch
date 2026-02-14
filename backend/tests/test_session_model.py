@@ -14,13 +14,25 @@ from app.models.user import User
 @pytest.fixture
 def db_session():
     """Create in-memory SQLite database for testing."""
+    from app.models.email_otp_code import EmailOtpCode
+    from app.models.email_verification_token import EmailVerificationToken
+    from app.models.mfa_temp_session import MfaTempSession
+    from app.models.password_reset_token import PasswordResetToken
     from app.models.portfolio import Portfolio
+    from app.models.user_mfa import UserMfa
+    from app.models.user_recovery_code import UserRecoveryCode
 
     engine = create_engine("sqlite:///:memory:")
     # Create all tables User references (for cascade deletes)
     User.__table__.create(engine, checkfirst=True)
     Session.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
+    EmailVerificationToken.__table__.create(engine, checkfirst=True)
+    PasswordResetToken.__table__.create(engine, checkfirst=True)
+    UserMfa.__table__.create(engine, checkfirst=True)
+    EmailOtpCode.__table__.create(engine, checkfirst=True)
+    UserRecoveryCode.__table__.create(engine, checkfirst=True)
+    MfaTempSession.__table__.create(engine, checkfirst=True)
     test_session = sessionmaker(bind=engine)
     session = test_session()
     yield session
@@ -29,7 +41,7 @@ def db_session():
 
 def test_create_session(db_session: DBSession):
     """Test creating a session for a user."""
-    user = User(email="test@example.com", password_hash="hash")
+    user = User(email="test@example.com", username="test_user", password_hash="hash")
     db_session.add(user)
     db_session.commit()
 
@@ -50,7 +62,7 @@ def test_create_session(db_session: DBSession):
 
 def test_session_cascade_delete(db_session: DBSession):
     """Test that sessions are deleted when user is deleted."""
-    user = User(email="test@example.com", password_hash="hash")
+    user = User(email="test@example.com", username="test_user", password_hash="hash")
     db_session.add(user)
     db_session.commit()
 

@@ -6,8 +6,8 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from app.database import Base, get_db
 from app.main import app
@@ -31,17 +31,27 @@ def engine():
         f"postgresql://portfolio_user:dev_password@{db_host}:5432/portfolio_tracker_test",
     )
     engine = create_engine(test_db_url)
+    # Drop and recreate all tables for a clean slate each test run.
+    # Uses CASCADE to handle legacy FK constraints not in current models.
+    with engine.connect() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.commit()
     Base.metadata.create_all(bind=engine)
     yield engine
 
 
 @pytest.fixture
 def db(engine):
-    """Create a fresh database session for each test with cleanup."""
+    """Create a fresh database session for each test with transaction rollback.
+
+    Uses join_transaction_mode="create_savepoint" so that session.commit()
+    inside tests releases a savepoint but does NOT commit the outer transaction,
+    allowing teardown to roll back all changes for proper test isolation.
+    """
     connection = engine.connect()
     transaction = connection.begin()
-    testing_session_local = sessionmaker(bind=connection)
-    session = testing_session_local()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
     try:
         yield session
     finally:

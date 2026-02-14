@@ -8,10 +8,9 @@ router's responsibility.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Account, Asset, HistoricalSnapshot, Holding
+from app.models import Asset
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
 from app.services.portfolio.types import (
     AccountValue,
@@ -21,6 +20,8 @@ from app.services.portfolio.types import (
     PerformancePoint,
     TopHolding,
 )
+from app.services.repositories import AccountRepository, HoldingRepository
+from app.services.repositories.snapshot_repository import SnapshotRepository
 from app.services.shared.currency_service import CurrencyService
 
 
@@ -31,6 +32,9 @@ class DashboardService:
         self._db = db
         self._valuation = HoldingValuationService(db)
         self._currency = CurrencyService(db)
+        self._account_repo = AccountRepository(db)
+        self._holding_repo = HoldingRepository(db)
+        self._snapshot_repo = SnapshotRepository(db)
 
     def get_summary(self, account_ids: list[int]) -> DashboardSummary:
         """Build a complete dashboard summary.
@@ -79,21 +83,13 @@ class DashboardService:
     # ------------------------------------------------------------------
 
     def _build_accounts(self, account_ids: list[int]) -> list[AccountValue]:
-        accounts = (
-            self._db.query(Account)
-            .filter(Account.is_active.is_(True), Account.id.in_(account_ids))
-            .all()
-        )
+        accounts = self._account_repo.find_active_by_ids(account_ids)
 
         usd_ils = self._currency.get_exchange_rate("USD", "ILS")
 
         result: list[AccountValue] = []
         for account in accounts:
-            holdings = (
-                self._db.query(Holding)
-                .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
-                .all()
-            )
+            holdings = self._holding_repo.find_active_by_account(account.id)
 
             account_usd = Decimal("0")
             for holding in holdings:
@@ -120,16 +116,7 @@ class DashboardService:
         self, account_ids: list[int], total_value_usd: Decimal
     ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
         yesterday = date.today() - timedelta(days=1)
-        row = (
-            self._db.query(func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"))
-            .filter(
-                HistoricalSnapshot.date == yesterday,
-                HistoricalSnapshot.account_id.in_(account_ids),
-            )
-            .first()
-        )
-
-        prev_usd = Decimal(str(row.total_usd or 0)) if row else None
+        prev_usd = self._snapshot_repo.sum_values_by_date(account_ids, yesterday)
 
         if prev_usd and prev_usd > 0:
             change = total_value_usd - prev_usd
@@ -139,12 +126,7 @@ class DashboardService:
         return None, None, prev_usd
 
     def _calc_allocation(self, account_ids: list[int]) -> list[AllocationItem]:
-        holdings_with_assets = (
-            self._db.query(Holding, Asset)
-            .join(Asset, Holding.asset_id == Asset.id)
-            .filter(Holding.is_active.is_(True), Holding.account_id.in_(account_ids))
-            .all()
-        )
+        holdings_with_assets = self._holding_repo.find_active_with_assets(account_ids)
 
         buckets: dict[str, dict] = {}
         for holding, asset in holdings_with_assets:
@@ -165,13 +147,7 @@ class DashboardService:
         return items
 
     def _calc_top_holdings(self, account_ids: list[int], limit: int = 10) -> list[TopHolding]:
-        rows = (
-            self._db.query(Holding, Asset, Account.name.label("account_name"))
-            .join(Asset, Holding.asset_id == Asset.id)
-            .join(Account, Holding.account_id == Account.id)
-            .filter(Holding.is_active.is_(True), Holding.account_id.in_(account_ids))
-            .all()
-        )
+        rows = self._holding_repo.find_active_with_assets_and_accounts(account_ids)
 
         items: list[TopHolding] = []
         for holding, asset, account_name in rows:
@@ -199,18 +175,7 @@ class DashboardService:
         return items[:limit]
 
     def _get_performance(self, account_ids: list[int], days: int = 30) -> list[PerformancePoint]:
-        rows = (
-            self._db.query(
-                HistoricalSnapshot.date,
-                func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"),
-                func.sum(HistoricalSnapshot.total_value_ils).label("total_ils"),
-            )
-            .filter(HistoricalSnapshot.account_id.in_(account_ids))
-            .group_by(HistoricalSnapshot.date)
-            .order_by(HistoricalSnapshot.date.desc())
-            .limit(days)
-            .all()
-        )
+        rows = self._snapshot_repo.find_aggregated_performance(account_ids, days)
 
         return [
             PerformancePoint(

@@ -50,6 +50,16 @@ def client_with_user():
             )
         """)
         )
+        conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS portfolio_accounts (
+                portfolio_id TEXT NOT NULL,
+                account_id INTEGER NOT NULL,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (portfolio_id, account_id)
+            )
+        """)
+        )
         conn.commit()
 
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -1,14 +1,16 @@
 """Portfolio reconstruction service for historical performance tracking."""
 
 import logging
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Asset, CorporateAction, Holding, Transaction
 from app.services.market_data.price_fetcher import PriceFetcher
+from app.services.repositories import AssetRepository, HoldingRepository, TransactionRepository
+from app.services.repositories.cash_balance_repository import CashBalanceRepository
+from app.services.repositories.corporate_action_repository import CorporateActionRepository
 from app.services.shared.ticker_change_detection_service import TickerChangeDetectionService
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ def _is_forex_pair(symbol: str) -> bool:
     return len(parts) == 2 and parts[0] in CURRENCY_CODES and parts[1] in CURRENCY_CODES
 
 
-def _resolve_quantity(txn: Transaction) -> Decimal | None:
+def _resolve_quantity(txn) -> Decimal | None:
     """Resolve quantity for deposits/withdrawals/transfers.
 
     Prefers quantity (8 decimal places for crypto) over amount (2 decimal places).
@@ -75,14 +77,12 @@ class PortfolioReconstructionService:
         """
         logger.info(f"Reconstructing portfolio for account {account_id} as of {as_of_date}")
 
+        txn_repo = TransactionRepository(db)
+        cash_repo = CashBalanceRepository(db)
+
         # Get all transactions up to the target date, ordered chronologically
-        transactions = (
-            db.query(Transaction, Holding, Asset)
-            .join(Holding, Transaction.holding_id == Holding.id)
-            .join(Asset, Holding.asset_id == Asset.id)
-            .filter(Holding.account_id == account_id, Transaction.date <= as_of_date)
-            .order_by(Transaction.date, Transaction.id)
-            .all()
+        transactions = txn_repo.find_with_holdings_and_assets_by_account(
+            account_id, as_of_date=as_of_date
         )
 
         # Filter out forex pair assets (USD.CAD, USD.ILS, etc.)
@@ -315,34 +315,10 @@ class PortfolioReconstructionService:
         # CRITICAL: Replace transaction-calculated cash balances with authoritative StmtFunds data
         # This fixes the issue where transaction data may be incomplete or have missing forex conversions
         # Note: StmtFunds only has entries on dates with activity, so we forward-fill (use most recent balance)
-        from sqlalchemy import func
-
-        from app.models import DailyCashBalance
-
         try:
             # Get the most recent balance for each currency on or before as_of_date
             # This handles gaps in StmtFunds data (which only records activity dates)
-            subquery = (
-                db.query(
-                    DailyCashBalance.currency, func.max(DailyCashBalance.date).label("max_date")
-                )
-                .filter(
-                    DailyCashBalance.account_id == account_id, DailyCashBalance.date <= as_of_date
-                )
-                .group_by(DailyCashBalance.currency)
-                .subquery()
-            )
-
-            latest_balances_query = (
-                db.query(DailyCashBalance)
-                .join(
-                    subquery,
-                    (DailyCashBalance.currency == subquery.c.currency)
-                    & (DailyCashBalance.date == subquery.c.max_date),
-                )
-                .filter(DailyCashBalance.account_id == account_id)
-                .all()
-            )
+            latest_balances_query = cash_repo.find_latest_per_currency(account_id, as_of_date)
 
             latest_balances = {balance.currency: balance for balance in latest_balances_query}
 
@@ -434,10 +410,11 @@ class PortfolioReconstructionService:
         Returns:
             Holdings with manual corporate actions applied
         """
+        corp_repo = CorporateActionRepository(db)
+        asset_repo = AssetRepository(db)
+
         # Get all corporate actions that are effective on or before the reconstruction date
-        actions = (
-            db.query(CorporateAction).filter(CorporateAction.effective_date <= as_of_date).all()
-        )
+        actions = corp_repo.find_effective_before(as_of_date)
 
         if not actions:
             return reconstructed_holdings
@@ -463,8 +440,8 @@ class PortfolioReconstructionService:
             if asset_id in merge_map:
                 # This asset has a corporate action
                 new_asset_id = merge_map[asset_id]
-                old_asset = db.get(Asset, asset_id)
-                new_asset = db.get(Asset, new_asset_id)
+                old_asset = asset_repo.find_by_id(asset_id)
+                new_asset = asset_repo.find_by_id(new_asset_id)
 
                 if not old_asset or not new_asset:
                     logger.warning(f"Asset not found for merge: {asset_id} -> {new_asset_id}")
@@ -524,12 +501,13 @@ class PortfolioReconstructionService:
         """
         holdings = PortfolioReconstructionService.reconstruct_holdings(db, account_id, as_of_date)
 
+        asset_repo = AssetRepository(db)
         total_value = Decimal("0")
         holdings_detail = []
 
         for holding in holdings:
             # Get price as of target date (or closest available)
-            asset = db.get(Asset, holding["asset_id"])
+            asset = asset_repo.find_by_id(holding["asset_id"])
             if not asset:
                 logger.warning(f"Asset {holding['asset_id']} not found, skipping")
                 continue
@@ -598,13 +576,11 @@ class PortfolioReconstructionService:
         if not as_of_date:
             as_of_date = date.today()
 
+        holding_repo = HoldingRepository(db)
+        asset_repo = AssetRepository(db)
+
         # Get current holdings from database
-        current_holdings = (
-            db.query(Holding, Asset)
-            .join(Asset)
-            .filter(Holding.account_id == account_id, Holding.quantity != 0)
-            .all()
-        )
+        current_holdings = holding_repo.find_with_assets_by_account_nonzero(account_id)
 
         # Filter out forex pair assets from current holdings
         filtered_current = []
@@ -640,7 +616,7 @@ class PortfolioReconstructionService:
 
             # Allow small rounding differences (0.0001 shares)
             if diff > Decimal("0.0001"):
-                asset = db.get(Asset, asset_id)
+                asset = asset_repo.find_by_id(asset_id)
                 discrepancies.append(
                     {
                         "asset_id": asset_id,
@@ -686,19 +662,12 @@ class PortfolioReconstructionService:
         Yields:
             Tuples of (date, holdings_list) for each calendar day
         """
-        from sqlalchemy import func
-
-        from app.models import CorporateAction, DailyCashBalance
+        txn_repo = TransactionRepository(db)
+        cash_repo = CashBalanceRepository(db)
+        corp_repo = CorporateActionRepository(db)
 
         # Fetch ALL transactions ordered chronologically (no date filter)
-        transactions = (
-            db.query(Transaction, Holding, Asset)
-            .join(Holding, Transaction.holding_id == Holding.id)
-            .join(Asset, Holding.asset_id == Asset.id)
-            .filter(Holding.account_id == account_id)
-            .order_by(Transaction.date, Transaction.id)
-            .all()
-        )
+        transactions = txn_repo.find_with_holdings_and_assets_by_account(account_id)
 
         # Filter out forex pairs
         transactions = [
@@ -708,15 +677,7 @@ class PortfolioReconstructionService:
         ]
 
         # Pre-fetch DailyCashBalance organized by currency and date
-        cash_balances = (
-            db.query(DailyCashBalance)
-            .filter(
-                DailyCashBalance.account_id == account_id,
-                DailyCashBalance.date >= start_date,
-                DailyCashBalance.date <= end_date,
-            )
-            .all()
-        )
+        cash_balances = cash_repo.find_by_account_and_date_range(account_id, start_date, end_date)
         stmt_funds_by_date: dict[date, dict[str, Decimal]] = {}
         for bal in cash_balances:
             if bal.date not in stmt_funds_by_date:
@@ -724,28 +685,7 @@ class PortfolioReconstructionService:
             stmt_funds_by_date[bal.date][bal.currency] = bal.balance
 
         # Also fetch the most recent StmtFunds before start_date for each currency
-        initial_balances_subq = (
-            db.query(
-                DailyCashBalance.currency,
-                func.max(DailyCashBalance.date).label("max_date"),
-            )
-            .filter(
-                DailyCashBalance.account_id == account_id,
-                DailyCashBalance.date < start_date,
-            )
-            .group_by(DailyCashBalance.currency)
-            .subquery()
-        )
-        initial_balances = (
-            db.query(DailyCashBalance)
-            .join(
-                initial_balances_subq,
-                (DailyCashBalance.currency == initial_balances_subq.c.currency)
-                & (DailyCashBalance.date == initial_balances_subq.c.max_date),
-            )
-            .filter(DailyCashBalance.account_id == account_id)
-            .all()
-        )
+        initial_balances = cash_repo.find_latest_per_currency_before_date(account_id, start_date)
         last_known_cash: dict[str, Decimal] = {
             bal.currency: bal.balance for bal in initial_balances
         }
@@ -753,12 +693,7 @@ class PortfolioReconstructionService:
         # Pre-fetch corporate actions if needed
         corporate_actions = []
         if apply_ticker_changes:
-            corporate_actions = (
-                db.query(CorporateAction)
-                .filter(CorporateAction.effective_date <= end_date)
-                .order_by(CorporateAction.effective_date)
-                .all()
-            )
+            corporate_actions = corp_repo.find_effective_before_ordered(end_date)
             if corporate_actions:
                 logger.debug(f"Loaded {len(corporate_actions)} corporate actions for timeline")
 
@@ -829,7 +764,7 @@ class PortfolioReconstructionService:
             current_date += timedelta(days=1)
 
     @staticmethod
-    def _process_transaction(txn: Transaction, asset: Asset, h: dict) -> None:
+    def _process_transaction(txn, asset, h: dict) -> None:
         """Process a single transaction and update holdings state.
 
         Extracted from reconstruct_holdings to share logic with streaming reconstruction.
@@ -957,7 +892,7 @@ class PortfolioReconstructionService:
 
     @staticmethod
     def _build_corporate_action_merge_map(
-        corporate_actions: list, as_of_date: date
+        corporate_actions: Sequence, as_of_date: date
     ) -> dict[int, int]:
         """Build a map of old_asset_id -> new_asset_id from corporate actions."""
         applicable_actions = [
@@ -986,7 +921,7 @@ class PortfolioReconstructionService:
     def _apply_corporate_actions_to_snapshot(
         db: Session,
         snapshot: list[dict],
-        corporate_actions: list,
+        corporate_actions: Sequence,
         as_of_date: date,
     ) -> list[dict]:
         """
@@ -995,7 +930,7 @@ class PortfolioReconstructionService:
         This merges holdings where corporate actions indicate asset changes
         (e.g., SPAC mergers, ticker changes).
         """
-        from app.models import Asset
+        asset_repo = AssetRepository(db)
 
         merge_map = PortfolioReconstructionService._build_corporate_action_merge_map(
             corporate_actions, as_of_date
@@ -1015,7 +950,7 @@ class PortfolioReconstructionService:
                 continue
 
             new_asset_id = merge_map[asset_id]
-            new_asset = db.get(Asset, new_asset_id)
+            new_asset = asset_repo.find_by_id(new_asset_id)
 
             if not new_asset:
                 PortfolioReconstructionService._accumulate_holding(
