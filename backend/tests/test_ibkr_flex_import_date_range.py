@@ -61,14 +61,14 @@ def _run_import(mocks, **overrides):
     """Call import_all with standard arguments, allowing per-test overrides."""
     from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
 
-    defaults = {
+    kwargs = {
         "db": mocks["db"],
         "account_id": 1,
         "flex_token": "tok",
         "flex_query_id": "qid",
+        **overrides,
     }
-    defaults.update(overrides)
-    return IBKRFlexImportService.import_all(**defaults)
+    return IBKRFlexImportService.import_all(**kwargs)
 
 
 class TestImportAllWithTransactions:
@@ -187,65 +187,55 @@ def staged_import_mocks():
         }
 
 
+def _run_staged_import(mocks, **overrides):
+    """Call import_with_staging with _import_to_staging patched out, allowing per-test overrides."""
+    from app.services.shared.staged_import_service import StagedImportService
+
+    kwargs = {
+        "db": mocks["db"],
+        "account_id": 1,
+        "flex_token": "tok",
+        "flex_query_id": "qid",
+        **overrides,
+    }
+
+    with patch.object(StagedImportService, "_import_to_staging") as mock_staging:
+        mock_staging.return_value = {
+            "positions": {},
+            "transactions": {},
+            "dividends": {},
+            "transfers": {},
+            "forex": {},
+            "cash": {},
+        }
+        stats = StagedImportService.import_with_staging(**kwargs)
+
+    return stats, mock_staging
+
+
 class TestStagedImportWithTransactions:
     """Tests for StagedImportService passing transaction data."""
 
     def test_staged_import_extracts_transactions(self, staged_import_mocks):
         """Staged import should extract and pass transactions to _import_to_staging."""
-        from app.services.shared.staged_import_service import StagedImportService
-
         mock_parser = staged_import_mocks["parser"]
         mock_parser.extract_cash_balances.return_value = ["cash1"]
         mock_parser.extract_transactions.return_value = ["txn1", "txn2"]
         mock_parser.extract_dividends.return_value = ["div1"]
         mock_parser.extract_forex_transactions.return_value = ["fx1"]
 
-        with patch.object(StagedImportService, "_import_to_staging") as mock_staging:
-            mock_staging.return_value = {
-                "positions": {},
-                "transactions": {},
-                "dividends": {},
-                "transfers": {},
-                "forex": {},
-                "cash": {},
-            }
+        _stats, mock_staging = _run_staged_import(staged_import_mocks)
 
-            StagedImportService.import_with_staging(
-                staged_import_mocks["db"],
-                account_id=1,
-                flex_token="tok",
-                flex_query_id="qid",
-            )
-
-        call_kwargs = mock_staging.call_args
-        assert call_kwargs[1]["transactions_data"] == ["txn1", "txn2"]
-        assert call_kwargs[1]["dividends_data"] == ["div1"]
-        assert call_kwargs[1]["forex_data"] == ["fx1"]
+        kwargs = mock_staging.call_args.kwargs
+        assert kwargs["transactions_data"] == ["txn1", "txn2"]
+        assert kwargs["dividends_data"] == ["div1"]
+        assert kwargs["forex_data"] == ["fx1"]
 
     def test_staged_import_calls_reconstruction_after_merge(self, staged_import_mocks):
         """Staged import should reconstruct holdings after merging staging to production."""
-        from app.services.shared.staged_import_service import StagedImportService
-
         staged_import_mocks["reconstruct"].return_value = {"holdings_updated": 5}
 
-        with patch.object(StagedImportService, "_import_to_staging") as mock_staging:
-            mock_staging.return_value = {
-                "positions": {},
-                "transactions": {},
-                "dividends": {},
-                "transfers": {},
-                "forex": {},
-                "cash": {},
-            }
+        stats, _mock_staging = _run_staged_import(staged_import_mocks)
 
-            stats = StagedImportService.import_with_staging(
-                staged_import_mocks["db"],
-                account_id=1,
-                flex_token="tok",
-                flex_query_id="qid",
-            )
-
-        staged_import_mocks["reconstruct"].assert_called_once_with(
-            staged_import_mocks["db"], 1
-        )
+        staged_import_mocks["reconstruct"].assert_called_once_with(staged_import_mocks["db"], 1)
         assert stats["holdings_reconstruction"] == {"holdings_updated": 5}

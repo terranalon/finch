@@ -100,7 +100,9 @@ class StagedImportService:
 
             # Phase 2: Fetch and parse IBKR data (no DB writes yet)
             logger.info("Phase 2: Fetching IBKR Flex Query report...")
-            xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id, from_date=start_date)
+            xml_data = IBKRFlexClient.fetch_flex_report(
+                flex_token, flex_query_id, from_date=start_date
+            )
 
             if not xml_data:
                 stats["status"] = "failed"
@@ -145,12 +147,8 @@ class StagedImportService:
                 cash_data=cash_data,
             )
 
-            stats["positions"] = import_stats.get("positions", {})
-            stats["transactions"] = import_stats.get("transactions", {})
-            stats["dividends"] = import_stats.get("dividends", {})
-            stats["transfers"] = import_stats.get("transfers", {})
-            stats["forex"] = import_stats.get("forex", {})
-            stats["cash"] = import_stats.get("cash", {})
+            for key in ("positions", "transactions", "dividends", "transfers", "forex", "cash"):
+                stats[key] = import_stats.get(key, {})
 
             # Phase 4: Quick merge from staging to production
             logger.info("Phase 4: Merging staging to production (quick operation)...")
