@@ -82,7 +82,7 @@ async def get_account_snapshots(
     if account_id not in allowed_account_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
+            detail=f"Account with id {account_id} not found",
         )
 
     snapshots = SnapshotService.get_account_history(db, account_id, start_date, end_date, limit)
@@ -161,7 +161,7 @@ async def get_portfolio_value(
     if account_id not in allowed_account_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
+            detail=f"Account with id {account_id} not found",
         )
 
     return PortfolioReconstructionService.calculate_portfolio_value(
