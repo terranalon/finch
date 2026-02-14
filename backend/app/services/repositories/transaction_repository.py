@@ -58,7 +58,9 @@ class TransactionRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[_TransactionRow]:
-        query = self._base_query(account_ids, _FOREX_TYPES, account_id=account_id)
+        query = self._base_query(account_ids, _FOREX_TYPES, account_id=account_id).filter(
+            Transaction.to_holding_id.isnot(None)
+        )
         return self._paginate(query, limit, offset)
 
     def find_cash_activity(
@@ -100,7 +102,11 @@ class TransactionRepository:
         *,
         account_id: int | None = None,
     ) -> int:
-        return self._base_query(account_ids, _FOREX_TYPES, account_id=account_id).count()
+        return (
+            self._base_query(account_ids, _FOREX_TYPES, account_id=account_id)
+            .filter(Transaction.to_holding_id.isnot(None))
+            .count()
+        )
 
     def count_cash_activity(
         self,
