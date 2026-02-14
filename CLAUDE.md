@@ -107,6 +107,23 @@ ruff check --fix . && ruff format .
 uv run ty check
 ```
 
+### CI workflows
+
+Two GitHub Actions workflows run on every PR:
+
+| Workflow | File | What it does |
+|----------|------|-------------|
+| **Backend Checks** | `backend-checks.yml` | Format, lint (changed files only), type check (full project) |
+| **Backend Tests** | `test.yml` | Full pytest suite against Postgres |
+
+Both workflows trigger on **all PRs** (no path filters). A lightweight `detect-changes` job
+runs first and checks whether `backend/` files were modified. If not, the expensive job is
+skipped -- skipped jobs count as passing for branch protection.
+
+**What to expect when creating a PR:**
+- Backend changes: all 4 jobs run (`detect-changes` x2, `lint-format-typecheck`, `backend-tests`)
+- Non-backend changes: only `detect-changes` x2 run (~3s each), everything else skips green
+
 ### Type annotation conventions
 
 - All function parameters and return types must be annotated
