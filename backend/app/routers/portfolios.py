@@ -192,15 +192,18 @@ async def delete_portfolio(
     db.commit()
 
 
-@router.put("/{portfolio_id}/set-default", response_model=PortfolioSchema)
-async def set_default_portfolio(
+@router.patch("/{portfolio_id}", response_model=PortfolioSchema)
+async def patch_portfolio(
     portfolio_id: str,
+    patch: PortfolioPatch,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Set a portfolio as the default for the current user.
-    This will unset any other portfolio that was previously marked as default.
+    Partially update a portfolio.
+
+    Currently supports setting is_default. When is_default is True,
+    all other portfolios for this user are unset as default.
     """
     db_portfolio = (
         db.query(Portfolio)
@@ -213,18 +216,19 @@ async def set_default_portfolio(
             detail=f"Portfolio with id {portfolio_id} not found",
         )
 
-    db.query(Portfolio).filter(
-        Portfolio.user_id == current_user.id,
-        Portfolio.is_default == True,  # noqa: E712
-    ).update({"is_default": False})
+    if patch.is_default is not None and patch.is_default:
+        db.query(Portfolio).filter(
+            Portfolio.user_id == current_user.id,
+            Portfolio.is_default == True,  # noqa: E712
+        ).update({"is_default": False})
+        db_portfolio.is_default = True
 
-    db_portfolio.is_default = True
     db.commit()
     db.refresh(db_portfolio)
     return db_portfolio
 
 
-@router.post("/{portfolio_id}/accounts/{account_id}/link")
+@router.put("/{portfolio_id}/accounts/{account_id}")
 async def link_account_to_portfolio(
     portfolio_id: str,
     account_id: int,
@@ -263,7 +267,7 @@ async def link_account_to_portfolio(
     return {"message": "Account linked successfully"}
 
 
-@router.delete("/{portfolio_id}/accounts/{account_id}/unlink")
+@router.delete("/{portfolio_id}/accounts/{account_id}")
 async def unlink_account_from_portfolio(
     portfolio_id: str,
     account_id: int,
