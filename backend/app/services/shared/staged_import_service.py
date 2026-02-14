@@ -14,7 +14,7 @@ The import logic is 100% unchanged - only the target tables differ.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.models import Account
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.parser import IBKRParser
+from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.shared.staging_utils import (
     cleanup_staging,
     copy_production_to_staging,
@@ -42,6 +43,7 @@ class StagedImportService:
         account_id: int,
         flex_token: str,
         flex_query_id: str,
+        start_date: date | None = None,
     ) -> dict[str, Any]:
         """
         Import IBKR data using staging tables for UI responsiveness.
@@ -75,6 +77,7 @@ class StagedImportService:
             "transfers": {},
             "forex": {},
             "cash": {},
+            "holdings_reconstruction": {},
             "staging": {},
             "merge": {},
             "errors": [],
@@ -97,7 +100,7 @@ class StagedImportService:
 
             # Phase 2: Fetch and parse IBKR data (no DB writes yet)
             logger.info("Phase 2: Fetching IBKR Flex Query report...")
-            xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id)
+            xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id, from_date=start_date)
 
             if not xml_data:
                 stats["status"] = "failed"
@@ -115,25 +118,30 @@ class StagedImportService:
                 cleanup_staging(db)
                 return stats
 
-            # Extract positions and cash only.
-            # Transactions are imported separately via manual XML file upload.
-            positions_data = IBKRParser.extract_positions(root)
+            # Extract all data types
             cash_data = IBKRParser.extract_cash_balances(root)
+            transactions_data = IBKRParser.extract_transactions(root)
+            dividends_data = IBKRParser.extract_dividends(root)
+            transfers_data = IBKRParser.extract_transfers(root)
+            forex_data = IBKRParser.extract_forex_transactions(root)
+            other_cash_data = IBKRParser.extract_other_cash_transactions(root)
 
             logger.info(
-                f"Extracted {len(positions_data)} positions, {len(cash_data)} cash balances"
+                f"Extracted {len(transactions_data)} transactions, {len(dividends_data)} dividends, "
+                f"{len(transfers_data)} transfers, {len(forex_data)} forex, "
+                f"{len(other_cash_data)} other cash, {len(cash_data)} cash balances"
             )
 
-            # Phase 3: Import to staging tables (positions + cash only)
+            # Phase 3: Import to staging tables
             logger.info("Phase 3: Importing to staging tables...")
             import_stats = StagedImportService._import_to_staging(
                 db,
                 account_id,
-                positions_data,
-                transactions_data=[],
-                dividends_data=[],
-                transfers_data=[],
-                forex_data=[],
+                positions_data=[],
+                transactions_data=transactions_data,
+                dividends_data=dividends_data,
+                transfers_data=transfers_data,
+                forex_data=forex_data,
                 cash_data=cash_data,
             )
 
@@ -148,6 +156,10 @@ class StagedImportService:
             logger.info("Phase 4: Merging staging to production (quick operation)...")
             merge_stats = merge_staging_to_production(db, account_id)
             stats["merge"] = merge_stats
+
+            # Phase 4.5: Reconstruct holdings from transactions
+            logger.info("Phase 4.5: Reconstructing holdings from transactions...")
+            stats["holdings_reconstruction"] = reconstruct_and_update_holdings(db, account_id)
 
             # Phase 5: Cleanup
             logger.info("Phase 5: Cleaning up staging tables...")
