@@ -257,7 +257,7 @@ class TestCryptoBrokerImport:
                 "app.services.brokers.broker_config.BrokerConfig.create_client",
                 return_value=mock_client,
             ),
-            patch("app.routers.brokers.CryptoImportService") as mock_service_class,
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
         ):
             mock_service = MagicMock()
             mock_service.import_data.return_value = {
@@ -265,7 +265,7 @@ class TestCryptoBrokerImport:
                 "positions": {"imported": 0},
                 "transactions": {"imported": 0},
             }
-            mock_service_class.return_value = mock_service
+            mock_registry.get_import_service.return_value = mock_service
 
             response = client.post("/api/brokers/kraken/import/1", headers=auth_headers)
 
@@ -290,14 +290,14 @@ class TestCryptoBrokerImport:
                 "app.services.brokers.broker_config.BrokerConfig.create_client",
                 return_value=mock_client,
             ),
-            patch("app.routers.brokers.CryptoImportService") as mock_service_class,
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
         ):
             mock_service = MagicMock()
             mock_service.import_data.return_value = {
                 "status": "completed",
                 "positions": {"imported": 0},
             }
-            mock_service_class.return_value = mock_service
+            mock_registry.get_import_service.return_value = mock_service
 
             response = client.post("/api/brokers/bit2c/import/1", headers=auth_headers)
 
