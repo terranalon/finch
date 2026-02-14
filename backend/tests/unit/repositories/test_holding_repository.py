@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from app.models import Account, Asset, Holding
+from app.models import Holding
 from app.services.repositories.holding_repository import HoldingRepository
 
 
