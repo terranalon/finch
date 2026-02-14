@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Holding, Transaction
+from app.services.repositories import HoldingRepository, TransactionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,9 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
         logger.info(f"Reconstructed {len(reconstructed)} holdings for account {account_id}")
 
         reconstructed_map = {h["asset_id"]: h for h in reconstructed}
-        holdings = db.query(Holding).filter(Holding.account_id == account_id).all()
+        holding_repo = HoldingRepository(db)
+        txn_repo = TransactionRepository(db)
+        holdings = holding_repo.find_by_account(account_id)
 
         for holding in holdings:
             recon = reconstructed_map.pop(holding.asset_id, None)
@@ -75,10 +77,7 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
                 )
             else:
                 # Not in reconstruction - check if it has transactions that sum to 0
-                has_transactions = (
-                    db.query(Transaction).filter(Transaction.holding_id == holding.id).first()
-                    is not None
-                )
+                has_transactions = txn_repo.find_first_by_holding(holding.id) is not None
 
                 if has_transactions and holding.quantity != 0:
                     holding.quantity = Decimal("0")

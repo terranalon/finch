@@ -7,7 +7,7 @@ from decimal import Decimal
 import yfinance as yf
 from sqlalchemy.orm import Session
 
-from app.models.exchange_rate import ExchangeRate
+from app.services.repositories.exchange_rate_repository import ExchangeRateRepository
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class CurrencyService:
 
     def __init__(self, db: Session) -> None:
         self._db = db
+        self._rate_repo = ExchangeRateRepository(db)
 
     def get_exchange_rate(
         self, from_currency: str, to_currency: str, target_date: date | None = None
@@ -45,15 +46,7 @@ class CurrencyService:
             return Decimal("1.0")
 
         # Try to find cached rate
-        rate = (
-            self._db.query(ExchangeRate)
-            .filter(
-                ExchangeRate.from_currency == from_currency,
-                ExchangeRate.to_currency == to_currency,
-                ExchangeRate.date == target_date,
-            )
-            .first()
-        )
+        rate = self._rate_repo.find_by_pair_and_date(from_currency, to_currency, target_date)
 
         if rate:
             return rate.rate
@@ -62,13 +55,7 @@ class CurrencyService:
         fetched_rate = CurrencyService.fetch_exchange_rate(from_currency, to_currency)
 
         if fetched_rate:
-            rate = ExchangeRate(
-                from_currency=from_currency,
-                to_currency=to_currency,
-                rate=fetched_rate,
-                date=target_date,
-            )
-            self._db.add(rate)
+            self._rate_repo.create(from_currency, to_currency, fetched_rate, target_date)
             try:
                 self._db.commit()
             except Exception as e:
@@ -154,14 +141,8 @@ class CurrencyService:
 
                 stats["total"] += 1
 
-                existing = (
-                    self._db.query(ExchangeRate)
-                    .filter(
-                        ExchangeRate.from_currency == from_curr,
-                        ExchangeRate.to_currency == to_curr,
-                        ExchangeRate.date == target_date,
-                    )
-                    .first()
+                existing = self._rate_repo.find_by_pair_and_date(
+                    from_curr, to_curr, target_date
                 )
 
                 if existing:
@@ -172,10 +153,7 @@ class CurrencyService:
                 rate = CurrencyService.fetch_exchange_rate(from_curr, to_curr)
 
                 if rate:
-                    exchange_rate = ExchangeRate(
-                        from_currency=from_curr, to_currency=to_curr, rate=rate, date=target_date
-                    )
-                    self._db.add(exchange_rate)
+                    self._rate_repo.create(from_curr, to_curr, rate, target_date)
                     stats["updated"] += 1
                     stats["pairs"].append(f"{from_curr}/{to_curr}")
                     logger.info(f"Updated rate {from_curr}/{to_curr} = {rate}")
@@ -217,16 +195,8 @@ class CurrencyService:
         if from_currency == to_currency:
             return 0
 
-        existing_dates = set(
-            row[0]
-            for row in self._db.query(ExchangeRate.date)
-            .filter(
-                ExchangeRate.from_currency == from_currency,
-                ExchangeRate.to_currency == to_currency,
-                ExchangeRate.date >= start_date,
-                ExchangeRate.date <= end_date,
-            )
-            .all()
+        existing_dates = self._rate_repo.find_dates_in_range(
+            from_currency, to_currency, start_date, end_date
         )
 
         symbol = f"{from_currency}{to_currency}=X"
@@ -255,13 +225,9 @@ class CurrencyService:
             if close_rate is None or close_rate <= 0:
                 continue
 
-            rate_record = ExchangeRate(
-                from_currency=from_currency,
-                to_currency=to_currency,
-                date=rate_date,
-                rate=Decimal(str(close_rate)),
+            self._rate_repo.create(
+                from_currency, to_currency, Decimal(str(close_rate)), rate_date
             )
-            self._db.add(rate_record)
             count += 1
 
         if count > 0:
