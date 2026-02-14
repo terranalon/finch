@@ -6,7 +6,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
@@ -193,18 +193,36 @@ def _update_last_import(account: Account, broker_key: str, db: Session) -> None:
     db.commit()
 
 
+_INCREMENTAL_BUFFER_DAYS = 1
+
+
+def _get_incremental_start_date(account: Account, broker_key: str) -> date | None:
+    """Derive start_date for incremental import from last_import metadata.
+
+    Returns a date 1 day before the last import, or None if no prior import exists.
+    The buffer ensures no transactions are missed due to timezone edge cases.
+    """
+    last_import_str = (account.meta_data or {}).get(broker_key, {}).get("last_import")
+    if not last_import_str:
+        return None
+    last_import_dt = datetime.fromisoformat(last_import_str)
+    return (last_import_dt - timedelta(days=_INCREMENTAL_BUFFER_DAYS)).date()
+
+
 def _import_crypto_broker(
     account_id: int,
     config: BrokerConfig,
     api_key: str,
     api_secret: str,
     db: Session,
+    start_date: date | None = None,
 ) -> dict[str, Any]:
     """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
     client = config.create_client(api_key, api_secret)
 
-    logger.info(f"Fetching {config.name} data for account {account_id}")
-    broker_data = client.fetch_all_data()
+    mode = f"incremental from {start_date}" if start_date else "full history"
+    logger.info(f"Fetching {config.name} data for account {account_id} ({mode})")
+    broker_data = client.fetch_all_data(start_date=start_date)
 
     import_service = BrokerImportServiceRegistry.get_import_service(config.key, db)
     return import_service.import_data(account_id, broker_data, source_id=None)
@@ -315,6 +333,10 @@ async def import_broker_data(
         default=True,
         description="Use staged import for better UI responsiveness (IBKR only)",
     ),
+    full_import: bool = Query(
+        default=False,
+        description="Force full history import, ignoring last_import timestamp",
+    ),
     background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -343,7 +365,10 @@ async def import_broker_data(
     try:
         if config.credential_type == CredentialType.API_KEY_SECRET:
             api_key, api_secret = _get_api_key_credentials(account, config.key, config.name)
-            stats = _import_crypto_broker(account_id, config, api_key, api_secret, db)
+            start_date = None if full_import else _get_incremental_start_date(account, config.key)
+            stats = _import_crypto_broker(
+                account_id, config, api_key, api_secret, db, start_date=start_date
+            )
         elif config.credential_type == CredentialType.FLEX_QUERY:
             flex_token, flex_query_id = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix

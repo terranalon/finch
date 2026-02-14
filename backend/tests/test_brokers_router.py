@@ -1,5 +1,7 @@
 """Tests for unified brokers router."""
 
+import json
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -93,8 +95,6 @@ def client_with_user(test_db):
 
     # Create a test account with broker credentials
     with test_db.connect() as conn:
-        import json
-
         metadata = json.dumps(
             {
                 "kraken": {"api_key": "test_key", "api_secret": "test_secret"},
@@ -685,8 +685,6 @@ class TestApiConnectionsEndpoint:
 
         # Create an account without any broker credentials
         with test_db.connect() as conn:
-            import json
-
             metadata = json.dumps({})  # Empty metadata - no credentials
             conn.execute(
                 text(
@@ -711,8 +709,6 @@ class TestApiConnectionsEndpoint:
 
         # Create an inactive account with credentials
         with test_db.connect() as conn:
-            import json
-
             metadata = json.dumps(
                 {
                     "kraken": {
@@ -744,8 +740,6 @@ class TestApiConnectionsEndpoint:
 
         # Create an account NOT linked to any portfolio (orphan)
         with test_db.connect() as conn:
-            import json
-
             metadata = json.dumps(
                 {
                     "kraken": {
@@ -857,3 +851,106 @@ class TestApiImportTriggersSnapshotGeneration:
             mock_status.assert_called()
             call_args = mock_status.call_args
             assert call_args[0][2] == "generating"
+
+
+class TestIncrementalImport:
+    """Test incremental import uses last_import as start_date."""
+
+    def _set_account_metadata(self, test_db, metadata_dict: dict) -> None:
+        """Update account 1 metadata in the test DB."""
+        with test_db.connect() as conn:
+            conn.execute(
+                text("UPDATE accounts SET metadata = :metadata WHERE id = 1"),
+                {"metadata": json.dumps(metadata_dict)},
+            )
+            conn.commit()
+
+    def _import_with_mocked_client(self, client, url: str, auth_headers: dict):
+        """Run a crypto import with mocked broker client and import service.
+
+        Returns the (mock_client, response) tuple so callers can assert
+        on fetch_all_data call args and HTTP response.
+        """
+        mock_client = MagicMock()
+        mock_client.fetch_all_data.return_value = MagicMock()
+
+        with (
+            patch(
+                "app.services.brokers.broker_config.BrokerConfig.create_client",
+                return_value=mock_client,
+            ),
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
+        ):
+            mock_service = MagicMock()
+            mock_service.import_data.return_value = {
+                "status": "completed",
+                "positions": {"imported": 0},
+                "transactions": {"imported": 0},
+            }
+            mock_registry.get_import_service.return_value = mock_service
+
+            response = client.post(url, headers=auth_headers)
+
+        return mock_client, response
+
+    def test_import_uses_last_import_as_start_date(self, client_with_user, auth_headers, test_db):
+        """Account with last_import should pass start_date to fetch_all_data."""
+        client, _ = client_with_user
+
+        self._set_account_metadata(
+            test_db,
+            {
+                "kraken": {
+                    "api_key": "test_key",
+                    "api_secret": "test_secret",
+                    "last_import": datetime(2025, 6, 15, 10, 30, 0).isoformat(),
+                },
+                "bit2c": {"api_key": "test_key", "api_secret": "test_secret"},
+            },
+        )
+
+        mock_client, response = self._import_with_mocked_client(
+            client, "/api/brokers/kraken/import/1", auth_headers
+        )
+
+        assert response.status_code == 200
+        # 1 day buffer: 2025-06-15 -> start_date = 2025-06-14
+        mock_client.fetch_all_data.assert_called_once_with(start_date=date(2025, 6, 14))
+
+    def test_first_import_fetches_full_history(self, client_with_user, auth_headers, test_db):
+        """Account without last_import should call fetch_all_data with no start_date."""
+        client, _ = client_with_user
+
+        self._set_account_metadata(
+            test_db,
+            {"kraken": {"api_key": "test_key", "api_secret": "test_secret"}},
+        )
+
+        mock_client, response = self._import_with_mocked_client(
+            client, "/api/brokers/kraken/import/1", auth_headers
+        )
+
+        assert response.status_code == 200
+        mock_client.fetch_all_data.assert_called_once_with(start_date=None)
+
+    def test_full_import_flag_overrides_incremental(self, client_with_user, auth_headers, test_db):
+        """full_import=true should fetch full history even with last_import set."""
+        client, _ = client_with_user
+
+        self._set_account_metadata(
+            test_db,
+            {
+                "kraken": {
+                    "api_key": "test_key",
+                    "api_secret": "test_secret",
+                    "last_import": datetime(2025, 6, 15, 10, 30, 0).isoformat(),
+                },
+            },
+        )
+
+        mock_client, response = self._import_with_mocked_client(
+            client, "/api/brokers/kraken/import/1?full_import=true", auth_headers
+        )
+
+        assert response.status_code == 200
+        mock_client.fetch_all_data.assert_called_once_with(start_date=None)
