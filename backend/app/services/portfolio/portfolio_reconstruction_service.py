@@ -1,13 +1,19 @@
 """Portfolio reconstruction service for historical performance tracking."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Generator, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from app.services.market_data.price_fetcher import PriceFetcher
+
+if TYPE_CHECKING:
+    from app.models import Transaction
 from app.services.repositories import AssetRepository, HoldingRepository, TransactionRepository
 from app.services.repositories.cash_balance_repository import CashBalanceRepository
 from app.services.repositories.corporate_action_repository import CorporateActionRepository
@@ -775,7 +781,7 @@ class PortfolioReconstructionService:
 
     @staticmethod
     def _apply_forex_to_destination(
-        db: Session, holdings_map: dict[int, dict], txn: "Transaction"
+        db: Session, holdings_map: dict[int, dict], txn: Transaction
     ) -> None:
         """Add to_amount to the destination holding for new-format forex."""
         from app.models import Asset, Holding

@@ -138,13 +138,10 @@ class TransactionViewService:
             return [], 0
 
         total = self._repo.count_forex(account_ids, account_id=account_id)
-        rows = self._repo.find_forex(
-            account_ids, account_id=account_id, limit=limit, offset=offset
-        )
+        rows = self._repo.find_forex(account_ids, account_id=account_id, limit=limit, offset=offset)
 
         items = [
-            self._build_new_format_forex(txn, asset, account)
-            for txn, _, asset, account in rows
+            self._build_new_format_forex(txn, asset, account) for txn, _, asset, account in rows
         ]
         return items, total
 
