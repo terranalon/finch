@@ -35,22 +35,20 @@ async def update_all_prices(
         Update statistics or status message
     """
     if run_async:
-        # Run in background
         background_tasks.add_task(PriceFetcher.update_all_asset_prices, db, asset_class)
         return {
             "status": "started",
             "message": "Price update started in background",
             "asset_class": asset_class,
         }
-    else:
-        # Run synchronously and return results
-        stats = PriceFetcher.update_all_asset_prices(db, asset_class)
-        return {
-            "status": "completed",
-            "message": "Price update completed",
-            "asset_class": asset_class,
-            "stats": stats,
-        }
+
+    stats = PriceFetcher.update_all_asset_prices(db, asset_class)
+    return {
+        "status": "completed",
+        "message": "Price update completed",
+        "asset_class": asset_class,
+        "stats": stats,
+    }
 
 
 @router.get("/historical/{symbol}", response_model=HistoricalPriceResponse)

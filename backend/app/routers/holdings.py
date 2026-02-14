@@ -23,9 +23,9 @@ router = APIRouter(prefix="/api/holdings", tags=["holdings"])
 async def list_holdings(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
-    account_id: int = None,
-    asset_id: int = None,
-    is_active: bool = None,
+    account_id: int | None = None,
+    asset_id: int | None = None,
+    is_active: bool | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

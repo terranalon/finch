@@ -78,7 +78,6 @@ async def get_account_snapshots(
     Returns:
         List of historical snapshots
     """
-    # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
         raise HTTPException(
@@ -158,7 +157,6 @@ async def get_portfolio_value(
     Returns:
         Portfolio value breakdown with holdings detail
     """
-    # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
         raise HTTPException(

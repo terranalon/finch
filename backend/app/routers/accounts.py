@@ -51,23 +51,12 @@ def verify_account_ownership(account_id: int, current_user: User, db: Session) -
 async def list_accounts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
-    is_active: bool = None,
+    is_active: bool | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get paginated list of accounts for the current user.
-
-    Query Parameters:
-        - skip: Number of records to skip (pagination)
-        - limit: Maximum number of records to return (1-100)
-        - is_active: Filter by active status
-        - portfolio_id: Filter by specific portfolio (must belong to user)
-
-    Returns:
-        Paginated response with items, total count, and has_more flag
-    """
+    """Get paginated list of accounts for the current user."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
         return PaginatedResponse(items=[], total=0, skip=skip, limit=limit, has_more=False)
