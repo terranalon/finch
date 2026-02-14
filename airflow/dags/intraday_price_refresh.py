@@ -105,7 +105,7 @@ def intraday_price_refresh():
             logger.info("Starting price refresh via backend API")
 
             response = requests.post(
-                f"{BACKEND_URL}/api/prices/update",
+                f"{BACKEND_URL}/api/prices",
                 params={"run_async": False},
                 timeout=120,  # 2 minute timeout
             )
