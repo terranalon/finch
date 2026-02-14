@@ -853,3 +853,171 @@ class TestApiImportTriggersSnapshotGeneration:
             mock_status.assert_called()
             call_args = mock_status.call_args
             assert call_args[0][2] == "generating"
+
+
+class TestIncrementalImport:
+    """Test incremental import uses last_import as start_date."""
+
+    def test_import_uses_last_import_as_start_date(
+        self, client_with_user, auth_headers, test_db
+    ):
+        """Account with last_import should pass start_date to fetch_all_data."""
+        client, _ = client_with_user
+
+        # Set last_import in account metadata
+        import json
+        from datetime import datetime
+
+        last_import_dt = datetime(2025, 6, 15, 10, 30, 0)
+        metadata = json.dumps(
+            {
+                "kraken": {
+                    "api_key": "test_key",
+                    "api_secret": "test_secret",
+                    "last_import": last_import_dt.isoformat(),
+                },
+                "bit2c": {"api_key": "test_key", "api_secret": "test_secret"},
+            }
+        )
+        with test_db.connect() as conn:
+            conn.execute(
+                text("UPDATE accounts SET metadata = :metadata WHERE id = 1"),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        mock_broker_data = MagicMock()
+        mock_broker_data.positions = []
+        mock_broker_data.cash_transactions = []
+
+        mock_client = MagicMock()
+        mock_client.fetch_all_data.return_value = mock_broker_data
+
+        with (
+            patch(
+                "app.services.brokers.broker_config.BrokerConfig.create_client",
+                return_value=mock_client,
+            ),
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
+        ):
+            mock_service = MagicMock()
+            mock_service.import_data.return_value = {
+                "status": "completed",
+                "positions": {"imported": 0},
+                "transactions": {"imported": 0},
+            }
+            mock_registry.get_import_service.return_value = mock_service
+
+            response = client.post("/api/brokers/kraken/import/1", headers=auth_headers)
+
+        assert response.status_code == 200
+        # fetch_all_data should have been called with start_date = 2025-06-14 (1 day buffer)
+        from datetime import date
+
+        expected_start = date(2025, 6, 14)
+        mock_client.fetch_all_data.assert_called_once_with(start_date=expected_start)
+
+    def test_first_import_fetches_full_history(
+        self, client_with_user, auth_headers, test_db
+    ):
+        """Account without last_import should call fetch_all_data with no start_date."""
+        client, _ = client_with_user
+
+        # Ensure metadata has credentials but NO last_import
+        import json
+
+        metadata = json.dumps(
+            {
+                "kraken": {"api_key": "test_key", "api_secret": "test_secret"},
+            }
+        )
+        with test_db.connect() as conn:
+            conn.execute(
+                text("UPDATE accounts SET metadata = :metadata WHERE id = 1"),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        mock_broker_data = MagicMock()
+        mock_broker_data.positions = []
+        mock_broker_data.cash_transactions = []
+
+        mock_client = MagicMock()
+        mock_client.fetch_all_data.return_value = mock_broker_data
+
+        with (
+            patch(
+                "app.services.brokers.broker_config.BrokerConfig.create_client",
+                return_value=mock_client,
+            ),
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
+        ):
+            mock_service = MagicMock()
+            mock_service.import_data.return_value = {
+                "status": "completed",
+                "positions": {"imported": 0},
+                "transactions": {"imported": 0},
+            }
+            mock_registry.get_import_service.return_value = mock_service
+
+            response = client.post("/api/brokers/kraken/import/1", headers=auth_headers)
+
+        assert response.status_code == 200
+        # fetch_all_data should be called with no start_date (full history)
+        mock_client.fetch_all_data.assert_called_once_with(start_date=None)
+
+    def test_full_import_flag_overrides_incremental(
+        self, client_with_user, auth_headers, test_db
+    ):
+        """full_import=true should fetch full history even with last_import set."""
+        client, _ = client_with_user
+
+        import json
+        from datetime import datetime
+
+        metadata = json.dumps(
+            {
+                "kraken": {
+                    "api_key": "test_key",
+                    "api_secret": "test_secret",
+                    "last_import": datetime(2025, 6, 15, 10, 30, 0).isoformat(),
+                },
+            }
+        )
+        with test_db.connect() as conn:
+            conn.execute(
+                text("UPDATE accounts SET metadata = :metadata WHERE id = 1"),
+                {"metadata": metadata},
+            )
+            conn.commit()
+
+        mock_broker_data = MagicMock()
+        mock_broker_data.positions = []
+        mock_broker_data.cash_transactions = []
+
+        mock_client = MagicMock()
+        mock_client.fetch_all_data.return_value = mock_broker_data
+
+        with (
+            patch(
+                "app.services.brokers.broker_config.BrokerConfig.create_client",
+                return_value=mock_client,
+            ),
+            patch("app.routers.brokers.BrokerImportServiceRegistry") as mock_registry,
+        ):
+            mock_service = MagicMock()
+            mock_service.import_data.return_value = {
+                "status": "completed",
+                "positions": {"imported": 0},
+                "transactions": {"imported": 0},
+            }
+            mock_registry.get_import_service.return_value = mock_service
+
+            response = client.post(
+                "/api/brokers/kraken/import/1?full_import=true",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 200
+        # full_import overrides -- no start_date
+        mock_client.fetch_all_data.assert_called_once_with(start_date=None)
