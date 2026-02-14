@@ -291,7 +291,7 @@ async def upload_broker_file(
     file: UploadFile = File(...),
     confirm_overlap: bool = Form(False),
     session_id: str | None = Form(None),
-    background_tasks: BackgroundTasks | None = None,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UploadResponse:
@@ -627,7 +627,7 @@ async def upload_broker_file(
 async def finalize_batch_upload(
     account_id: int,
     session_id: str = Query(..., description="The batch session ID to finalize"),
-    background_tasks: BackgroundTasks | None = None,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
