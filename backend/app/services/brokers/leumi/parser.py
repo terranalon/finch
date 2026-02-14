@@ -47,8 +47,56 @@ class LeumiParser(BaseBrokerParser):
     def has_api(cls) -> bool:
         return False
 
+    def _parse_xml_rows(self, file_content: bytes) -> list[dict[int, str]]:
+        """Parse SpreadsheetML XML and return list of row dicts.
+
+        Each row is a dict mapping column position (1-based) to cell value.
+        Handles ss:Index attribute for sparse columns.
+        """
+        content = file_content.decode("utf-8").strip()
+        root = ET.fromstring(content)
+
+        ns = {"ss": SPREADSHEET_NS}
+        rows: list[dict[int, str]] = []
+
+        for row_el in root.findall(".//ss:Row", ns):
+            cells: dict[int, str] = {}
+            col_pos = 1
+            for cell_el in row_el.findall("ss:Cell", ns):
+                idx_attr = cell_el.get(f"{{{SPREADSHEET_NS}}}Index")
+                if idx_attr:
+                    col_pos = int(idx_attr)
+                data_el = cell_el.find("ss:Data", ns)
+                cells[col_pos] = data_el.text if data_el is not None else ""
+                col_pos += 1
+            rows.append(cells)
+
+        return rows
+
+    @staticmethod
+    def _parse_date(date_str: str | None) -> date | None:
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str.strip(), "%d/%m/%Y").date()
+        except ValueError:
+            return None
+
     def extract_date_range(self, file_content: bytes) -> tuple[date, date]:
-        raise NotImplementedError
+        rows = self._parse_xml_rows(file_content)
+        dates: list[date] = []
+
+        for row in rows[3:]:  # Skip title, metadata, header rows
+            for col in (4, 5):  # execution_date, payment_date
+                parsed = self._parse_date(row.get(col))
+                if parsed:
+                    dates = [*dates, parsed]
+
+        if not dates:
+            today = date.today()
+            return today, today
+
+        return min(dates), max(dates)
 
     def parse(self, file_content: bytes) -> BrokerImportData:
         raise NotImplementedError
