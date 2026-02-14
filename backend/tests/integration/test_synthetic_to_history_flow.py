@@ -215,8 +215,9 @@ class TestSyntheticSnapshotImport:
         assert symbols == {"AAPL", "MSFT"}
 
         # Assert: transactions exist linked to the synthetic source
+        # AAPL + MSFT equity positions, plus USD cash holding = 3 transactions
         transactions = db.query(Transaction).filter(Transaction.broker_source_id == source.id).all()
-        assert len(transactions) == 2
+        assert len(transactions) == 3
 
         # Check AAPL transaction
         aapl_txn = next(t for t in transactions if t.notes and "AAPL" in _get_holding_symbol(db, t))
@@ -691,7 +692,7 @@ class TestFullSyntheticToHistoryFlow:
         cleanup_result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         assert cleanup_result["deleted_sources"] == 1
-        assert cleanup_result["deleted_transactions"] == 2
+        assert cleanup_result["deleted_transactions"] == 3  # 2 equity + 1 cash
         assert len(cleanup_result["snapshot_positions"]) == 2
 
         # Verify synthetic source is gone
