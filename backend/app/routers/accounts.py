@@ -1,5 +1,9 @@
 """Accounts API router."""
 
+from dataclasses import asdict
+from datetime import date
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -12,6 +16,10 @@ from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
 from app.schemas.common import PaginatedResponse
+from app.schemas.holding import ReconstructionStatsResponse
+from app.services.portfolio.holding_service import HoldingService
+from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
+from app.services.portfolio.snapshot_service import SnapshotService
 from app.services.repositories import AccountRepository
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
@@ -181,3 +189,92 @@ async def delete_account(
     db.delete(db_account)
     db.commit()
     return None
+
+
+@router.post("/{account_id}/reconstructed-holdings", response_model=ReconstructionStatsResponse)
+async def reconstruct_holdings(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reconstruct holdings for an account from transaction history (must belong to user)."""
+    allowed_account_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+
+    svc = HoldingService(db)
+    stats = svc.reconstruct_holdings(account_id)
+    db.commit()
+    return asdict(stats)
+
+
+@router.get("/{account_id}/reconstruction-validation", response_model=dict[str, Any])
+async def validate_reconstruction(
+    account_id: int,
+    as_of_date: date = Query(default=None, description="Date to validate (defaults to today)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Validate portfolio reconstruction accuracy (account must belong to user).
+
+    Compares reconstructed holdings (from transaction replay) with actual holdings.
+    """
+    allowed_account_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+
+    return PortfolioReconstructionService.validate_reconstruction(db, account_id, as_of_date)
+
+
+@router.post("/{account_id}/snapshot-backfill", response_model=dict[str, Any])
+async def backfill_historical_snapshots(
+    account_id: int,
+    start_date: date = Query(..., description="Start date for backfill"),
+    end_date: date = Query(default=None, description="End date (defaults to today)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Backfill historical snapshots (account must belong to user).
+
+    Generates portfolio snapshots for every day between start_date and end_date
+    by reconstructing holdings from transaction history.
+    """
+    allowed_account_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+    if not end_date:
+        end_date = date.today()
+
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="start_date must be before end_date"
+        )
+
+    total_days = (end_date - start_date).days + 1
+
+    if total_days > 730:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Date range too large ({total_days} days). Maximum is 730 days (2 years).",
+        )
+
+    try:
+        stats = SnapshotService(db).backfill_historical_snapshots(account_id, start_date, end_date)
+        return {"status": "completed", "message": "Backfill completed successfully", **stats}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Backfill failed: {str(e)}"
+        )
