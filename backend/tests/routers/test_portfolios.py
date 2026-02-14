@@ -119,7 +119,7 @@ def test_list_portfolios_shows_account_count(client, auth_headers, test_user, db
 
 
 def test_link_account_to_portfolio(client, auth_headers, test_user, db_session):
-    """POST /portfolios/{id}/accounts/{account_id}/link links existing account."""
+    """PUT /portfolios/{id}/accounts/{account_id} links existing account."""
     portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
     portfolio2 = Portfolio(name="All", user_id=test_user.id)
     db_session.add_all([portfolio1, portfolio2])
@@ -130,8 +130,8 @@ def test_link_account_to_portfolio(client, auth_headers, test_user, db_session):
     db_session.add(account)
     db_session.commit()
 
-    response = client.post(
-        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}/link", headers=auth_headers
+    response = client.put(
+        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}", headers=auth_headers
     )
 
     assert response.status_code == 200
@@ -144,7 +144,7 @@ def test_link_account_to_portfolio(client, auth_headers, test_user, db_session):
 
 
 def test_link_account_already_linked(client, auth_headers, test_user, db_session):
-    """POST /portfolios/{id}/accounts/{account_id}/link returns 400 if already linked."""
+    """PUT /portfolios/{id}/accounts/{account_id} returns 400 if already linked."""
     portfolio = Portfolio(name="Crypto", user_id=test_user.id)
     db_session.add(portfolio)
     db_session.flush()
@@ -154,8 +154,8 @@ def test_link_account_already_linked(client, auth_headers, test_user, db_session
     db_session.add(account)
     db_session.commit()
 
-    response = client.post(
-        f"/api/portfolios/{portfolio.id}/accounts/{account.id}/link", headers=auth_headers
+    response = client.put(
+        f"/api/portfolios/{portfolio.id}/accounts/{account.id}", headers=auth_headers
     )
 
     assert response.status_code == 400
@@ -163,7 +163,7 @@ def test_link_account_already_linked(client, auth_headers, test_user, db_session
 
 
 def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_session):
-    """DELETE /portfolios/{id}/accounts/{account_id}/unlink removes link."""
+    """DELETE /portfolios/{id}/accounts/{account_id} removes link."""
     portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
     portfolio2 = Portfolio(name="All", user_id=test_user.id)
     db_session.add_all([portfolio1, portfolio2])
@@ -175,7 +175,7 @@ def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_sessi
     db_session.commit()
 
     response = client.delete(
-        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}/unlink", headers=auth_headers
+        f"/api/portfolios/{portfolio2.id}/accounts/{account.id}", headers=auth_headers
     )
 
     assert response.status_code == 200
@@ -188,7 +188,7 @@ def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_sessi
 
 
 def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_user, db_session):
-    """DELETE /portfolios/{id}/accounts/{account_id}/unlink blocked if only portfolio."""
+    """DELETE /portfolios/{id}/accounts/{account_id} blocked if only portfolio."""
     portfolio = Portfolio(name="Crypto", user_id=test_user.id)
     db_session.add(portfolio)
     db_session.flush()
@@ -199,7 +199,7 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
     db_session.commit()
 
     response = client.delete(
-        f"/api/portfolios/{portfolio.id}/accounts/{account.id}/unlink", headers=auth_headers
+        f"/api/portfolios/{portfolio.id}/accounts/{account.id}", headers=auth_headers
     )
 
     assert response.status_code == 400
@@ -207,7 +207,7 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
 
 
 def test_link_account_duplicate_name_rejected(client, auth_headers, test_user, db_session):
-    """POST /portfolios/{id}/accounts/{account_id}/link rejects if name already in portfolio."""
+    """PUT /portfolios/{id}/accounts/{account_id} rejects if name already in portfolio."""
     portfolio1 = Portfolio(name="Crypto", user_id=test_user.id)
     portfolio2 = Portfolio(name="Stocks", user_id=test_user.id)
     db_session.add_all([portfolio1, portfolio2])
@@ -223,8 +223,8 @@ def test_link_account_duplicate_name_rejected(client, auth_headers, test_user, d
     db_session.commit()
 
     # Try to link account2 ("Kraken") into portfolio1 which already has a "Kraken"
-    response = client.post(
-        f"/api/portfolios/{portfolio1.id}/accounts/{account2.id}/link", headers=auth_headers
+    response = client.put(
+        f"/api/portfolios/{portfolio1.id}/accounts/{account2.id}", headers=auth_headers
     )
 
     assert response.status_code == 409

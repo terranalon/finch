@@ -150,7 +150,7 @@ def daily_snapshot_pipeline():
         logger.info("Crypto prices: %s updated", crypto_price_stats["updated"])
 
         result = _make_api_call(
-            "/api/snapshots/create",
+            "/api/snapshots",
             params={"snapshot_date": str(_get_snapshot_date())},
         )
 

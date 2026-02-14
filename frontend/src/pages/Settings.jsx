@@ -473,8 +473,9 @@ function PortfolioManagement() {
     setLoading(true);
     setError('');
     try {
-      const response = await api(`/portfolios/${portfolioId}/set-default`, {
-        method: 'PUT',
+      const response = await api(`/portfolios/${portfolioId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_default: true }),
       });
 
       if (response.ok) {

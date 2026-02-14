@@ -27,6 +27,12 @@ class PortfolioUpdate(BaseModel):
     default_currency: str | None = Field(None, min_length=3, max_length=3)
 
 
+class PortfolioPatch(BaseModel):
+    """Schema for partial portfolio updates (PATCH)."""
+
+    is_default: bool | None = None
+
+
 class Portfolio(PortfolioBase):
     """Schema for Portfolio responses."""
 

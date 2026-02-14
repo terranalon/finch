@@ -8,14 +8,14 @@ from app.schemas.common import StatusResponse
 
 
 class PriceUpdateResponse(StatusResponse):
-    """Response for POST /api/prices/update."""
+    """Response for POST /api/prices."""
 
     asset_class: str | None = None
     stats: dict[str, Any] | None = None
 
 
 class SingleAssetPriceResponse(StatusResponse):
-    """Response for POST /api/prices/update/{asset_id}."""
+    """Response for PATCH /api/assets/{asset_id}/price."""
 
     asset_id: int
     symbol: str

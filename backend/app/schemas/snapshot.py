@@ -16,7 +16,7 @@ class SnapshotPointResponse(BaseModel):
 
 
 class SnapshotCreateResponse(StatusResponse):
-    """Response for POST /api/snapshots/create.
+    """Response for POST /api/snapshots.
 
     When run_async=True: {status, message, date}
     When run_async=False: {status, message, ...stats_fields}

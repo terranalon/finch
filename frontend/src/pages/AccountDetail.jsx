@@ -762,7 +762,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
 
     setIsUnlinking(portfolioId);
     try {
-      const res = await api(`/portfolios/${portfolioId}/accounts/${account.id}/unlink`, {
+      const res = await api(`/portfolios/${portfolioId}/accounts/${account.id}`, {
         method: 'DELETE',
       });
 

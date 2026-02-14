@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas import Holding as HoldingSchema
 from app.schemas import HoldingCreate, HoldingUpdate
 from app.schemas.common import PaginatedResponse
-from app.schemas.holding import HoldingDetailResponse, ReconstructionStatsResponse
+from app.schemas.holding import HoldingDetailResponse
 from app.services.portfolio.holding_service import HoldingService
 
 router = APIRouter(prefix="/api/holdings", tags=["holdings"])
@@ -184,23 +184,3 @@ async def delete_holding(
     db.commit()
 
     return None
-
-
-@router.post("/reconstruct/{account_id}", response_model=ReconstructionStatsResponse)
-async def reconstruct_holdings(
-    account_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Reconstruct holdings for an account from transaction history (must belong to user)."""
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
-
-    svc = HoldingService(db)
-    stats = svc.reconstruct_holdings(account_id)
-    db.commit()
-    return asdict(stats)

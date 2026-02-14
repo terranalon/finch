@@ -750,7 +750,7 @@ export default function Accounts() {
       let res;
       if (isUnlink && selectedPortfolioId) {
         // Unlink from current portfolio only
-        res = await api(`/portfolios/${selectedPortfolioId}/accounts/${account.id}/unlink`, {
+        res = await api(`/portfolios/${selectedPortfolioId}/accounts/${account.id}`, {
           method: 'DELETE',
         });
       } else {

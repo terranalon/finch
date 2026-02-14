@@ -102,7 +102,7 @@ function Dashboard() {
   const handleRefreshPrices = async () => {
     try {
       setRefreshingPrices(true)
-      const response = await fetch('http://localhost:8000/api/prices/update', {
+      const response = await fetch('http://localhost:8000/api/prices', {
         method: 'POST'
       })
       if (!response.ok) throw new Error('Failed to refresh prices')
@@ -120,7 +120,7 @@ function Dashboard() {
   const handleCreateSnapshot = async () => {
     try {
       setCreatingSnapshot(true)
-      const response = await fetch('http://localhost:8000/api/snapshots/create', {
+      const response = await fetch('http://localhost:8000/api/snapshots', {
         method: 'POST'
       })
       if (!response.ok) throw new Error('Failed to create snapshot')

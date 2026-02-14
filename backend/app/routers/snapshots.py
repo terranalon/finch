@@ -18,7 +18,7 @@ from app.services.shared.currency_conversion_helper import CurrencyConversionHel
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
 
-@router.post("/create", response_model=SnapshotCreateResponse)
+@router.post("", response_model=SnapshotCreateResponse)
 async def create_snapshot(
     background_tasks: BackgroundTasks,
     snapshot_date: date | None = None,
@@ -78,12 +78,11 @@ async def get_account_snapshots(
     Returns:
         List of historical snapshots
     """
-    # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
+            detail=f"Account with id {account_id} not found",
         )
 
     snapshots = SnapshotService.get_account_history(db, account_id, start_date, end_date, limit)
@@ -133,41 +132,6 @@ async def get_portfolio_snapshots(
     ]
 
 
-@router.get("/validate-reconstruction/{account_id}", response_model=dict[str, Any])
-async def validate_reconstruction(
-    account_id: int,
-    as_of_date: date = Query(default=None, description="Date to validate (defaults to today)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Validate portfolio reconstruction accuracy (account must belong to user).
-
-    Compares reconstructed holdings (from transaction replay) with actual holdings.
-    This is useful for:
-    - Ensuring transaction data is complete
-    - Verifying FIFO logic is correct
-    - Debugging discrepancies
-
-    Args:
-        account_id: Account to validate
-        as_of_date: Date to reconstruct (defaults to today)
-        db: Database session
-
-    Returns:
-        Validation results with any discrepancies found
-    """
-    # Verify account belongs to user
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
-
-    return PortfolioReconstructionService.validate_reconstruction(db, account_id, as_of_date)
-
-
 @router.get("/portfolio-value/{account_id}", response_model=dict[str, Any])
 async def get_portfolio_value(
     account_id: int,
@@ -193,75 +157,13 @@ async def get_portfolio_value(
     Returns:
         Portfolio value breakdown with holdings detail
     """
-    # Verify account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
+            detail=f"Account with id {account_id} not found",
         )
 
     return PortfolioReconstructionService.calculate_portfolio_value(
         db, account_id, as_of_date, currency
     )
-
-
-@router.post("/backfill/{account_id}", response_model=dict[str, Any])
-async def backfill_historical_snapshots(
-    account_id: int,
-    start_date: date = Query(..., description="Start date for backfill"),
-    end_date: date = Query(default=None, description="End date (defaults to today)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Backfill historical snapshots (account must belong to user).
-
-    This endpoint generates portfolio snapshots for every day between start_date and end_date
-    by reconstructing holdings from transaction history. This enables accurate historical
-    performance charts even if snapshots weren't being captured at the time.
-
-    WARNING: This can take a while for large date ranges!
-
-    Args:
-        account_id: Account to backfill
-        start_date: First date to generate snapshots for
-        end_date: Last date (defaults to today)
-        db: Database session
-
-    Returns:
-        Backfill statistics (snapshots created, skipped, errors)
-    """
-    # Verify account belongs to user
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
-    if not end_date:
-        end_date = date.today()
-
-    if start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="start_date must be before end_date"
-        )
-
-    # Calculate date range
-    total_days = (end_date - start_date).days + 1
-
-    if total_days > 730:  # ~2 years max
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Date range too large ({total_days} days). Maximum is 730 days (2 years).",
-        )
-
-    try:
-        stats = SnapshotService(db).backfill_historical_snapshots(account_id, start_date, end_date)
-        return {"status": "completed", "message": "Backfill completed successfully", **stats}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Backfill failed: {str(e)}"
-        )

@@ -390,8 +390,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   // Link existing account
   const handleLinkAccount = async (account) => {
     try {
-      const response = await api(`/portfolios/${portfolioId}/accounts/${account.id}/link`, {
-        method: 'POST',
+      const response = await api(`/portfolios/${portfolioId}/accounts/${account.id}`, {
+        method: 'PUT',
       });
 
       if (!response.ok) {

@@ -647,7 +647,7 @@ export default function Assets() {
   const handleToggleFavorite = async (assetId) => {
     try {
       const res = await api(`/assets/${assetId}/favorite`, {
-        method: 'POST',
+        method: 'PUT',
       });
 
       if (res.ok) {
