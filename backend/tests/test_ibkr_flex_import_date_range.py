@@ -68,7 +68,7 @@ def _run_import(mocks, **overrides):
         "flex_query_id": "qid",
         **overrides,
     }
-    return IBKRFlexImportService.import_all(**kwargs)
+    return IBKRFlexImportService.import_all(**kwargs)  # ty: ignore[invalid-argument-type] — kwargs dict matches signature
 
 
 class TestImportAllWithTransactions:
@@ -208,7 +208,7 @@ def _run_staged_import(mocks, **overrides):
             "forex": {},
             "cash": {},
         }
-        stats = StagedImportService.import_with_staging(**kwargs)
+        stats = StagedImportService.import_with_staging(**kwargs)  # ty: ignore[invalid-argument-type] — kwargs dict matches signature
 
     return stats, mock_staging
 
