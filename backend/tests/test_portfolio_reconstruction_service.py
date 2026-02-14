@@ -82,10 +82,10 @@ def account_with_transactions(db_session):
     # Create account
     account = Account(
         name="Test Recon Account",
-        portfolio_id=portfolio.id,
         account_type="brokerage",
         currency="USD",
     )
+    account.portfolios.append(portfolio)
     db_session.add(account)
     db_session.flush()
 

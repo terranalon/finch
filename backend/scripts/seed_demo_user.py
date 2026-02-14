@@ -76,6 +76,7 @@ def create_demo_user(db: DBSession) -> tuple[User, Portfolio, Portfolio | None]:
     # Create demo user
     user = User(
         email=DEMO_EMAIL,
+        username="demo_user",
         password_hash=AuthService.hash_password(DEMO_PASSWORD),
         is_active=True,
         email_verified=True,  # Demo account should be pre-verified

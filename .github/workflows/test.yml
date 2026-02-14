@@ -1,0 +1,50 @@
+name: Backend Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: portfolio_user
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: portfolio_tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portfolio_user -d portfolio_tracker_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Run tests
+        env:
+          DATABASE_HOST: localhost
+        run: uv run pytest --tb=short -q

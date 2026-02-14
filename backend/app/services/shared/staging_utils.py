@@ -59,6 +59,7 @@ def create_staging_tables(db: Session) -> None:
                     conid VARCHAR(50),
                     figi VARCHAR(20),
                     is_manual_valuation BOOLEAN DEFAULT FALSE,
+                    is_favorite BOOLEAN DEFAULT FALSE,
                     data_source VARCHAR(50),
                     last_fetched_price NUMERIC(15, 4),
                     last_fetched_at TIMESTAMP,
@@ -258,12 +259,12 @@ def merge_staging_to_production(db: Session, account_id: int) -> dict:
         text("""
         INSERT INTO public.assets (
             symbol, name, asset_class, category, currency,
-            cusip, isin, conid, figi, is_manual_valuation, data_source,
+            cusip, isin, conid, figi, is_manual_valuation, is_favorite, data_source,
             last_fetched_price, last_fetched_at, metadata, created_at, updated_at
         )
         SELECT
             symbol, name, asset_class, category, currency,
-            cusip, isin, conid, figi, is_manual_valuation, data_source,
+            cusip, isin, conid, figi, is_manual_valuation, is_favorite, data_source,
             last_fetched_price, last_fetched_at, metadata, created_at, updated_at
         FROM staging.assets
         WHERE original_id IS NULL

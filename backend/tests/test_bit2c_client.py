@@ -335,6 +335,7 @@ class TestBit2CClientTransactions:
 
         ILS deposits/withdrawals go to cash_transactions.
         Crypto deposits/withdrawals go to transactions (for proper quantity tracking).
+        Withdrawal fees (action=4) are combined with the matched withdrawal record.
         """
         balance_response = {"NIS": 1000.0, "BTC": 0.1}
         funds_history = [
@@ -351,21 +352,21 @@ class TestBit2CClientTransactions:
             {
                 "ticks": 1733526120,
                 "created": "06/12/24 23:22",
-                "action": 3,  # ETH Withdrawal (crypto)
+                "action": 4,  # ETH FeeWithdrawal (must come before matched withdrawal)
                 "price": "",
                 "pair": "",
-                "reference": "RX153800",
-                "firstAmount": "-0.12386231",
+                "reference": "FEE-ETH:153800",
+                "firstAmount": "-0.015",
                 "firstCoin": "ETH",
             },
             {
                 "ticks": 1733526120,
                 "created": "06/12/24 23:22",
-                "action": 4,  # ETH FeeWithdrawal (crypto)
+                "action": 3,  # ETH Withdrawal (crypto)
                 "price": "",
                 "pair": "",
                 "reference": "RX153800",
-                "firstAmount": "-0.015",
+                "firstAmount": "-0.12386231",
                 "firstCoin": "ETH",
             },
         ]
@@ -385,9 +386,10 @@ class TestBit2CClientTransactions:
                 end_date=date(2024, 12, 31),
             )
 
-        # Crypto withdrawals go to transactions, ILS deposit goes to cash_transactions
-        assert len(result.transactions) == 2  # ETH withdrawal + ETH fee
-        assert len(result.cash_transactions) == 1  # ILS deposit only
+        # Fee is combined with withdrawal -> 1 crypto transaction
+        # ILS deposit goes to cash_transactions
+        assert len(result.transactions) == 1
+        assert len(result.cash_transactions) == 1
 
         # Verify ILS deposit (positive)
         deposit = result.cash_transactions[0]
@@ -395,15 +397,12 @@ class TestBit2CClientTransactions:
         assert deposit.amount == Decimal("15000")
         assert deposit.currency == "ILS"
 
-        # Verify ETH withdrawal (negative quantity, uses quantity field)
-        withdrawal = [t for t in result.transactions if t.transaction_type == "Withdrawal"][0]
+        # Verify ETH withdrawal with combined fee
+        withdrawal = result.transactions[0]
+        assert withdrawal.transaction_type == "Withdrawal"
         assert withdrawal.quantity == Decimal("-0.12386231")
         assert withdrawal.symbol == "ETH"
-
-        # Verify ETH withdrawal fee (negative quantity)
-        fee = [t for t in result.transactions if t.transaction_type == "Withdrawal Fee"][0]
-        assert fee.quantity == Decimal("-0.015")
-        assert fee.symbol == "ETH"
+        assert withdrawal.fees == Decimal("0.015")
 
     def test_trades_with_deposits_dual_entry(self, client: Bit2CClient):
         """Test that trades create settlements and deposits are included."""

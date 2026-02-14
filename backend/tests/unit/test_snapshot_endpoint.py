@@ -168,8 +168,11 @@ class TestSnapshotEndpoint:
         """Snapshot endpoint should return 200 with completed status on success."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = _make_completed_stats(
+        with (
+            patch("app.routers.brokers.IBKRSyntheticImportService.import_snapshot") as mock_import,
+            patch("app.routers.brokers.generate_snapshots_background"),
+        ):
+            mock_import.return_value = _make_completed_stats(
                 positions_imported=3, cash_balances={"USD": 5000}, assets_created=2
             )
 
@@ -186,13 +189,16 @@ class TestSnapshotEndpoint:
         """Snapshot endpoint should pass flex credentials to the service."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = _make_completed_stats()
+        with (
+            patch("app.routers.brokers.IBKRSyntheticImportService.import_snapshot") as mock_import,
+            patch("app.routers.brokers.generate_snapshots_background"),
+        ):
+            mock_import.return_value = _make_completed_stats()
 
             client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
-            mock_service.import_snapshot.assert_called_once()
-            call_args = mock_service.import_snapshot.call_args
+            mock_import.assert_called_once()
+            call_args = mock_import.call_args
             # Verify flex_token and flex_query_id were passed (positional args)
             assert call_args[0][2] == "test_token"
             assert call_args[0][3] == "test_query_id"
@@ -201,8 +207,11 @@ class TestSnapshotEndpoint:
         """Snapshot endpoint should return 500 when service reports failure."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = {
+        with (
+            patch("app.routers.brokers.IBKRSyntheticImportService.import_snapshot") as mock_import,
+            patch("app.routers.brokers.generate_snapshots_background"),
+        ):
+            mock_import.return_value = {
                 "status": "failed",
                 "errors": ["Failed to fetch Flex Query report"],
             }
@@ -233,10 +242,11 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
 
         with (
-            patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service,
+            patch("app.routers.brokers.IBKRSyntheticImportService.import_snapshot") as mock_import,
+            patch("app.routers.brokers.generate_snapshots_background"),
             patch("app.routers.brokers._update_last_import") as mock_update,
         ):
-            mock_service.import_snapshot.return_value = _make_completed_stats(positions_imported=1)
+            mock_import.return_value = _make_completed_stats(positions_imported=1)
 
             client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 
@@ -246,8 +256,11 @@ class TestSnapshotEndpoint:
         """Response should include a human-readable message."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers.IBKRSyntheticImportService") as mock_service:
-            mock_service.import_snapshot.return_value = _make_completed_stats(positions_imported=5)
+        with (
+            patch("app.routers.brokers.IBKRSyntheticImportService.import_snapshot") as mock_import,
+            patch("app.routers.brokers.generate_snapshots_background"),
+        ):
+            mock_import.return_value = _make_completed_stats(positions_imported=5)
 
             response = client.post("/api/brokers/ibkr/snapshot/1", headers=auth_headers)
 

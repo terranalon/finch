@@ -46,6 +46,7 @@ dev = [
     "pytest-asyncio>=0.21.1",
     "httpx>=0.26.0",
     "ruff>=0.1.11",
+    "xlsxwriter>=3.0.0",
 ]
 
 [build-system]

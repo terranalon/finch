@@ -34,11 +34,13 @@ class TestTASESecurityInfo:
 class TestTASEApiServiceInit:
     """Test TASEApiService initialization."""
 
-    @patch("app.services.brokers.shared.tase_api_service.settings")
-    def test_init_with_settings(self, mock_settings):
+    @patch("app.services.brokers.shared.tase_api_service._get_settings")
+    def test_init_with_settings(self, mock_get_settings):
         """Test initialization with settings."""
+        mock_settings = MagicMock()
         mock_settings.tase_api_key = "test_key"
         mock_settings.tase_api_url = "https://test.api.com/v1/"
+        mock_get_settings.return_value = mock_settings
 
         service = TASEApiService()
 
@@ -170,7 +172,7 @@ class TestTASEApiServiceSync:
         mock_get.assert_called_once()
         call_args = mock_get.call_args
         assert "2024/1/15" in call_args[0][0]
-        assert call_args[1]["headers"]["Ocp-Apim-Subscription-Key"] == "test_key"
+        assert call_args[1]["headers"]["apikey"] == "test_key"
 
     def test_sync_without_api_key_raises(self):
         """Test sync raises error without API key."""
