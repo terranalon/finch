@@ -631,25 +631,25 @@ class TestIBKRImport:
         """IBKR import should pass start_date derived from last_import metadata."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers._get_validated_account") as mock_account_fn:
-            mock_account = MagicMock()
-            mock_account.meta_data = {
-                "ibkr": {
-                    "flex_token": "tok",
-                    "flex_query_id": "qid",
-                    "last_import": "2026-02-10T12:00:00",
-                }
+        mock_account = MagicMock()
+        mock_account.meta_data = {
+            "ibkr": {
+                "flex_token": "tok",
+                "flex_query_id": "qid",
+                "last_import": "2026-02-10T12:00:00",
             }
-            mock_account_fn.return_value = mock_account
+        }
 
-            with patch("app.routers.brokers._import_ibkr") as mock_import:
-                mock_import.return_value = {"status": "completed"}
+        with (
+            patch("app.routers.brokers._get_validated_account", return_value=mock_account),
+            patch(
+                "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+            ) as mock_import,
+        ):
+            client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
 
-                client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
-
-        # start_date should be last_import minus 1 day buffer = 2026-02-09
-        _, kwargs = mock_import.call_args
-        assert kwargs["start_date"] == date(2026, 2, 9)
+            # start_date should be last_import minus 1 day buffer = 2026-02-09
+            assert mock_import.call_args.kwargs["start_date"] == date(2026, 2, 9)
 
     def test_ibkr_import_uses_account_created_at_for_new_accounts(
         self, client_with_user, auth_headers
@@ -657,35 +657,30 @@ class TestIBKRImport:
         """First import for a new IBKR account should use account.created_at as start_date."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers._get_validated_account") as mock_account_fn:
-            mock_account = MagicMock()
-            mock_account.meta_data = {
-                "ibkr": {"flex_token": "tok", "flex_query_id": "qid"}
-            }
-            mock_account.created_at = datetime(2026, 2, 12, 10, 0, 0)
-            mock_account_fn.return_value = mock_account
+        mock_account = MagicMock()
+        mock_account.meta_data = {"ibkr": {"flex_token": "tok", "flex_query_id": "qid"}}
+        mock_account.created_at = datetime(2026, 2, 12, 10, 0, 0)
 
-            with patch("app.routers.brokers._import_ibkr") as mock_import:
-                mock_import.return_value = {"status": "completed"}
+        with (
+            patch("app.routers.brokers._get_validated_account", return_value=mock_account),
+            patch(
+                "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+            ) as mock_import,
+        ):
+            client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
 
-                client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
-
-        _, kwargs = mock_import.call_args
-        assert kwargs["start_date"] == date(2026, 2, 12)
+            assert mock_import.call_args.kwargs["start_date"] == date(2026, 2, 12)
 
     def test_ibkr_full_import_passes_no_start_date(self, client_with_user, auth_headers):
         """full_import=true should pass start_date=None regardless of metadata."""
         client, _ = client_with_user
 
-        with patch("app.routers.brokers._import_ibkr") as mock_import:
-            mock_import.return_value = {"status": "completed"}
+        with patch(
+            "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+        ) as mock_import:
+            client.post("/api/brokers/ibkr/import/1?full_import=true", headers=auth_headers)
 
-            client.post(
-                "/api/brokers/ibkr/import/1?full_import=true", headers=auth_headers
-            )
-
-        _, kwargs = mock_import.call_args
-        assert kwargs["start_date"] is None
+            assert mock_import.call_args.kwargs["start_date"] is None
 
 
 class TestApiConnectionsEndpoint:
