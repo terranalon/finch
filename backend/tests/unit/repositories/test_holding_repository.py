@@ -35,9 +35,7 @@ class TestHoldingRepositoryJoinMethods:
         for holding, asset in results:
             assert holding.is_active is True
 
-    def test_find_active_with_assets_and_accounts(
-        self, db, test_account, test_asset, test_holding
-    ):
+    def test_find_active_with_assets_and_accounts(self, db, test_account, test_asset, test_holding):
         """Returns (Holding, Asset, account_name) tuples."""
         repo = HoldingRepository(db)
         results = repo.find_active_with_assets_and_accounts([test_account.id])
@@ -45,9 +43,7 @@ class TestHoldingRepositoryJoinMethods:
         holding, asset, account_name = results[0]
         assert account_name == test_account.name
 
-    def test_find_with_assets_by_account_nonzero(
-        self, db, test_account, test_asset, test_holding
-    ):
+    def test_find_with_assets_by_account_nonzero(self, db, test_account, test_asset, test_holding):
         """Returns holdings with non-zero quantity."""
         repo = HoldingRepository(db)
         results = repo.find_with_assets_by_account_nonzero(test_account.id)

@@ -1366,11 +1366,11 @@ class IBKRImportService:
         name: str,
         asset_class: str,
         currency: str = "USD",
-        ibkr_symbol: str = None,
-        cusip: str = None,
-        isin: str = None,
-        conid: str = None,
-        figi: str = None,
+        ibkr_symbol: str | None = None,
+        cusip: str | None = None,
+        isin: str | None = None,
+        conid: str | None = None,
+        figi: str | None = None,
     ) -> tuple[Asset, bool]:
         """
         Find or auto-create asset.

@@ -33,7 +33,7 @@ def raise_duplicate_account_name(account_name: str, portfolio_name: str) -> None
 async def list_accounts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
-    is_active: bool = None,
+    is_active: bool | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -145,6 +145,11 @@ async def update_account(
         )
 
     db_account = db.query(Account).filter(Account.id == account_id).first()
+    if not db_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account with id {account_id} not found",
+        )
 
     update_data = account_update.model_dump(exclude_unset=True)
     if "name" in update_data:

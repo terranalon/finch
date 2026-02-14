@@ -23,6 +23,14 @@ from app.models.user_recovery_code import UserRecoveryCode
 from app.rate_limiter import limiter
 
 
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter():
+    """Disable rate limiter during tests to prevent 429 cascades."""
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
+
+
 def register_and_verify_user(
     test_client: TestClient,
     db_session_maker,

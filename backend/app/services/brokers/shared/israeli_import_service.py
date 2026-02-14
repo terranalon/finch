@@ -592,7 +592,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         symbol: str,
         tase_security_number: str | None,
         fallback_price: Decimal | None,
-        fallback_price_date: datetime | None,
+        fallback_price_date: datetime | date | None,
     ) -> None:
         """Update an existing asset with new information.
 
@@ -615,7 +615,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         self,
         asset: Asset,
         fallback_price: Decimal | None,
-        fallback_price_date: datetime | None,
+        fallback_price_date: datetime | date | None,
     ) -> bool:
         """Update asset's fallback price if the new price is more recent.
 
@@ -670,7 +670,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         currency: str,
         tase_security_number: str | None = None,
         fallback_price: Decimal | None = None,
-        fallback_price_date: datetime | None = None,
+        fallback_price_date: datetime | date | None = None,
     ) -> tuple[Asset, bool]:
         """Find or create an asset.
 

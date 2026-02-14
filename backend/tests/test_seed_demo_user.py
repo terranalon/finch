@@ -21,8 +21,8 @@ def db_session():
     User.__table__.create(engine, checkfirst=True)
     Session.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+    session_local = sessionmaker(bind=engine)
+    session = session_local()
     yield session
     session.close()
 
@@ -31,20 +31,20 @@ def test_create_demo_user(db_session):
     """Test creating demo user with portfolio."""
     from scripts.seed_demo_user import create_demo_user
 
-    user, portfolio = create_demo_user(db_session)
+    user, us_portfolio, il_portfolio = create_demo_user(db_session)
 
     assert user.email == "demo@finch.com"
     assert user.is_active is True
-    assert portfolio.name == "Demo Portfolio"
-    assert portfolio.user_id == user.id
+    assert us_portfolio.name == "US Investments"
+    assert us_portfolio.user_id == user.id
 
 
 def test_create_demo_user_idempotent(db_session):
     """Test that running seed twice doesn't create duplicates."""
     from scripts.seed_demo_user import create_demo_user
 
-    user1, _ = create_demo_user(db_session)
-    user2, _ = create_demo_user(db_session)
+    user1, _, _ = create_demo_user(db_session)
+    user2, _, _ = create_demo_user(db_session)
 
     assert user1.id == user2.id
     users = db_session.query(User).filter(User.email == "demo@finch.com").all()

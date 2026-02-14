@@ -102,7 +102,7 @@ def build_credential_data(
 ) -> dict[str, str]:
     """Build credential data dict from Pydantic model."""
     field1, field2 = get_credential_fields(credential_type)
-    if credential_type == CredentialType.API_KEY_SECRET:
+    if isinstance(credentials, ApiKeyCredentials):
         values = (credentials.api_key, credentials.api_secret)
     else:
         values = (credentials.flex_token, credentials.flex_query_id)
@@ -184,11 +184,11 @@ def _get_flex_query_credentials(
 
 def _update_last_import(account: Account, broker_key: str, db: Session) -> None:
     """Update last_import timestamp in account metadata."""
-    if not account.meta_data:
-        account.meta_data = {}
-    if broker_key not in account.meta_data:
-        account.meta_data[broker_key] = {}
-    account.meta_data[broker_key]["last_import"] = datetime.now().isoformat()
+    meta: dict = account.meta_data or {}
+    if broker_key not in meta:
+        meta[broker_key] = {}
+    meta[broker_key]["last_import"] = datetime.now().isoformat()
+    account.meta_data = meta
     flag_modified(account, "meta_data")
     db.commit()
 
@@ -337,7 +337,7 @@ async def import_broker_data(
         default=False,
         description="Force full history import, ignoring last_import timestamp",
     ),
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -432,7 +432,7 @@ async def import_broker_data(
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)
 async def import_ibkr_snapshot(
     account_id: int,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] — FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -616,13 +616,13 @@ async def set_broker_credentials(
     cred_data = build_credential_data(credentials, config.credential_type)
 
     # Store credentials in account metadata
-    if not account.meta_data:
-        account.meta_data = {}
+    meta: dict = account.meta_data or {}
 
     # Preserve existing broker data (like last_import) while updating credentials
-    existing = account.meta_data.get(config.key, {})
+    existing = meta.get(config.key, {})
     existing.update(cred_data)
-    account.meta_data[config.key] = existing
+    meta[config.key] = existing
+    account.meta_data = meta
     flag_modified(account, "meta_data")
     db.commit()
 

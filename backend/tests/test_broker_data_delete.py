@@ -9,6 +9,7 @@ These tests verify the multi-file import and partial delete scenario:
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -95,13 +96,13 @@ def test_portfolio(db_session, test_user):
 def test_account(db_session, test_portfolio):
     """Create a test account."""
     account = Account(
-        portfolio_id=test_portfolio.id,
         name="Test Kraken Account",
         account_type="Crypto",
         institution="Kraken",
         currency="USD",
         broker_type="kraken",
     )
+    account.portfolios.append(test_portfolio)
     db_session.add(account)
     db_session.commit()
     db_session.refresh(account)
@@ -280,7 +281,12 @@ def client_with_auth(test_db, test_user, test_portfolio):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app) as test_client:
+    # Mock background snapshot generation to avoid SessionLocal() connecting to wrong DB
+    with (
+        patch("app.routers.broker_data.generate_snapshots_background"),
+        patch("app.routers.broker_data.update_snapshot_status"),
+        TestClient(app) as test_client,
+    ):
         token = AuthService.create_access_token(test_user.id)
         headers = {"Authorization": f"Bearer {token}"}
         yield test_client, headers, testing_session_local

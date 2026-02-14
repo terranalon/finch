@@ -42,6 +42,12 @@ def get_current_user(
         )
 
     user_id = payload.get("sub")
+    if not user_id or not isinstance(user_id, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user_repo = UserRepository(db)
     user = user_repo.find_by_id(user_id)
 

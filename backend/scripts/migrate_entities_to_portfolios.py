@@ -38,6 +38,7 @@ def migrate_entities(db: DBSession) -> dict:
     if not user:
         user = User(
             email=MIGRATION_USER_EMAIL,
+            username="migrated_user",
             password_hash=AuthService.hash_password(MIGRATION_USER_PASSWORD),
             is_active=True,
         )

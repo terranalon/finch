@@ -167,7 +167,7 @@ def _format_top_holding(h: TopHolding) -> dict:
 
 def _format_summary(db: Session, s: DashboardSummary, display_currency: str) -> dict:
     """Convert a DashboardSummary (all USD) to the API response dict."""
-    if s.day_change_usd is not None:
+    if s.day_change_usd is not None and s.previous_close_value_usd is not None:
         day_change = _convert(db, s.day_change_usd, display_currency)
         previous_close_value = _convert(db, s.previous_close_value_usd, display_currency)
     else:

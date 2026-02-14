@@ -261,7 +261,7 @@ class ManualImportService(BaseBrokerImportService):
             client = CoinGeckoClient()
             coin_info = client.get_coin_info(symbol)
             if coin_info:
-                return coin_info["name"]
+                return str(coin_info["name"])
         except Exception as e:
             logger.debug("CoinGecko lookup failed for %s: %s", symbol, e)
         return None

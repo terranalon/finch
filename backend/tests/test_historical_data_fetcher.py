@@ -83,12 +83,12 @@ def test_portfolio(db_session, test_user):
 def test_account_with_holdings(db_session, test_portfolio):
     """Create a test account with holdings."""
     account = Account(
-        portfolio_id=test_portfolio.id,
         name="Test Hist Account",
         account_type="Brokerage",
         institution="Test",
         currency="USD",
     )
+    account.portfolios.append(test_portfolio)
     db_session.add(account)
     db_session.flush()
 

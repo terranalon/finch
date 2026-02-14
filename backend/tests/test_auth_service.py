@@ -68,4 +68,5 @@ def test_create_refresh_token():
 
     assert token is not None
     decoded = AuthService.decode_access_token(token)
+    assert decoded is not None
     assert decoded["type"] == "refresh"

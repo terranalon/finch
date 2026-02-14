@@ -29,11 +29,11 @@ app = FastAPI(
 
 # Add rate limiter to app state and exception handler
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty: ignore[invalid-argument-type] — FastAPI exception handler signature
 
 # Configure CORS
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # ty: ignore[invalid-argument-type] — FastAPI middleware signature
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],

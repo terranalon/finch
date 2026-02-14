@@ -134,9 +134,7 @@ class SnapshotService:
         if allowed_account_ids is not None:
             accounts = self._account_repo.find_by_ids(allowed_account_ids)
         else:
-            accounts = self._account_repo.find_by_ids(
-                self._account_repo.find_all_active_ids()
-            )
+            accounts = self._account_repo.find_by_ids(self._account_repo.find_all_active_ids())
 
         for account in accounts:
             snapshot_data = self._create_account_snapshot(account, snapshot_date)
@@ -272,9 +270,7 @@ class SnapshotService:
 
         while current_date <= end_date:
             try:
-                existing = self._snapshot_repo.find_by_account_and_date(
-                    account_id, current_date
-                )
+                existing = self._snapshot_repo.find_by_account_and_date(account_id, current_date)
 
                 if existing:
                     logger.debug(f"Snapshot already exists for {current_date}, skipping")
@@ -357,9 +353,7 @@ class SnapshotService:
             self._db, account_id, start_date, end_date
         ):
             try:
-                existing = self._snapshot_repo.find_by_account_and_date(
-                    account_id, snapshot_date
-                )
+                existing = self._snapshot_repo.find_by_account_and_date(account_id, snapshot_date)
 
                 if existing:
                     stats["skipped"] += 1
@@ -369,9 +363,7 @@ class SnapshotService:
                     holdings, valuation_date=snapshot_date
                 )
 
-                self._snapshot_repo.create(
-                    account_id, snapshot_date, total_usd, total_ils
-                )
+                self._snapshot_repo.create(account_id, snapshot_date, total_usd, total_ils)
                 stats["created"] += 1
 
                 if stats["created"] % 100 == 0:

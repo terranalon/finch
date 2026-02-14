@@ -1,5 +1,6 @@
 """Tests for IBKRFlexClient error handling."""
 
+import itertools
 from unittest.mock import MagicMock, patch
 
 from app.services.brokers.ibkr.flex_client import (
@@ -144,8 +145,10 @@ class TestFetchFlexReportRateLimit:
     ):
         mock_request.return_value = "ref123"
         mock_poll.return_value = ("rate_limited", None)
-        # Simulate time progressing past the 60s timeout
-        mock_time.side_effect = [0, 0, 11, 22, 33, 44, 55, 66]
+        # Simulate time progressing past the 60s timeout.
+        # Use an infinite counter because logging also calls time.time()
+        # internally, consuming extra values from the mock.
+        mock_time.side_effect = itertools.count(0, 11)
 
         result = IBKRFlexClient.fetch_flex_report("token", "query1", timeout=60)
 
