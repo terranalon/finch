@@ -118,14 +118,12 @@ class HoldingRepository:
         self._db.flush()
         return holding
 
-    def find_active_with_assets(
-        self, account_ids: list[int]
-    ) -> list[tuple["Holding", "Asset"]]:
+    def find_active_with_assets(self, account_ids: list[int]) -> list[tuple["Holding", "Asset"]]:
         """Find active holdings with joined Asset data for given accounts."""
         from app.models import Asset
 
         return (
-            self._db.query(Holding, Asset)
+            self._db.query(Holding, Asset)  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
             .join(Asset, Holding.asset_id == Asset.id)
             .filter(Holding.is_active.is_(True), Holding.account_id.in_(account_ids))
             .all()
@@ -138,7 +136,7 @@ class HoldingRepository:
         from app.models import Account, Asset
 
         return (
-            self._db.query(Holding, Asset, Account.name.label("account_name"))
+            self._db.query(Holding, Asset, Account.name.label("account_name"))  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
             .join(Asset, Holding.asset_id == Asset.id)
             .join(Account, Holding.account_id == Account.id)
             .filter(Holding.is_active.is_(True), Holding.account_id.in_(account_ids))
@@ -152,7 +150,7 @@ class HoldingRepository:
         from app.models import Asset
 
         return (
-            self._db.query(Holding, Asset)
+            self._db.query(Holding, Asset)  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
             .join(Asset, Holding.asset_id == Asset.id)
             .filter(Holding.account_id == account_id, Holding.quantity != 0)
             .all()

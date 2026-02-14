@@ -49,12 +49,12 @@ def test_db():
     )
 
     engine = create_engine(test_db_url)
-    TestSession = sessionmaker(bind=engine)
+    test_session = sessionmaker(bind=engine)
 
     # Create all tables
     Base.metadata.create_all(engine)
 
-    session = TestSession()
+    session = test_session()
     yield session
 
     # Cleanup

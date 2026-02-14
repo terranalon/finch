@@ -32,7 +32,7 @@ def main():
             .join(Asset)
             .filter(
                 Holding.account_id == account_id,
-                Holding.is_active == True,
+                Holding.is_active == True,  # noqa: E712 — SQLAlchemy filter requires == comparison
                 Asset.asset_class == "Stock",  # Only stocks for now
             )
             .all()

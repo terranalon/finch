@@ -21,8 +21,8 @@ def db_session():
     User.__table__.create(engine, checkfirst=True)
     Session.__table__.create(engine, checkfirst=True)
     Portfolio.__table__.create(engine, checkfirst=True)
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+    session_local = sessionmaker(bind=engine)
+    session = session_local()
     yield session
     session.close()
 

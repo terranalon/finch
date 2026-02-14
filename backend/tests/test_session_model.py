@@ -33,8 +33,8 @@ def db_session():
     EmailOtpCode.__table__.create(engine, checkfirst=True)
     UserRecoveryCode.__table__.create(engine, checkfirst=True)
     MfaTempSession.__table__.create(engine, checkfirst=True)
-    TestSession = sessionmaker(bind=engine)
-    session = TestSession()
+    test_session = sessionmaker(bind=engine)
+    session = test_session()
     yield session
     session.close()
 

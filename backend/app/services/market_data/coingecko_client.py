@@ -304,7 +304,7 @@ class CoinGeckoClient:
             List of dicts with 'id', 'symbol', 'name' keys
         """
         try:
-            return self._request("/coins/list")
+            return self._request("/coins/list")  # ty: ignore[invalid-return-type] — API returns list[dict], _request typed as dict for most endpoints
         except CoinGeckoAPIError as e:
             logger.error(f"Failed to fetch coin list: {e}")
             return []

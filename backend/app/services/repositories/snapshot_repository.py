@@ -34,14 +34,10 @@ class SnapshotRepository:
             .first()
         )
 
-    def sum_values_by_date(
-        self, account_ids: list[int], target_date: date
-    ) -> Decimal | None:
+    def sum_values_by_date(self, account_ids: list[int], target_date: date) -> Decimal | None:
         """Sum total_value_usd for given accounts on a specific date."""
         row = (
-            self._db.query(
-                func.sum(HistoricalSnapshot.total_value_usd).label("total_usd")
-            )
+            self._db.query(func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"))
             .filter(
                 HistoricalSnapshot.date == target_date,
                 HistoricalSnapshot.account_id.in_(account_ids),
@@ -50,15 +46,13 @@ class SnapshotRepository:
         )
         return Decimal(str(row.total_usd)) if row and row.total_usd is not None else None
 
-    def find_aggregated_performance(
-        self, account_ids: list[int], days: int = 30
-    ) -> list[tuple]:
+    def find_aggregated_performance(self, account_ids: list[int], days: int = 30) -> list[tuple]:
         """Aggregated portfolio value by date, most recent first, limited to N days.
 
         Returns list of Row(date, total_usd, total_ils).
         """
         return (
-            self._db.query(
+            self._db.query(  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
                 HistoricalSnapshot.date,
                 func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"),
                 func.sum(HistoricalSnapshot.total_value_ils).label("total_ils"),
@@ -114,7 +108,7 @@ class SnapshotRepository:
             query = query.filter(HistoricalSnapshot.date <= end_date)
 
         return (
-            query.group_by(HistoricalSnapshot.date)
+            query.group_by(HistoricalSnapshot.date)  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
             .order_by(HistoricalSnapshot.date.desc())
             .limit(limit)
             .all()

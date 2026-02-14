@@ -67,6 +67,7 @@ class TestBatchUploadStaging:
             status="staged",
             import_stats={"session_id": session_id, "total_records": 50},
         )
+        assert source.import_stats is not None
         assert source.import_stats["session_id"] == session_id
 
     @patch("app.routers.broker_data.delete_synthetic_sources")
@@ -144,7 +145,7 @@ class TestBatchUploadStaging:
                     file=mock_file,
                     confirm_overlap=False,
                     session_id=session_id,
-                    background_tasks=None,
+                    background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                     db=mock_db,
                     current_user=mock_user,
                 )
@@ -224,7 +225,7 @@ class TestBatchUploadStaging:
                     file=mock_file,
                     confirm_overlap=False,
                     session_id=None,
-                    background_tasks=None,
+                    background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                     db=mock_db,
                     current_user=mock_user,
                 )
@@ -378,7 +379,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -428,7 +429,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -481,7 +482,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -508,7 +509,7 @@ class TestFinalizeBatchEndpoint:
                 finalize_batch_upload(
                     account_id=1,
                     session_id="nonexistent-session-id",
-                    background_tasks=None,
+                    background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                     db=mock_db,
                     current_user=mock_user,
                 )
@@ -626,7 +627,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -689,7 +690,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -741,7 +742,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -788,7 +789,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -847,7 +848,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )
@@ -896,7 +897,7 @@ class TestFinalizeBatchEndpoint:
             finalize_batch_upload(
                 account_id=1,
                 session_id=session_id,
-                background_tasks=None,
+                background_tasks=None,  # ty: ignore[invalid-argument-type] -- BackgroundTasks injected by FastAPI
                 db=mock_db,
                 current_user=mock_user,
             )

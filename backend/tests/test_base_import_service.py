@@ -20,7 +20,7 @@ class TestBaseBrokerImportService:
         """Test that subclasses must implement supported_broker_types."""
 
         class IncompleteService(BaseBrokerImportService):
-            def import_data(self, account_id, data, source_id=None):
+            def import_data(self, account_id, data, source_id=None):  # ty: ignore[invalid-method-override] — test override with simplified signature
                 return {}
 
         mock_db = MagicMock()
@@ -47,7 +47,7 @@ class TestBaseBrokerImportService:
             def supported_broker_types(cls):
                 return ["test"]
 
-            def import_data(self, account_id, data, source_id=None):
+            def import_data(self, account_id, data, source_id=None):  # ty: ignore[invalid-method-override] — test override with simplified signature
                 return {"status": "completed"}
 
         mock_db = MagicMock()

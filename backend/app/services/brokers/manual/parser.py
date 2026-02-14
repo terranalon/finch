@@ -186,10 +186,13 @@ class ManualParser(BaseBrokerParser):
         amount = self._parse_decimal(row.get("amount"))
 
         if txn_type in CASH_TYPES:
+            cash_amount = amount or Decimal("0")
+            if txn_type != "Deposit":
+                cash_amount = -abs(cash_amount)
             return "cash", ParsedCashTransaction(
                 date=trade_date,
                 transaction_type=txn_type,
-                amount=amount if txn_type == "Deposit" else -abs(amount),
+                amount=cash_amount,
                 currency=currency,
                 fees=fees,
                 notes=notes,

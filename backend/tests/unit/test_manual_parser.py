@@ -198,6 +198,7 @@ class TestManualParserValidation:
     def test_validate_wrong_extension(self, parser: ManualParser, sample_csv_content: bytes):
         is_valid, error = parser.validate_file(sample_csv_content, "data.xml")
         assert is_valid is False
+        assert error is not None
         assert "Unsupported file type" in error
 
     def test_missing_required_column(self, parser: ManualParser):

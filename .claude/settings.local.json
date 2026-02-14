@@ -69,7 +69,11 @@
       "Skill(portfolio-ui)",
       "Bash(docker cp:*)",
       "Bash(docker inspect:*)",
-      "Bash(docker compose build:*)"
+      "Bash(docker compose build:*)",
+      "Bash(uv run ty check:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(DATABASE_HOST=localhost uv run:*)"
     ]
   }
 }

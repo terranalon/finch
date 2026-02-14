@@ -67,11 +67,11 @@ class IBKRValidationService:
 
     def calculate_cash_totals(
         self,
-        transactions: list[dict],
-        dividends: list[dict],
-        transfers: list[dict],
-        forex: list[dict],
-        other_cash: list[dict],
+        transactions: list[Any],
+        dividends: list[Any],
+        transfers: list[Any],
+        forex: list[Any],
+        other_cash: list[Any],
     ) -> dict[str, dict[str, Decimal]]:
         """Calculate total cash impact by currency and transaction type.
 
@@ -156,11 +156,11 @@ class IBKRValidationService:
 
     def validate(
         self,
-        transactions: list[dict],
-        dividends: list[dict],
-        transfers: list[dict],
-        forex: list[dict],
-        other_cash: list[dict],
+        transactions: list[Any],
+        dividends: list[Any],
+        transfers: list[Any],
+        forex: list[Any],
+        other_cash: list[Any],
         fx_positions: dict[str, Decimal] | None = None,
         statement_of_funds: dict[str, dict[str, Decimal]] | None = None,
     ) -> IBKRValidationReport:
@@ -303,11 +303,11 @@ class IBKRValidationService:
 
 
 def validate_ibkr_import(
-    transactions: list[dict],
-    dividends: list[dict],
-    transfers: list[dict],
-    forex: list[dict],
-    other_cash: list[dict],
+    transactions: list[Any],
+    dividends: list[Any],
+    transfers: list[Any],
+    forex: list[Any],
+    other_cash: list[Any],
     fx_positions: dict[str, Decimal] | None = None,
     threshold: Decimal = Decimal("1.00"),
 ) -> dict[str, Any]:

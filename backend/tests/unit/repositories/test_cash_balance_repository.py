@@ -126,8 +126,6 @@ class TestCashBalanceRepository:
 
         repo = CashBalanceRepository(db)
         # Strict before: date(2024, 6, 15) should NOT include 6/15 itself
-        results = repo.find_latest_per_currency_before_date(
-            test_account.id, date(2024, 6, 15)
-        )
+        results = repo.find_latest_per_currency_before_date(test_account.id, date(2024, 6, 15))
         assert len(results) == 1
         assert results[0].balance == Decimal("1000.00")

@@ -102,8 +102,9 @@ def _verify_mfa_or_recovery(
     db: Session, mfa: UserMfa | None, user_id: str, mfa_code: str | None, recovery_code: str | None
 ) -> bool:
     """Verify using TOTP code or recovery code. Returns True if valid."""
-    return (mfa_code and _verify_totp_code(mfa, mfa_code)) or (
-        recovery_code and _verify_recovery_code(db, user_id, recovery_code)
+    return bool(
+        (mfa_code and _verify_totp_code(mfa, mfa_code))
+        or (recovery_code and _verify_recovery_code(db, user_id, recovery_code))
     )
 
 

@@ -43,8 +43,8 @@ class DashboardService:
         Display-currency conversion is the router's responsibility.
         """
         accounts = self._build_accounts(account_ids)
-        total_usd = sum(a.value_usd for a in accounts)
-        total_ils = sum(a.value_ils for a in accounts)
+        total_usd = sum((a.value_usd for a in accounts), Decimal("0"))
+        total_ils = sum((a.value_ils for a in accounts), Decimal("0"))
 
         day_change_usd, day_change_pct, prev_close_usd = self._calc_day_change(
             account_ids, total_usd

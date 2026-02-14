@@ -125,7 +125,7 @@ def create_or_transfer_transaction(
     exchange_rate: Decimal | None = None,
     # Account scoping for deduplication
     account_id: int | None = None,
-) -> tuple[DedupResult, "Transaction"]:
+) -> tuple[DedupResult, "Transaction | None"]:
     """Create a transaction with automatic hash-based deduplication.
 
     This is the canonical way to create transactions during broker imports.

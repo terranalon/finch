@@ -1,7 +1,7 @@
 """Portfolio reconstruction service for historical performance tracking."""
 
 import logging
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -318,9 +318,7 @@ class PortfolioReconstructionService:
         try:
             # Get the most recent balance for each currency on or before as_of_date
             # This handles gaps in StmtFunds data (which only records activity dates)
-            latest_balances_query = cash_repo.find_latest_per_currency(
-                account_id, as_of_date
-            )
+            latest_balances_query = cash_repo.find_latest_per_currency(account_id, as_of_date)
 
             latest_balances = {balance.currency: balance for balance in latest_balances_query}
 
@@ -445,6 +443,10 @@ class PortfolioReconstructionService:
                 old_asset = asset_repo.find_by_id(asset_id)
                 new_asset = asset_repo.find_by_id(new_asset_id)
 
+                if not old_asset or not new_asset:
+                    logger.warning(f"Asset not found for merge: {asset_id} -> {new_asset_id}")
+                    continue
+
                 logger.info(
                     f"Merging {old_asset.symbol} ({holding['quantity']} shares) "
                     f"into {new_asset.symbol} due to corporate action"
@@ -506,6 +508,9 @@ class PortfolioReconstructionService:
         for holding in holdings:
             # Get price as of target date (or closest available)
             asset = asset_repo.find_by_id(holding["asset_id"])
+            if not asset:
+                logger.warning(f"Asset {holding['asset_id']} not found, skipping")
+                continue
 
             # For cash assets, price is always 1.0 in their own currency
             if asset.asset_class == "Cash":
@@ -554,7 +559,9 @@ class PortfolioReconstructionService:
         }
 
     @staticmethod
-    def validate_reconstruction(db: Session, account_id: int, as_of_date: date = None) -> dict:
+    def validate_reconstruction(
+        db: Session, account_id: int, as_of_date: date | None = None
+    ) -> dict:
         """
         Validate reconstruction accuracy by comparing with current holdings.
 
@@ -613,7 +620,7 @@ class PortfolioReconstructionService:
                 discrepancies.append(
                     {
                         "asset_id": asset_id,
-                        "symbol": asset.symbol,
+                        "symbol": asset.symbol if asset else "unknown",
                         "current_quantity": float(current_qty),
                         "reconstructed_quantity": float(recon_qty),
                         "difference": float(diff),
@@ -670,9 +677,7 @@ class PortfolioReconstructionService:
         ]
 
         # Pre-fetch DailyCashBalance organized by currency and date
-        cash_balances = cash_repo.find_by_account_and_date_range(
-            account_id, start_date, end_date
-        )
+        cash_balances = cash_repo.find_by_account_and_date_range(account_id, start_date, end_date)
         stmt_funds_by_date: dict[date, dict[str, Decimal]] = {}
         for bal in cash_balances:
             if bal.date not in stmt_funds_by_date:
@@ -680,9 +685,7 @@ class PortfolioReconstructionService:
             stmt_funds_by_date[bal.date][bal.currency] = bal.balance
 
         # Also fetch the most recent StmtFunds before start_date for each currency
-        initial_balances = cash_repo.find_latest_per_currency_before_date(
-            account_id, start_date
-        )
+        initial_balances = cash_repo.find_latest_per_currency_before_date(account_id, start_date)
         last_known_cash: dict[str, Decimal] = {
             bal.currency: bal.balance for bal in initial_balances
         }
@@ -889,7 +892,7 @@ class PortfolioReconstructionService:
 
     @staticmethod
     def _build_corporate_action_merge_map(
-        corporate_actions: list, as_of_date: date
+        corporate_actions: Sequence, as_of_date: date
     ) -> dict[int, int]:
         """Build a map of old_asset_id -> new_asset_id from corporate actions."""
         applicable_actions = [
@@ -918,7 +921,7 @@ class PortfolioReconstructionService:
     def _apply_corporate_actions_to_snapshot(
         db: Session,
         snapshot: list[dict],
-        corporate_actions: list,
+        corporate_actions: Sequence,
         as_of_date: date,
     ) -> list[dict]:
         """

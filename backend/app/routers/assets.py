@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/assets", tags=["assets"])
 async def list_assets(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
-    asset_class: str = None,
+    asset_class: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Get list of assets."""
@@ -41,7 +41,7 @@ async def list_assets(
 async def list_assets_with_changes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    asset_class: str = None,
+    asset_class: str | None = None,
     display_currency: str = Query("USD", pattern="^[A-Z]{3}$"),
     db: Session = Depends(get_db),
 ):

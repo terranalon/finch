@@ -45,7 +45,9 @@ dev = [
     "pytest>=7.4.3",
     "pytest-asyncio>=0.21.1",
     "httpx>=0.26.0",
-    "ruff>=0.1.11",
+    "ruff>=0.9.0",
+    "ty>=0.0.16",
+    "pre-commit>=4.0.0",
     "xlsxwriter>=3.0.0",
 ]
 
@@ -72,6 +74,35 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"app/main.py" = ["E402"]  # imports after app setup code
+"backfill_*.py" = ["E402"]  # scripts with inline setup
+"check_*.py" = ["E402"]
+"validate_*.py" = ["E402"]
+"app/models/*.py" = ["F821"]  # SQLAlchemy forward reference strings
+
+[tool.ty]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+exclude = [
+    "alembic/",
+    "backfill_*.py",
+    "check_*.py",
+    "debug_*.py",
+    "fix_*.py",
+    "import_*.py",
+    "record_*.py",
+    "update_*.py",
+    "validate_*.py",
+]
+
+[tool.ty.rules]
+unresolved-reference = "ignore"
+unresolved-attribute = "warn"  # SQLAlchemy __table__.create(), result.rowcount, etc.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

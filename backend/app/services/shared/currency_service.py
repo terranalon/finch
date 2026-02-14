@@ -141,9 +141,7 @@ class CurrencyService:
 
                 stats["total"] += 1
 
-                existing = self._rate_repo.find_by_pair_and_date(
-                    from_curr, to_curr, target_date
-                )
+                existing = self._rate_repo.find_by_pair_and_date(from_curr, to_curr, target_date)
 
                 if existing:
                     logger.debug(f"Rate {from_curr}/{to_curr} already exists for {target_date}")
@@ -225,9 +223,7 @@ class CurrencyService:
             if close_rate is None or close_rate <= 0:
                 continue
 
-            self._rate_repo.create(
-                from_currency, to_currency, Decimal(str(close_rate)), rate_date
-            )
+            self._rate_repo.create(from_currency, to_currency, Decimal(str(close_rate)), rate_date)
             count += 1
 
         if count > 0:

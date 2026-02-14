@@ -51,7 +51,7 @@ ISRAELI_HOLDINGS_DATA = [
 DEMO_HOLDINGS_DATA = US_HOLDINGS_DATA
 
 
-def create_demo_user(db: DBSession) -> tuple[User, Portfolio, Portfolio | None]:
+def create_demo_user(db: DBSession) -> tuple[User, Portfolio | None, Portfolio | None]:
     """
     Create demo user with sample portfolios.
 
@@ -122,7 +122,7 @@ def seed_demo_data(db: DBSession) -> dict:
     user, us_portfolio, il_portfolio = create_demo_user(db)
 
     # Check if demo data already seeded (has accounts)
-    existing_accounts = db.query(Account).filter(Account.portfolio_id == us_portfolio.id).count()
+    existing_accounts = len(us_portfolio.accounts) if us_portfolio else 0
     if existing_accounts > 0:
         logger.info("Demo data already seeded, skipping...")
         db.commit()
@@ -136,7 +136,6 @@ def seed_demo_data(db: DBSession) -> dict:
     # ============ US INVESTMENTS PORTFOLIO ============
     # Create US accounts
     brokerage_account = Account(
-        portfolio_id=us_portfolio.id,
         name="Main Brokerage",
         institution="Interactive Brokers",
         account_type="brokerage",
@@ -148,7 +147,6 @@ def seed_demo_data(db: DBSession) -> dict:
     db.add(brokerage_account)
 
     retirement_account = Account(
-        portfolio_id=us_portfolio.id,
         name="Retirement IRA",
         institution="Fidelity",
         account_type="ira",
@@ -159,6 +157,11 @@ def seed_demo_data(db: DBSession) -> dict:
     )
     db.add(retirement_account)
     db.flush()
+
+    # Link accounts to US portfolio via many-to-many relationship
+    if us_portfolio:
+        us_portfolio.accounts.append(brokerage_account)
+        us_portfolio.accounts.append(retirement_account)
 
     logger.info(f"Created US accounts: {brokerage_account.name}, {retirement_account.name}")
 
@@ -216,7 +219,6 @@ def seed_demo_data(db: DBSession) -> dict:
     if il_portfolio:
         # Create Israeli accounts
         leumi_account = Account(
-            portfolio_id=il_portfolio.id,
             name="Bank Leumi Brokerage",
             institution="Bank Leumi",
             account_type="brokerage",
@@ -228,7 +230,6 @@ def seed_demo_data(db: DBSession) -> dict:
         db.add(leumi_account)
 
         pension_account = Account(
-            portfolio_id=il_portfolio.id,
             name="Migdal Pension",
             institution="Migdal Insurance",
             account_type="pension",
@@ -239,6 +240,10 @@ def seed_demo_data(db: DBSession) -> dict:
         )
         db.add(pension_account)
         db.flush()
+
+        # Link accounts to Israeli portfolio via many-to-many relationship
+        il_portfolio.accounts.append(leumi_account)
+        il_portfolio.accounts.append(pension_account)
         il_accounts_created = 2
 
         logger.info(f"Created Israeli accounts: {leumi_account.name}, {pension_account.name}")
@@ -540,7 +545,6 @@ def add_israeli_portfolio_to_existing_demo(db: DBSession) -> dict:
 
     # Create Israeli accounts
     leumi_account = Account(
-        portfolio_id=il_portfolio.id,
         name="Bank Leumi Brokerage",
         institution="Bank Leumi",
         account_type="brokerage",
@@ -552,7 +556,6 @@ def add_israeli_portfolio_to_existing_demo(db: DBSession) -> dict:
     db.add(leumi_account)
 
     pension_account = Account(
-        portfolio_id=il_portfolio.id,
         name="Migdal Pension",
         institution="Migdal Insurance",
         account_type="pension",
@@ -563,6 +566,10 @@ def add_israeli_portfolio_to_existing_demo(db: DBSession) -> dict:
     )
     db.add(pension_account)
     db.flush()
+
+    # Link accounts to Israeli portfolio via many-to-many relationship
+    il_portfolio.accounts.append(leumi_account)
+    il_portfolio.accounts.append(pension_account)
 
     # Get or create Israeli assets
     assets_by_symbol: dict[str, Asset] = {}
@@ -646,7 +653,11 @@ def seed_historical_for_existing_demo(db: DBSession) -> int:
         return 0
 
     portfolio = db.query(Portfolio).filter(Portfolio.user_id == user.id).first()
-    accounts = db.query(Account).filter(Account.portfolio_id == portfolio.id).all()
+    if not portfolio:
+        logger.error("Demo portfolio not found")
+        return 0
+
+    accounts = portfolio.accounts
 
     if len(accounts) < 2:
         logger.error("Expected 2 demo accounts")
@@ -686,7 +697,7 @@ def seed_historical_for_israeli_portfolio(db: DBSession) -> int:
         logger.error("Israeli Savings portfolio not found")
         return 0
 
-    accounts = db.query(Account).filter(Account.portfolio_id == il_portfolio.id).all()
+    accounts = il_portfolio.accounts
 
     if len(accounts) < 2:
         logger.error("Expected 2 Israeli accounts")

@@ -61,9 +61,7 @@ class TestExchangeRateRepository:
         db.commit()
 
         repo = ExchangeRateRepository(db)
-        dates = repo.find_dates_in_range(
-            "USD", "ILS", date(2024, 6, 11), date(2024, 6, 13)
-        )
+        dates = repo.find_dates_in_range("USD", "ILS", date(2024, 6, 11), date(2024, 6, 13))
         assert dates == {date(2024, 6, 11), date(2024, 6, 12), date(2024, 6, 13)}
 
     def test_find_dates_in_range_empty(self, db):
