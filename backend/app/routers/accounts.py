@@ -37,6 +37,16 @@ def raise_duplicate_account_name(account_name: str, portfolio_name: str) -> None
     )
 
 
+def verify_account_ownership(account_id: int, current_user: User, db: Session) -> None:
+    """Raise HTTP 404 if account_id does not belong to the current user."""
+    allowed_ids = get_user_account_ids(current_user, db)
+    if account_id not in allowed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account with id {account_id} not found",
+        )
+
+
 @router.get("", response_model=PaginatedResponse[AccountSchema])
 async def list_accounts(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -89,12 +99,7 @@ async def get_account(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific account by ID (must belong to user)."""
-    allowed_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
 
     account = db.query(Account).filter(Account.id == account_id).first()
     return account
@@ -145,12 +150,7 @@ async def update_account(
     current_user: User = Depends(get_current_user),
 ):
     """Update an existing account (must belong to user)."""
-    allowed_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
 
     db_account = db.query(Account).filter(Account.id == account_id).first()
 
@@ -178,12 +178,7 @@ async def delete_account(
     current_user: User = Depends(get_current_user),
 ):
     """Delete an account (must belong to user)."""
-    allowed_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
 
     db_account = db.query(Account).filter(Account.id == account_id).first()
     db.delete(db_account)
@@ -198,12 +193,7 @@ async def reconstruct_holdings(
     current_user: User = Depends(get_current_user),
 ):
     """Reconstruct holdings for an account from transaction history (must belong to user)."""
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
 
     svc = HoldingService(db)
     stats = svc.reconstruct_holdings(account_id)
@@ -223,12 +213,7 @@ async def validate_reconstruction(
 
     Compares reconstructed holdings (from transaction replay) with actual holdings.
     """
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
 
     return PortfolioReconstructionService.validate_reconstruction(db, account_id, as_of_date)
 
@@ -247,12 +232,8 @@ async def backfill_historical_snapshots(
     Generates portfolio snapshots for every day between start_date and end_date
     by reconstructing holdings from transaction history.
     """
-    allowed_account_ids = get_user_account_ids(current_user, db)
-    if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
+    verify_account_ownership(account_id, current_user, db)
+
     if not end_date:
         end_date = date.today()
 
@@ -271,10 +252,7 @@ async def backfill_historical_snapshots(
 
     try:
         stats = SnapshotService(db).backfill_historical_snapshots(account_id, start_date, end_date)
-        return {"status": "completed", "message": "Backfill completed successfully", **stats}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Backfill failed: {str(e)}"
-        )
+
+    return {"status": "completed", "message": "Backfill completed successfully", **stats}
