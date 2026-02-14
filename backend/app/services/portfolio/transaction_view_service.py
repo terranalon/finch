@@ -137,46 +137,16 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
-        # Load all rows to get accurate count after deduplication
-        all_rows = self._repo.find_forex(
-            account_ids,
-            account_id=account_id,
-            limit=10000,
-            offset=0,
+        total = self._repo.count_forex(account_ids, account_id=account_id)
+        rows = self._repo.find_forex(
+            account_ids, account_id=account_id, limit=limit, offset=offset
         )
 
-        all_forex: list[ForexItem] = []
-        seen_legacy_pairs: set[tuple[str, ...]] = set()
-
-        for txn, _, asset, account in all_rows:
-            if txn.to_holding_id is not None:
-                all_forex.append(self._build_new_format_forex(txn, asset, account))
-            else:
-                parsed = self.parse_legacy_forex_notes(txn.notes)
-                if not parsed:
-                    continue
-                from_amt, from_curr, to_amt, to_curr, rate = parsed
-                pair_key = (str(txn.date), from_curr, to_curr, str(from_amt), str(to_amt))
-                if pair_key in seen_legacy_pairs:
-                    continue
-                seen_legacy_pairs.add(pair_key)
-
-                all_forex.append(
-                    ForexItem(
-                        id=txn.id,
-                        date=txn.date,
-                        from_currency=from_curr,
-                        from_amount=from_amt,
-                        to_currency=to_curr,
-                        to_amount=to_amt,
-                        exchange_rate=rate,
-                        account_name=account.name,
-                        notes=txn.notes,
-                    ),
-                )
-
-        total = len(all_forex)
-        return all_forex[offset : offset + limit], total
+        items = [
+            self._build_new_format_forex(txn, asset, account)
+            for txn, _, asset, account in rows
+        ]
+        return items, total
 
     def _build_new_format_forex(
         self, txn: Transaction, asset: Asset, account: Account
@@ -191,7 +161,7 @@ class TransactionViewService:
             id=txn.id,
             date=txn.date,
             from_currency=asset.symbol,
-            from_amount=txn.amount or Decimal("0"),
+            from_amount=abs(txn.amount) if txn.amount is not None else Decimal("0"),
             to_currency=to_asset.symbol if to_asset else "???",
             to_amount=txn.to_amount or Decimal("0"),
             exchange_rate=txn.exchange_rate or Decimal("0"),
