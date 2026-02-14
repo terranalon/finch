@@ -75,6 +75,8 @@ class StagedImportService:
             "dividends": {},
             "transfers": {},
             "forex": {},
+            "other_cash": {},
+            "dividend_cash": {},
             "cash": {},
             "holdings_reconstruction": {},
             "staging": {},
@@ -142,10 +144,19 @@ class StagedImportService:
                 dividends_data=dividends_data,
                 transfers_data=transfers_data,
                 forex_data=forex_data,
+                other_cash_data=other_cash_data,
                 cash_data=cash_data,
             )
 
-            for key in ("transactions", "dividends", "transfers", "forex", "cash"):
+            for key in (
+                "transactions",
+                "dividends",
+                "transfers",
+                "forex",
+                "other_cash",
+                "dividend_cash",
+                "cash",
+            ):
                 stats[key] = import_stats.get(key, {})
 
             # Phase 4: Quick merge from staging to production
@@ -195,6 +206,7 @@ class StagedImportService:
         dividends_data: list,
         transfers_data: list,
         forex_data: list,
+        other_cash_data: list,
         cash_data: list,
     ) -> dict[str, Any]:
         """
@@ -208,6 +220,8 @@ class StagedImportService:
             "dividends": {"total": len(dividends_data), "imported": 0, "errors": []},
             "transfers": {"total": len(transfers_data), "imported": 0, "errors": []},
             "forex": {"total": len(forex_data), "imported": 0, "errors": []},
+            "other_cash": {"total": len(other_cash_data), "imported": 0, "errors": []},
+            "dividend_cash": {"total": len(dividends_data), "imported": 0, "errors": []},
             "cash": {"total": len(cash_data), "imported": 0, "errors": []},
         }
 
@@ -252,6 +266,22 @@ class StagedImportService:
                 stats["forex"]["errors"].append(
                     f"{getattr(forex, 'from_currency', None)}->{getattr(forex, 'to_currency', None)}: {str(e)}"
                 )
+
+        # Import other cash transactions (interest, tax, fees)
+        for txn in other_cash_data:
+            try:
+                StagedImportService._import_other_cash_to_staging(db, account_id, txn)
+                stats["other_cash"]["imported"] += 1
+            except Exception as e:
+                stats["other_cash"]["errors"].append(f"{getattr(txn, 'type', None)}: {str(e)}")
+
+        # Import dividend cash impact (cash-side entries for dividends)
+        for div in dividends_data:
+            try:
+                StagedImportService._import_dividend_cash_to_staging(db, account_id, div)
+                stats["dividend_cash"]["imported"] += 1
+            except Exception as e:
+                stats["dividend_cash"]["errors"].append(f"{getattr(div, 'symbol', None)}: {str(e)}")
 
         db.commit()
         return stats
@@ -446,6 +476,77 @@ class StagedImportService:
                 "notes": f"IBKR Import - {getattr(txn, 'description', '')}",
             },
         )
+
+        # Create Trade Settlement cash entry (double-entry: stock impact + cash impact)
+        net_cash = getattr(txn, "net_cash", None)
+        if net_cash and net_cash != 0:
+            trade_currency = txn.currency
+
+            # Find or create cash asset
+            result = db.execute(
+                text("SELECT id FROM staging.assets WHERE symbol = :symbol"),
+                {"symbol": trade_currency},
+            )
+            row = result.fetchone()
+
+            if row:
+                cash_asset_id = row[0]
+            else:
+                result = db.execute(
+                    text("""
+                        INSERT INTO staging.assets (
+                            symbol, name, asset_class, currency, data_source,
+                            last_fetched_price, is_manual_valuation
+                        ) VALUES (
+                            :symbol, :name, 'Cash', :currency, 'IBKR', 1, false
+                        )
+                        RETURNING id
+                    """),
+                    {
+                        "symbol": trade_currency,
+                        "name": f"{trade_currency} Cash",
+                        "currency": trade_currency,
+                    },
+                )
+                cash_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
+
+            cash_holding_id = StagedImportService._find_or_create_staging_holding(
+                db, account_id, cash_asset_id
+            )
+
+            # Check for duplicate settlement
+            result = db.execute(
+                text("""
+                    SELECT id FROM staging.transactions
+                    WHERE staging_holding_id = :holding_id
+                    AND date = :date
+                    AND type = 'Trade Settlement'
+                    AND amount = :amount
+                """),
+                {
+                    "holding_id": cash_holding_id,
+                    "date": txn.trade_date,
+                    "amount": net_cash,
+                },
+            )
+            if not result.fetchone():
+                db.execute(
+                    text("""
+                        INSERT INTO staging.transactions (
+                            staging_holding_id, holding_id, date, type, amount, fees, notes
+                        ) VALUES (
+                            :staging_holding_id, :holding_id, :date, 'Trade Settlement',
+                            :amount, 0, :notes
+                        )
+                    """),
+                    {
+                        "staging_holding_id": cash_holding_id,
+                        "holding_id": cash_holding_id,
+                        "date": txn.trade_date,
+                        "amount": net_cash,
+                        "notes": f"Cash settlement for {symbol} {txn.transaction_type}",
+                    },
+                )
 
     @staticmethod
     def _import_dividend_to_staging(db: Session, account_id: int, div) -> None:
@@ -664,5 +765,147 @@ class StagedImportService:
                 "to_amount": to_amount,
                 "exchange_rate": exchange_rate,
                 "notes": f"IBKR Import - Convert {from_amount} {from_currency} to {to_amount} {to_currency}",
+            },
+        )
+
+    @staticmethod
+    def _import_other_cash_to_staging(db: Session, account_id: int, txn: Any) -> None:
+        """Import an other-cash transaction (interest, tax, fee) to staging tables."""
+        currency = txn.currency
+        txn_type = txn.type
+        amount = txn.amount
+
+        # Find or create cash asset
+        result = db.execute(
+            text("SELECT id FROM staging.assets WHERE symbol = :symbol"),
+            {"symbol": currency},
+        )
+        row = result.fetchone()
+
+        if row:
+            staging_asset_id = row[0]
+        else:
+            result = db.execute(
+                text("""
+                    INSERT INTO staging.assets (
+                        symbol, name, asset_class, currency, data_source,
+                        last_fetched_price, is_manual_valuation
+                    ) VALUES (
+                        :symbol, :name, 'Cash', :currency, 'IBKR', 1, false
+                    )
+                    RETURNING id
+                """),
+                {"symbol": currency, "name": f"{currency} Cash", "currency": currency},
+            )
+            staging_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
+
+        staging_holding_id = StagedImportService._find_or_create_staging_holding(
+            db, account_id, staging_asset_id
+        )
+
+        # Check for duplicate
+        result = db.execute(
+            text("""
+                SELECT id FROM staging.transactions
+                WHERE staging_holding_id = :holding_id
+                AND date = :date
+                AND type = :type
+                AND amount = :amount
+            """),
+            {
+                "holding_id": staging_holding_id,
+                "date": txn.date,
+                "type": txn_type,
+                "amount": amount,
+            },
+        )
+        if result.fetchone():
+            return
+
+        db.execute(
+            text("""
+                INSERT INTO staging.transactions (
+                    staging_holding_id, holding_id, date, type, amount, fees, notes
+                ) VALUES (
+                    :staging_holding_id, :holding_id, :date, :type, :amount, 0, :notes
+                )
+            """),
+            {
+                "staging_holding_id": staging_holding_id,
+                "holding_id": staging_holding_id,
+                "date": txn.date,
+                "type": txn_type,
+                "amount": amount,
+                "notes": f"IBKR Import - {getattr(txn, 'description', '')}",
+            },
+        )
+
+    @staticmethod
+    def _import_dividend_cash_to_staging(db: Session, account_id: int, div: Any) -> None:
+        """Import the cash-side entry for a dividend to staging tables."""
+        currency = div.currency
+        amount = div.amount
+        symbol = div.symbol
+
+        # Find or create cash asset for this currency
+        result = db.execute(
+            text("SELECT id FROM staging.assets WHERE symbol = :symbol"),
+            {"symbol": currency},
+        )
+        row = result.fetchone()
+
+        if row:
+            staging_asset_id = row[0]
+        else:
+            result = db.execute(
+                text("""
+                    INSERT INTO staging.assets (
+                        symbol, name, asset_class, currency, data_source,
+                        last_fetched_price, is_manual_valuation
+                    ) VALUES (
+                        :symbol, :name, 'Cash', :currency, 'IBKR', 1, false
+                    )
+                    RETURNING id
+                """),
+                {"symbol": currency, "name": f"{currency} Cash", "currency": currency},
+            )
+            staging_asset_id = result.fetchone()[0]  # ty: ignore[not-subscriptable] — INSERT RETURNING always returns a row
+
+        staging_holding_id = StagedImportService._find_or_create_staging_holding(
+            db, account_id, staging_asset_id
+        )
+
+        # Check for duplicate (use "Dividend Cash" type to distinguish from stock dividend)
+        result = db.execute(
+            text("""
+                SELECT id FROM staging.transactions
+                WHERE staging_holding_id = :holding_id
+                AND date = :date
+                AND type = 'Dividend Cash'
+                AND amount = :amount
+            """),
+            {
+                "holding_id": staging_holding_id,
+                "date": div.date,
+                "amount": amount,
+            },
+        )
+        if result.fetchone():
+            return
+
+        db.execute(
+            text("""
+                INSERT INTO staging.transactions (
+                    staging_holding_id, holding_id, date, type, amount, fees, notes
+                ) VALUES (
+                    :staging_holding_id, :holding_id, :date, 'Dividend Cash', :amount, 0, :notes
+                )
+            """),
+            {
+                "staging_holding_id": staging_holding_id,
+                "holding_id": staging_holding_id,
+                "date": div.date,
+                "amount": amount,
+                "notes": f"IBKR Import - Dividend from {symbol}",
             },
         )

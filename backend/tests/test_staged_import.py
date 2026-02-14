@@ -20,6 +20,7 @@ from app.models import Account, Asset, Holding
 from app.services.brokers.ibkr.models import (
     IBKRCashBalance,
     IBKRDividend,
+    IBKROtherCashTransaction,
     IBKRTransaction,
 )
 from app.services.shared.staged_import_service import StagedImportService
@@ -145,6 +146,23 @@ def sample_cash_data():
             balance=Decimal("5000.00"),
             description="US Dollar",
             asset_class="Cash",
+            account_id="U12345",
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_other_cash_data():
+    """Sample other-cash transaction data from IBKR parser."""
+    return [
+        IBKROtherCashTransaction(
+            date=date(2025, 9, 1),
+            type="Interest",
+            ibkr_type="Broker Interest Received",
+            amount=Decimal("12.50"),
+            currency="USD",
+            symbol="USD",
+            description="Broker Interest Received",
             account_id="U12345",
         ),
     ]
@@ -409,6 +427,7 @@ class TestDataIntegrity:
         test_db,
         sample_transactions_data,
         sample_dividends_data,
+        sample_other_cash_data,
         sample_cash_data,
     ):
         """
@@ -429,7 +448,7 @@ class TestDataIntegrity:
             parser.extract_dividends.return_value = sample_dividends_data
             parser.extract_transfers.return_value = []
             parser.extract_forex_transactions.return_value = []
-            parser.extract_other_cash_transactions.return_value = []
+            parser.extract_other_cash_transactions.return_value = sample_other_cash_data
             parser.extract_cash_balances.return_value = sample_cash_data
 
         # Create two separate accounts for comparison
@@ -476,22 +495,18 @@ class TestDataIntegrity:
             test_db.query(Holding).filter(Holding.account_id == account_staged.id).all()
         )
 
-        # Compare equity holdings (exclude cash -- the atomic path creates
-        # dividend-cash transactions via _import_dividend_cash which the
-        # staging path doesn't replicate, causing different cash balances
-        # after reconstruction)
-        atomic_equity = {
-            h.asset.symbol: h for h in atomic_holdings if h.asset.asset_class != "Cash"
-        }
-        staged_equity = {
-            h.asset.symbol: h for h in staged_holdings if h.asset.asset_class != "Cash"
-        }
+        # Compare all holdings (equity + cash) -- both paths should produce identical results
+        atomic_by_symbol = {h.asset.symbol: h for h in atomic_holdings}
+        staged_by_symbol = {h.asset.symbol: h for h in staged_holdings}
 
-        assert len(atomic_equity) == len(staged_equity), "Equity holding count mismatch"
+        assert len(atomic_by_symbol) == len(staged_by_symbol), (
+            f"Holding count mismatch: atomic={sorted(atomic_by_symbol)} "
+            f"staged={sorted(staged_by_symbol)}"
+        )
 
-        for symbol in atomic_equity:
-            atomic_h = atomic_equity[symbol]
-            staged_h = staged_equity.get(symbol)
+        for symbol in atomic_by_symbol:
+            atomic_h = atomic_by_symbol[symbol]
+            staged_h = staged_by_symbol.get(symbol)
 
             assert staged_h is not None, f"Missing holding for {symbol} in staged import"
             assert atomic_h.quantity == staged_h.quantity, f"Quantity mismatch for {symbol}"

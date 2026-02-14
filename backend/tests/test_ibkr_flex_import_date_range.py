@@ -205,6 +205,8 @@ def _run_staged_import(mocks, **overrides):
             "dividends": {},
             "transfers": {},
             "forex": {},
+            "other_cash": {},
+            "dividend_cash": {},
             "cash": {},
         }
         stats = StagedImportService.import_with_staging(**kwargs)  # ty: ignore[invalid-argument-type] — kwargs dict matches signature
@@ -222,6 +224,7 @@ class TestStagedImportWithTransactions:
         mock_parser.extract_transactions.return_value = ["txn1", "txn2"]
         mock_parser.extract_dividends.return_value = ["div1"]
         mock_parser.extract_forex_transactions.return_value = ["fx1"]
+        mock_parser.extract_other_cash_transactions.return_value = ["fee1"]
 
         _stats, mock_staging = _run_staged_import(staged_import_mocks)
 
@@ -229,6 +232,17 @@ class TestStagedImportWithTransactions:
         assert kwargs["transactions_data"] == ["txn1", "txn2"]
         assert kwargs["dividends_data"] == ["div1"]
         assert kwargs["forex_data"] == ["fx1"]
+        assert kwargs["other_cash_data"] == ["fee1"]
+
+    def test_staged_import_passes_dividends_for_cash_impact(self, staged_import_mocks):
+        """Staged import should pass dividends_data so dividend_cash entries are created."""
+        mock_parser = staged_import_mocks["parser"]
+        mock_parser.extract_dividends.return_value = ["div1", "div2"]
+
+        _stats, mock_staging = _run_staged_import(staged_import_mocks)
+
+        kwargs = mock_staging.call_args.kwargs
+        assert kwargs["dividends_data"] == ["div1", "div2"]
 
     def test_staged_import_calls_reconstruction_after_merge(self, staged_import_mocks):
         """Staged import should reconstruct holdings after merging staging to production."""
