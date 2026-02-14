@@ -67,7 +67,7 @@ class LeumiParser(BaseBrokerParser):
                 if idx_attr:
                     col_pos = int(idx_attr)
                 data_el = cell_el.find("ss:Data", ns)
-                cells[col_pos] = data_el.text if data_el is not None else ""
+                cells[col_pos] = (data_el.text or "") if data_el is not None else ""
                 col_pos += 1
             rows = [*rows, cells]
 
