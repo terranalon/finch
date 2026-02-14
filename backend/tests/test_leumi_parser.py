@@ -57,6 +57,21 @@ class TestLeumiParserDateRange:
         assert start_date <= date(2025, 10, 1)
         assert end_date >= date(2025, 12, 15)
 
+    def test_extract_date_range_raises_on_no_dates(self, parser):
+        """File with no valid dates should raise ValueError."""
+        empty_xml = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            b' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+            b"<Worksheet ss:Name='Sheet1'><Table>"
+            b"<Row><Cell><Data ss:Type='String'>title</Data></Cell></Row>"
+            b"<Row><Cell><Data ss:Type='String'>meta</Data></Cell></Row>"
+            b"<Row><Cell><Data ss:Type='String'>header</Data></Cell></Row>"
+            b"</Table></Worksheet></Workbook>"
+        )
+        with pytest.raises(ValueError, match="No valid dates found"):
+            parser.extract_date_range(empty_xml)
+
 
 class TestLeumiParserParse:
     """Tests for full file parsing."""

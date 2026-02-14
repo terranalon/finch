@@ -101,8 +101,7 @@ class LeumiParser(BaseBrokerParser):
                     dates = [*dates, parsed]
 
         if not dates:
-            today = date.today()
-            return today, today
+            raise ValueError("No valid dates found in Leumi file")
 
         return min(dates), max(dates)
 
