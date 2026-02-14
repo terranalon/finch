@@ -198,7 +198,9 @@ async def reconstruct_holdings(
 @router.get("/{account_id}/reconstruction-validation", response_model=dict[str, Any])
 async def validate_reconstruction(
     account_id: int,
-    as_of_date: date | None = Query(default=None, description="Date to validate (defaults to today)"),
+    as_of_date: date | None = Query(
+        default=None, description="Date to validate (defaults to today)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
