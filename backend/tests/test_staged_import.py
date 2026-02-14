@@ -42,9 +42,10 @@ def test_db():
     # For staging tests, we need PostgreSQL due to schema support
     import os
 
+    db_host = os.getenv("DATABASE_HOST", "portfolio_tracker_db")
     test_db_url = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_test",
+        f"postgresql://portfolio_user:dev_password@{db_host}:5432/portfolio_tracker_test",
     )
 
     engine = create_engine(test_db_url)
@@ -210,7 +211,7 @@ class TestStagingTableUtilities:
 
         # Verify tables exist
         for table in ["assets", "holdings", "transactions", "daily_cash_balance"]:
-            result = test_db.execute(text(f"SELECT 1 FROM staging.{table} LIMIT 1"))
+            test_db.execute(text(f"SELECT 1 FROM staging.{table} LIMIT 1"))
             # No error means table exists
 
     def test_copy_production_to_staging(self, test_db, sample_account):
@@ -375,7 +376,10 @@ class TestStagedImportService:
         )
 
         assert stats["status"] == "completed"
-        assert stats["transactions"]["imported"] >= 2
+        # Staged import only imports positions and cash (not transactions).
+        # Transactions are imported via manual XML file upload, not the API.
+        assert stats["transactions"]["imported"] == 0
+        assert stats["transactions"]["total"] == 0
 
     @patch("app.services.shared.staged_import_service.IBKRFlexClient")
     @patch("app.services.shared.staged_import_service.IBKRParser")

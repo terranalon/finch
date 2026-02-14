@@ -43,7 +43,7 @@ class TestTotpSetup:
 class TestTotpConfirm:
     """Tests for TOTP confirmation."""
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_confirm_totp_success(self, mock_verify, auth_client):
         """Confirming TOTP with valid code should enable MFA and return recovery codes."""
         test_client, db_session_maker = auth_client
@@ -80,7 +80,7 @@ class TestTotpConfirm:
         assert user.mfa.totp_enabled is True
         db.close()
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_confirm_totp_invalid_code(self, mock_verify, auth_client):
         """Confirming TOTP with invalid code should fail."""
         test_client, db_session_maker = auth_client
@@ -139,7 +139,7 @@ class TestEmailOtpSetup:
 class TestMfaDisable:
     """Tests for disabling MFA."""
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     @patch("app.routers.mfa.EmailService.send_mfa_disabled_notification")
     def test_disable_mfa_with_totp_code(self, mock_notify, mock_verify, auth_client):
         """Disabling MFA with valid TOTP code should succeed."""
@@ -217,7 +217,7 @@ class TestMfaDisable:
 class TestRecoveryCodes:
     """Tests for recovery code operations."""
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_regenerate_recovery_codes(self, mock_verify, auth_client):
         """Regenerating recovery codes should return new codes and invalidate old ones."""
         test_client, db_session_maker = auth_client
@@ -258,7 +258,7 @@ class TestRecoveryCodes:
 class TestMfaLoginFlow:
     """Tests for MFA login flow."""
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_login_with_mfa_returns_temp_token(self, mock_verify, auth_client):
         """Login with MFA enabled should return temp token, not full tokens."""
         test_client, db_session_maker = auth_client
@@ -295,7 +295,7 @@ class TestMfaLoginFlow:
         assert "totp" in data["methods"]
         assert "access_token" not in data
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_verify_mfa_returns_full_tokens(self, mock_verify, auth_client):
         """Verifying MFA should return full access/refresh tokens."""
         test_client, db_session_maker = auth_client
@@ -477,7 +477,7 @@ class TestMfaStatus:
         assert data["primary_method"] == "email"
         assert data["has_recovery_codes"] is True
 
-    @patch("app.services.mfa_service.MfaService.verify_totp")
+    @patch("app.services.auth.mfa_service.MfaService.verify_totp")
     def test_get_mfa_status_totp_only(self, mock_verify, auth_client):
         """Returns correct status when only TOTP is enabled."""
         test_client, db_session_maker = auth_client
