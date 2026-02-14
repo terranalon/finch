@@ -4,13 +4,14 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Account, HistoricalSnapshot
+from app.models import Account
 from app.services.market_data.historical_data_fetcher import HistoricalDataFetcher
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
+from app.services.repositories import AccountRepository
+from app.services.repositories.snapshot_repository import SnapshotRepository
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ def update_snapshot_status(db: Session, account_id: int, status: str | None) -> 
         account_id: Account to update
         status: New status value ('generating', 'ready', 'failed', or None to clear)
     """
-    account = db.get(Account, account_id)
+    account = AccountRepository(db).find_by_id(account_id)
     if account:
         account.snapshot_status = status
         db.commit()
@@ -53,18 +54,12 @@ def generate_snapshots_background(account_id: int, start_date: date) -> None:
     try:
         # Verify we can see recent data before generating snapshots
         # This catches cases where the import transaction isn't yet visible
-        from app.models import Holding, Transaction
+        from app.services.repositories import TransactionRepository
 
         max_retries = 3
         retry_delay = 2
         for attempt in range(max_retries):
-            recent_txn_count = (
-                db.query(Transaction)
-                .join(Transaction.holding)
-                .filter(Holding.account_id == account_id)
-                .limit(1)
-                .count()
-            )
+            recent_txn_count = TransactionRepository(db).count_by_account(account_id)
             if recent_txn_count > 0:
                 break
             if attempt < max_retries - 1:
@@ -109,6 +104,8 @@ class SnapshotService:
     def __init__(self, db: Session) -> None:
         self._db = db
         self._valuation = HoldingValuationService(db)
+        self._snapshot_repo = SnapshotRepository(db)
+        self._account_repo = AccountRepository(db)
 
     def create_portfolio_snapshot(
         self,
@@ -134,11 +131,12 @@ class SnapshotService:
             "accounts": [],
         }
 
-        query = select(Account)
         if allowed_account_ids is not None:
-            query = query.where(Account.id.in_(allowed_account_ids))
-
-        accounts = self._db.execute(query).scalars().all()
+            accounts = self._account_repo.find_by_ids(allowed_account_ids)
+        else:
+            accounts = self._account_repo.find_by_ids(
+                self._account_repo.find_all_active_ids()
+            )
 
         for account in accounts:
             snapshot_data = self._create_account_snapshot(account, snapshot_date)
@@ -159,14 +157,7 @@ class SnapshotService:
 
     def _create_account_snapshot(self, account: Account, snapshot_date: date) -> dict | None:
         """Create a snapshot for a single account using transaction reconstruction."""
-        existing = self._db.execute(
-            select(HistoricalSnapshot).where(
-                and_(
-                    HistoricalSnapshot.account_id == account.id,
-                    HistoricalSnapshot.date == snapshot_date,
-                )
-            )
-        ).scalar_one_or_none()
+        existing = self._snapshot_repo.find_by_account_and_date(account.id, snapshot_date)
 
         if existing:
             logger.info(f"Snapshot already exists for account {account.name} on {snapshot_date}")
@@ -184,14 +175,7 @@ class SnapshotService:
             reconstructed, valuation_date=snapshot_date
         )
 
-        snapshot = HistoricalSnapshot(
-            account_id=account.id,
-            date=snapshot_date,
-            total_value_usd=total_usd,
-            total_value_ils=total_ils,
-        )
-
-        self._db.add(snapshot)
+        self._snapshot_repo.create(account.id, snapshot_date, total_usd, total_ils)
         self._db.commit()
 
         logger.info(
@@ -215,17 +199,10 @@ class SnapshotService:
         limit: int = 90,
     ) -> list[dict]:
         """Get historical snapshots for an account."""
-        query = select(HistoricalSnapshot).where(HistoricalSnapshot.account_id == account_id)
-
-        if start_date:
-            query = query.where(HistoricalSnapshot.date >= start_date)
-
-        if end_date:
-            query = query.where(HistoricalSnapshot.date <= end_date)
-
-        query = query.order_by(HistoricalSnapshot.date.desc()).limit(limit)
-
-        snapshots = db.execute(query).scalars().all()
+        repo = SnapshotRepository(db)
+        snapshots = repo.find_by_account(
+            account_id, start_date=start_date, end_date=end_date, limit=limit
+        )
 
         return [
             {
@@ -245,26 +222,13 @@ class SnapshotService:
         allowed_account_ids: list[int] | None = None,
     ) -> list[dict]:
         """Get aggregated portfolio history across all accounts."""
-        query = select(
-            HistoricalSnapshot.date,
-            func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"),
-            func.sum(HistoricalSnapshot.total_value_ils).label("total_ils"),
-        ).join(Account, HistoricalSnapshot.account_id == Account.id)
-
-        if allowed_account_ids is not None:
-            query = query.where(HistoricalSnapshot.account_id.in_(allowed_account_ids))
-
-        if start_date:
-            query = query.where(HistoricalSnapshot.date >= start_date)
-
-        if end_date:
-            query = query.where(HistoricalSnapshot.date <= end_date)
-
-        query = query.group_by(HistoricalSnapshot.date)
-        query = query.order_by(HistoricalSnapshot.date.desc())
-        query = query.limit(limit)
-
-        results = db.execute(query).all()
+        repo = SnapshotRepository(db)
+        results = repo.find_aggregated_portfolio_history(
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            account_ids=allowed_account_ids,
+        )
 
         return [
             {
@@ -283,9 +247,7 @@ class SnapshotService:
         Generates portfolio snapshots for every day between start_date and end_date
         by reconstructing holdings from transaction history.
         """
-        account = self._db.execute(
-            select(Account).where(Account.id == account_id)
-        ).scalar_one_or_none()
+        account = self._account_repo.find_by_id(account_id)
 
         if not account:
             raise ValueError(f"Account {account_id} not found")
@@ -310,14 +272,9 @@ class SnapshotService:
 
         while current_date <= end_date:
             try:
-                existing = self._db.execute(
-                    select(HistoricalSnapshot).where(
-                        and_(
-                            HistoricalSnapshot.account_id == account_id,
-                            HistoricalSnapshot.date == current_date,
-                        )
-                    )
-                ).scalar_one_or_none()
+                existing = self._snapshot_repo.find_by_account_and_date(
+                    account_id, current_date
+                )
 
                 if existing:
                     logger.debug(f"Snapshot already exists for {current_date}, skipping")
@@ -339,14 +296,7 @@ class SnapshotService:
                     reconstructed, valuation_date=current_date
                 )
 
-                snapshot = HistoricalSnapshot(
-                    account_id=account_id,
-                    date=current_date,
-                    total_value_usd=total_usd,
-                    total_value_ils=total_ils,
-                )
-
-                self._db.add(snapshot)
+                self._snapshot_repo.create(account_id, current_date, total_usd, total_ils)
                 self._db.commit()
 
                 stats["created"] += 1
@@ -391,14 +341,8 @@ class SnapshotService:
         }
 
         if invalidate_existing:
-            deleted = (
-                self._db.query(HistoricalSnapshot)
-                .filter(
-                    HistoricalSnapshot.account_id == account_id,
-                    HistoricalSnapshot.date >= start_date,
-                    HistoricalSnapshot.date <= end_date,
-                )
-                .delete(synchronize_session=False)
+            deleted = self._snapshot_repo.delete_by_account_and_date_range(
+                account_id, start_date, end_date
             )
             self._db.commit()
             logger.info(f"Deleted {deleted} existing snapshots for account {account_id}")
@@ -413,14 +357,9 @@ class SnapshotService:
             self._db, account_id, start_date, end_date
         ):
             try:
-                existing = self._db.execute(
-                    select(HistoricalSnapshot).where(
-                        and_(
-                            HistoricalSnapshot.account_id == account_id,
-                            HistoricalSnapshot.date == snapshot_date,
-                        )
-                    )
-                ).scalar_one_or_none()
+                existing = self._snapshot_repo.find_by_account_and_date(
+                    account_id, snapshot_date
+                )
 
                 if existing:
                     stats["skipped"] += 1
@@ -430,13 +369,9 @@ class SnapshotService:
                     holdings, valuation_date=snapshot_date
                 )
 
-                snapshot = HistoricalSnapshot(
-                    account_id=account_id,
-                    date=snapshot_date,
-                    total_value_usd=total_usd,
-                    total_value_ils=total_ils,
+                self._snapshot_repo.create(
+                    account_id, snapshot_date, total_usd, total_ils
                 )
-                self._db.add(snapshot)
                 stats["created"] += 1
 
                 if stats["created"] % 100 == 0:

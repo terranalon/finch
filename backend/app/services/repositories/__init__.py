@@ -13,20 +13,28 @@ Dependency direction: Services -> Repositories -> Models
 
 from .account_repository import AccountRepository
 from .asset_repository import AssetRepository
+from .cash_balance_repository import CashBalanceRepository
+from .corporate_action_repository import CorporateActionRepository
 from .exceptions import DuplicateError, NotFoundError, RepositoryError
+from .exchange_rate_repository import ExchangeRateRepository
 from .holding_repository import HoldingRepository
 from .price_repository import PriceRepository
+from .snapshot_repository import SnapshotRepository
 from .transaction_repository import TransactionRepository
 from .user_repository import UserRepository
 
 __all__ = [
     "AccountRepository",
     "AssetRepository",
+    "CashBalanceRepository",
+    "CorporateActionRepository",
     "DuplicateError",
+    "ExchangeRateRepository",
     "HoldingRepository",
     "NotFoundError",
     "PriceRepository",
     "RepositoryError",
+    "SnapshotRepository",
     "TransactionRepository",
     "UserRepository",
 ]
