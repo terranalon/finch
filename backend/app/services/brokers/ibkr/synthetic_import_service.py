@@ -5,6 +5,7 @@ These synthetic records are replaced when the user uploads full historical data.
 """
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -157,7 +158,13 @@ class IBKRSyntheticImportService:
     """Creates synthetic transactions from current IBKR positions."""
 
     @staticmethod
-    def import_snapshot(db: Session, account_id: int, flex_token: str, flex_query_id: str) -> dict:
+    def import_snapshot(
+        db: Session,
+        account_id: int,
+        flex_token: str,
+        flex_query_id: str,
+        pre_fetched_root: ET.Element | None = None,
+    ) -> dict:
         """Fetch current positions from IBKR and create synthetic transactions.
 
         This creates:
@@ -178,15 +185,17 @@ class IBKRSyntheticImportService:
             if not account:
                 return _fail_stats(stats, f"Account {account_id} not found")
 
-            xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id)
-            if not xml_data:
-                return _fail_stats(
-                    stats, "Failed to fetch Flex Query report. Check your token and query ID."
-                )
-
-            root = IBKRParser.parse_xml(xml_data)
-            if root is None:
-                return _fail_stats(stats, "Failed to parse Flex Query XML response")
+            if pre_fetched_root is not None:
+                root = pre_fetched_root
+            else:
+                xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id)
+                if not xml_data:
+                    return _fail_stats(
+                        stats, "Failed to fetch Flex Query report. Check your token and query ID."
+                    )
+                root = IBKRParser.parse_xml(xml_data)
+                if root is None:
+                    return _fail_stats(stats, "Failed to parse Flex Query XML response")
 
             positions_data = IBKRParser.extract_positions(root)
             cash_data = IBKRParser.extract_cash_balances(root)
