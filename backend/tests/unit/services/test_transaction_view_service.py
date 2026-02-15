@@ -59,6 +59,31 @@ def _create_txn(db, holding, **kwargs):
     return txn
 
 
+def _create_forex_holdings(db, test_account, cash_usd, test_asset, *, from_qty="1000", to_qty="0"):
+    """Create from/to holding pair for forex tests. Returns (from_holding, to_holding)."""
+    from_holding = Holding(
+        account_id=test_account.id,
+        asset_id=cash_usd.id,
+        quantity=Decimal(from_qty),
+        cost_basis=Decimal("0"),
+        is_active=True,
+    )
+    db.add(from_holding)
+    db.flush()
+
+    to_holding = Holding(
+        account_id=test_account.id,
+        asset_id=test_asset.id,
+        quantity=Decimal(to_qty),
+        cost_basis=Decimal("0"),
+        is_active=True,
+    )
+    db.add(to_holding)
+    db.flush()
+
+    return from_holding, to_holding
+
+
 class TestGetTrades:
     def test_computes_total(self, db, test_account, test_asset, test_holding):
         _create_txn(
@@ -114,26 +139,9 @@ class TestGetDividends:
 
 class TestGetForex:
     def test_new_format_with_to_holding(self, db, test_account, test_asset, cash_usd):
-        from_holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, to_qty="280"
         )
-        db.add(from_holding)
-        db.flush()
-
-        to_holding = Holding(
-            account_id=test_account.id,
-            asset_id=test_asset.id,
-            quantity=Decimal("280"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(to_holding)
-        db.flush()
-
         _create_txn(
             db,
             from_holding,
@@ -151,7 +159,8 @@ class TestGetForex:
         assert total == 1
         assert forex[0].from_currency == "USD"
 
-    def test_legacy_format_parses_notes(self, db, test_account, cash_holding):
+    def test_legacy_rows_without_to_holding_excluded(self, db, test_account, cash_holding):
+        """Legacy rows (to_holding_id=NULL) are excluded from forex view."""
         _create_txn(
             db,
             cash_holding,
@@ -163,12 +172,57 @@ class TestGetForex:
         )
         svc = TransactionViewService(db)
         forex, total = svc.get_forex([test_account.id])
-        assert len(forex) == 1
+        assert total == 0
+        assert len(forex) == 0
+
+    def test_migrated_legacy_uses_abs_amount(self, db, test_account, test_asset, cash_usd):
+        """Migrated legacy rows with negative amount display abs(amount)."""
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, to_qty="280"
+        )
+        _create_txn(
+            db,
+            from_holding,
+            type="Forex Conversion",
+            amount=Decimal("-1500"),
+            to_holding_id=to_holding.id,
+            to_amount=Decimal("420"),
+            exchange_rate=Decimal("0.28"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        svc = TransactionViewService(db)
+        forex, total = svc.get_forex([test_account.id])
         assert total == 1
-        assert forex[0].from_currency == "ILS"
         assert forex[0].from_amount == Decimal("1500")
-        assert forex[0].to_currency == "USD"
-        assert forex[0].to_amount == Decimal("420")
+
+    def test_pagination_at_db_level(self, db, test_account, test_asset, cash_usd):
+        """Pagination uses DB offset/limit, not Python slicing."""
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, from_qty="5000"
+        )
+        for i in range(3):
+            _create_txn(
+                db,
+                from_holding,
+                type="Forex Conversion",
+                date=date(2024, 6, 15 + i),
+                amount=Decimal("100") * (i + 1),
+                to_holding_id=to_holding.id,
+                to_amount=Decimal("28") * (i + 1),
+                exchange_rate=Decimal("0.28"),
+                quantity=None,
+                price_per_unit=None,
+            )
+
+        svc = TransactionViewService(db)
+        page1, total = svc.get_forex([test_account.id], limit=2, offset=0)
+        assert total == 3
+        assert len(page1) == 2
+
+        page2, total2 = svc.get_forex([test_account.id], limit=2, offset=2)
+        assert total2 == 3
+        assert len(page2) == 1
 
 
 class TestGetCashActivity:
@@ -231,17 +285,34 @@ class TestCountDividends:
 
 
 class TestCountForex:
-    def test_counts_forex_transactions(self, db, test_account, cash_holding):
+    def test_counts_forex_with_to_holding(self, db, test_account, test_asset, cash_usd):
+        from_holding, to_holding = _create_forex_holdings(db, test_account, cash_usd, test_asset)
         _create_txn(
             db,
-            cash_holding,
+            from_holding,
             type="Forex Conversion",
             amount=Decimal("1000"),
+            to_holding_id=to_holding.id,
+            to_amount=Decimal("280"),
+            exchange_rate=Decimal("0.28"),
             quantity=None,
             price_per_unit=None,
         )
         repo = TransactionRepository(db)
         assert repo.count_forex([test_account.id]) == 1
+
+    def test_excludes_mirror_rows(self, db, test_account, cash_holding):
+        """Mirror rows (to_holding_id=NULL) are not counted."""
+        _create_txn(
+            db,
+            cash_holding,
+            type="Forex Conversion",
+            amount=Decimal("1500"),
+            quantity=None,
+            price_per_unit=None,
+        )
+        repo = TransactionRepository(db)
+        assert repo.count_forex([test_account.id]) == 0
 
 
 class TestCountCashActivity:

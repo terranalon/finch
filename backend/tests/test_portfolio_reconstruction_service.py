@@ -545,3 +545,98 @@ class TestApplyCorporateActionsToSnapshot:
         assert 200 in result_by_id
         assert 300 in result_by_id
         assert result_by_id[300]["quantity"] == Decimal("10")
+
+
+class TestNewFormatForexReconstruction:
+    """Tests for single-row forex reconstruction."""
+
+    def test_new_format_forex_adjusts_both_holdings(self, db_session):
+        """New-format forex subtracts from source and adds to destination."""
+        user = User(
+            email="test_recon_forex@example.com",
+            username="test_recon_forex",
+            password_hash=AuthService.hash_password("test123"),
+            email_verified=True,
+        )
+        db_session.add(user)
+        db_session.flush()
+
+        portfolio = Portfolio(user_id=user.id, name="Test Recon Forex Portfolio")
+        db_session.add(portfolio)
+        db_session.flush()
+
+        account = Account(
+            name="Test Recon Forex Account",
+            account_type="brokerage",
+            currency="USD",
+        )
+        account.portfolios.append(portfolio)
+        db_session.add(account)
+        db_session.flush()
+
+        ils_asset = Asset(
+            symbol="RECON_TEST_ILS",
+            name="Israeli Shekel",
+            asset_class="Cash",
+            currency="ILS",
+        )
+        usd_asset = Asset(
+            symbol="RECON_TEST_USD",
+            name="US Dollar",
+            asset_class="Cash",
+            currency="USD",
+        )
+        db_session.add_all([ils_asset, usd_asset])
+        db_session.flush()
+
+        ils_holding = Holding(
+            account_id=account.id,
+            asset_id=ils_asset.id,
+            quantity=Decimal("0"),
+            cost_basis=Decimal("0"),
+        )
+        usd_holding = Holding(
+            account_id=account.id,
+            asset_id=usd_asset.id,
+            quantity=Decimal("0"),
+            cost_basis=Decimal("0"),
+        )
+        db_session.add_all([ils_holding, usd_holding])
+        db_session.flush()
+
+        # Deposit 5000 ILS first
+        db_session.add(
+            Transaction(
+                holding_id=ils_holding.id,
+                date=date(2024, 1, 1),
+                type="Deposit",
+                quantity=None,
+                price_per_unit=None,
+                amount=Decimal("5000"),
+                fees=Decimal("0"),
+            )
+        )
+        # Convert 1500 ILS to 420 USD (new format: single row)
+        db_session.add(
+            Transaction(
+                holding_id=ils_holding.id,
+                to_holding_id=usd_holding.id,
+                date=date(2024, 6, 1),
+                type="Forex Conversion",
+                quantity=None,
+                price_per_unit=None,
+                amount=Decimal("1500"),
+                to_amount=Decimal("420"),
+                exchange_rate=Decimal("0.28"),
+                fees=Decimal("0"),
+            )
+        )
+        db_session.commit()
+
+        results = PortfolioReconstructionService.reconstruct_holdings(
+            db_session, account.id, date(2024, 12, 31)
+        )
+
+        holdings_by_symbol = {r["symbol"]: r for r in results}
+        assert holdings_by_symbol["RECON_TEST_ILS"]["quantity"] == Decimal("3500")
+        assert holdings_by_symbol["RECON_TEST_USD"]["quantity"] == Decimal("420")
