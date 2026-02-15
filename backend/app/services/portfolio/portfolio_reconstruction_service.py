@@ -300,20 +300,6 @@ class PortfolioReconstructionService:
                         h["quantity"] -= fee_qty  # Fee is positive, so subtract
                     logger.debug(f"Fee for {asset.symbol} on {txn.date}: {fee_qty}")
 
-            elif txn.type in ("Withdrawal Fee", "Custody Fee"):
-                # Platform fees - already stored with correct sign (negative for deductions)
-                fee_qty = _resolve_quantity(txn)
-                if fee_qty is not None:
-                    h["quantity"] += fee_qty
-                    logger.debug(f"{txn.type} for {asset.symbol} on {txn.date}: {fee_qty}")
-
-            elif txn.type in ("Refund Fee", "Refund Withdrawal"):
-                # Refunds that add back to holdings (usually stored as positive quantities)
-                refund_qty = _resolve_quantity(txn)
-                if refund_qty is not None:
-                    h["quantity"] += refund_qty
-                    logger.debug(f"{txn.type} for {asset.symbol} on {txn.date}: {refund_qty}")
-
             elif txn.type == "Credit":
                 # Credits that add to holdings (refunds, adjustments, etc.)
                 credit_qty = _resolve_quantity(txn)

@@ -59,6 +59,31 @@ def _create_txn(db, holding, **kwargs):
     return txn
 
 
+def _create_forex_holdings(db, test_account, cash_usd, test_asset, *, from_qty="1000", to_qty="0"):
+    """Create from/to holding pair for forex tests. Returns (from_holding, to_holding)."""
+    from_holding = Holding(
+        account_id=test_account.id,
+        asset_id=cash_usd.id,
+        quantity=Decimal(from_qty),
+        cost_basis=Decimal("0"),
+        is_active=True,
+    )
+    db.add(from_holding)
+    db.flush()
+
+    to_holding = Holding(
+        account_id=test_account.id,
+        asset_id=test_asset.id,
+        quantity=Decimal(to_qty),
+        cost_basis=Decimal("0"),
+        is_active=True,
+    )
+    db.add(to_holding)
+    db.flush()
+
+    return from_holding, to_holding
+
+
 class TestGetTrades:
     def test_computes_total(self, db, test_account, test_asset, test_holding):
         _create_txn(
@@ -114,26 +139,9 @@ class TestGetDividends:
 
 class TestGetForex:
     def test_new_format_with_to_holding(self, db, test_account, test_asset, cash_usd):
-        from_holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, to_qty="280"
         )
-        db.add(from_holding)
-        db.flush()
-
-        to_holding = Holding(
-            account_id=test_account.id,
-            asset_id=test_asset.id,
-            quantity=Decimal("280"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(to_holding)
-        db.flush()
-
         _create_txn(
             db,
             from_holding,
@@ -169,26 +177,9 @@ class TestGetForex:
 
     def test_migrated_legacy_uses_abs_amount(self, db, test_account, test_asset, cash_usd):
         """Migrated legacy rows with negative amount display abs(amount)."""
-        from_holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, to_qty="280"
         )
-        db.add(from_holding)
-        db.flush()
-
-        to_holding = Holding(
-            account_id=test_account.id,
-            asset_id=test_asset.id,
-            quantity=Decimal("280"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(to_holding)
-        db.flush()
-
         _create_txn(
             db,
             from_holding,
@@ -207,26 +198,9 @@ class TestGetForex:
 
     def test_pagination_at_db_level(self, db, test_account, test_asset, cash_usd):
         """Pagination uses DB offset/limit, not Python slicing."""
-        from_holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("5000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
+        from_holding, to_holding = _create_forex_holdings(
+            db, test_account, cash_usd, test_asset, from_qty="5000"
         )
-        db.add(from_holding)
-        db.flush()
-
-        to_holding = Holding(
-            account_id=test_account.id,
-            asset_id=test_asset.id,
-            quantity=Decimal("0"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(to_holding)
-        db.flush()
-
         for i in range(3):
             _create_txn(
                 db,
@@ -312,26 +286,7 @@ class TestCountDividends:
 
 class TestCountForex:
     def test_counts_forex_with_to_holding(self, db, test_account, test_asset, cash_usd):
-        from_holding = Holding(
-            account_id=test_account.id,
-            asset_id=cash_usd.id,
-            quantity=Decimal("1000"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(from_holding)
-        db.flush()
-
-        to_holding = Holding(
-            account_id=test_account.id,
-            asset_id=test_asset.id,
-            quantity=Decimal("0"),
-            cost_basis=Decimal("0"),
-            is_active=True,
-        )
-        db.add(to_holding)
-        db.flush()
-
+        from_holding, to_holding = _create_forex_holdings(db, test_account, cash_usd, test_asset)
         _create_txn(
             db,
             from_holding,

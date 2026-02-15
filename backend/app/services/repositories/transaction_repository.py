@@ -58,10 +58,7 @@ class TransactionRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[_TransactionRow]:
-        query = self._base_query(account_ids, _FOREX_TYPES, account_id=account_id).filter(
-            Transaction.to_holding_id.isnot(None)
-        )
-        return self._paginate(query, limit, offset)
+        return self._paginate(self._forex_query(account_ids, account_id=account_id), limit, offset)
 
     def find_cash_activity(
         self,
@@ -102,11 +99,7 @@ class TransactionRepository:
         *,
         account_id: int | None = None,
     ) -> int:
-        return (
-            self._base_query(account_ids, _FOREX_TYPES, account_id=account_id)
-            .filter(Transaction.to_holding_id.isnot(None))
-            .count()
-        )
+        return self._forex_query(account_ids, account_id=account_id).count()
 
     def count_cash_activity(
         self,
@@ -137,6 +130,17 @@ class TransactionRepository:
         if account_id:
             query = query.filter(Account.id == account_id)
         return query
+
+    def _forex_query(
+        self,
+        account_ids: Sequence[int],
+        *,
+        account_id: int | None = None,
+    ) -> Query:
+        """Build forex query filtering to new-format rows (to_holding_id IS NOT NULL)."""
+        return self._base_query(account_ids, _FOREX_TYPES, account_id=account_id).filter(
+            Transaction.to_holding_id.isnot(None)
+        )
 
     def _filtered_query(
         self,

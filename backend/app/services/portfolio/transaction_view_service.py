@@ -148,12 +148,8 @@ class TransactionViewService:
     def _build_new_format_forex(
         self, txn: Transaction, asset: Asset, account: Account
     ) -> ForexItem:
-        to_holding = self._db.query(Holding).filter(Holding.id == txn.to_holding_id).first()
-        to_asset = (
-            self._db.query(Asset).filter(Asset.id == to_holding.asset_id).first()
-            if to_holding
-            else None
-        )
+        to_holding = self._db.get(Holding, txn.to_holding_id)
+        to_asset = self._db.get(Asset, to_holding.asset_id) if to_holding else None
         return ForexItem(
             id=txn.id,
             date=txn.date,
