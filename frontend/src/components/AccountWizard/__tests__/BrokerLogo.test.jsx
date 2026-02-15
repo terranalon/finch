@@ -21,7 +21,7 @@ describe('BrokerLogo', () => {
   });
 
   it('renders correct logo for each known broker', () => {
-    const brokers = ['ibkr', 'meitav', 'kraken', 'bit2c', 'binance'];
+    const brokers = ['ibkr', 'meitav', 'bank_hapoalim', 'leumi', 'kraken', 'bit2c', 'binance'];
 
     brokers.forEach((broker) => {
       const { unmount } = render(<BrokerLogo type={broker} />);

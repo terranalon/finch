@@ -3,6 +3,8 @@ import { cn } from '../../lib/index.js';
 const BROKER_LOGOS = {
   ibkr: 'https://cdn.brandfetch.io/idcABCQwX-/w/400/h/400/theme/dark/icon.jpeg',
   meitav: 'https://cdn.brandfetch.io/idT29sW48-/w/400/h/400/theme/dark/logo.png',
+  bank_hapoalim: 'https://cdn.brandfetch.io/ido_bZv0cC/w/400/h/400/theme/dark/logo.png',
+  leumi: 'https://cdn.brandfetch.io/idqdUVKqfU/w/400/h/400/theme/dark/icon.jpeg',
   kraken: 'https://cdn.brandfetch.io/idYQrXoH-Q/w/400/h/400/theme/dark/symbol.png',
   bit2c: 'https://cdn.brandfetch.io/idatfQiwS7/w/400/h/400/theme/dark/icon.jpeg',
   binance: 'https://cdn.brandfetch.io/id-pjrLx_q/w/400/h/400/theme/dark/symbol.png',
