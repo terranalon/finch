@@ -627,6 +627,61 @@ class TestIBKRImport:
         assert data["status"] == "completed"
         assert data["import_method"] == "atomic"
 
+    def test_ibkr_import_passes_incremental_start_date(self, client_with_user, auth_headers):
+        """IBKR import should pass start_date derived from last_import metadata."""
+        client, _ = client_with_user
+
+        mock_account = MagicMock()
+        mock_account.meta_data = {
+            "ibkr": {
+                "flex_token": "tok",
+                "flex_query_id": "qid",
+                "last_import": "2026-02-10T12:00:00",
+            }
+        }
+
+        with (
+            patch("app.routers.brokers._get_validated_account", return_value=mock_account),
+            patch(
+                "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+            ) as mock_import,
+        ):
+            client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
+
+            # start_date should be last_import minus 1 day buffer = 2026-02-09
+            assert mock_import.call_args.kwargs["start_date"] == date(2026, 2, 9)
+
+    def test_ibkr_import_uses_account_created_at_for_new_accounts(
+        self, client_with_user, auth_headers
+    ):
+        """First import for a new IBKR account should use account.created_at as start_date."""
+        client, _ = client_with_user
+
+        mock_account = MagicMock()
+        mock_account.meta_data = {"ibkr": {"flex_token": "tok", "flex_query_id": "qid"}}
+        mock_account.created_at = datetime(2026, 2, 12, 10, 0, 0)
+
+        with (
+            patch("app.routers.brokers._get_validated_account", return_value=mock_account),
+            patch(
+                "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+            ) as mock_import,
+        ):
+            client.post("/api/brokers/ibkr/import/1", headers=auth_headers)
+
+            assert mock_import.call_args.kwargs["start_date"] == date(2026, 2, 12)
+
+    def test_ibkr_full_import_passes_no_start_date(self, client_with_user, auth_headers):
+        """full_import=true should pass start_date=None regardless of metadata."""
+        client, _ = client_with_user
+
+        with patch(
+            "app.routers.brokers._import_ibkr", return_value={"status": "completed"}
+        ) as mock_import:
+            client.post("/api/brokers/ibkr/import/1?full_import=true", headers=auth_headers)
+
+            assert mock_import.call_args.kwargs["start_date"] is None
+
 
 class TestApiConnectionsEndpoint:
     """Tests for GET /api/brokers/api-connections endpoint."""

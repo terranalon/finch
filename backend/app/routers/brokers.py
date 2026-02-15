@@ -209,6 +209,20 @@ def _get_incremental_start_date(account: Account, broker_key: str) -> date | Non
     return (last_import_dt - timedelta(days=_INCREMENTAL_BUFFER_DAYS)).date()
 
 
+def _get_ibkr_start_date(account: Account, broker_key: str) -> date | None:
+    """Get start_date for IBKR incremental import.
+
+    Uses last_import metadata if available, otherwise falls back to
+    account.created_at for first-time imports.
+    """
+    incremental = _get_incremental_start_date(account, broker_key)
+    if incremental is not None:
+        return incremental
+    if account.created_at:
+        return account.created_at.date()
+    return None
+
+
 def _import_crypto_broker(
     account_id: int,
     config: BrokerConfig,
@@ -234,14 +248,19 @@ def _import_ibkr(
     flex_query_id: str,
     use_staging: bool,
     db: Session,
+    start_date: date | None = None,
 ) -> dict[str, Any]:
     """Import data from IBKR using Flex Query API."""
     if use_staging:
         logger.info(f"Using staged import for account {account_id} (UI-responsive mode)")
-        return StagedImportService.import_with_staging(db, account_id, flex_token, flex_query_id)
+        return StagedImportService.import_with_staging(
+            db, account_id, flex_token, flex_query_id, start_date=start_date
+        )
 
     logger.info(f"Using atomic import for account {account_id}")
-    return IBKRFlexImportService.import_all(db, account_id, flex_token, flex_query_id)
+    return IBKRFlexImportService.import_all(
+        db, account_id, flex_token, flex_query_id, start_date=start_date
+    )
 
 
 # =============================================================================
@@ -373,7 +392,10 @@ async def import_broker_data(
             flex_token, flex_query_id = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
             )
-            stats = _import_ibkr(account_id, flex_token, flex_query_id, use_staging, db)
+            start_date = None if full_import else _get_ibkr_start_date(account, config.key)
+            stats = _import_ibkr(
+                account_id, flex_token, flex_query_id, use_staging, db, start_date=start_date
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
