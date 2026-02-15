@@ -121,6 +121,32 @@ export const BROKERS = {
     fields: {},
   },
 
+  leumi: {
+    type: 'leumi',
+    name: 'Bank Leumi',
+    shortName: 'Leumi',
+    category: 'brokerage',
+    defaultCurrency: 'ILS',
+    defaultAccountType: 'Investment',
+    hasApi: false,
+    supportedFormats: ['.xls'],
+    instructions: {
+      file: {
+        title: 'Export from Bank Leumi',
+        steps: [
+          'Log into Bank Leumi online banking (hb2.bankleumi.co.il)',
+          'Navigate to Investments > Securities Portfolio',
+          'Click on "Transaction History"',
+          'Select your date range (up to 6 months per export)',
+          'Export as Excel file (.xls)',
+        ],
+        formats: 'Excel (.xls) files',
+        note: 'Bank Leumi exports cover up to 6 months per file. For longer history, export multiple files.',
+      },
+    },
+    fields: {},
+  },
+
   kraken: {
     type: 'kraken',
     name: 'Kraken',
