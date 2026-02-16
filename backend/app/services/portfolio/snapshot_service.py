@@ -353,6 +353,10 @@ class SnapshotService:
             self._db, account_id, start_date, end_date
         ):
             try:
+                if not holdings:
+                    stats["skipped"] += 1
+                    continue
+
                 existing = self._snapshot_repo.find_by_account_and_date(account_id, snapshot_date)
 
                 if existing:
