@@ -215,3 +215,56 @@ class TestManualAssetResolution:
             currency="USD",
             data_source="manual",
         )
+
+
+class TestManualImportBatchPrefetch:
+    """Tests for batch symbol pre-fetching during import."""
+
+    @patch("app.services.brokers.manual.import_service.YFinanceClient")
+    @patch("app.services.brokers.manual.import_service.create_or_transfer_transaction")
+    def test_prefetch_resolves_new_symbols_in_batch(self, mock_create_txn, mock_client_cls):
+        """New symbols are resolved via YFinanceClient.resolve_symbols in batch."""
+        service = _create_service()
+        service._asset_repo.find_by_symbol.return_value = None  # ty: ignore[invalid-assignment] — all symbols are new
+        mock_new_asset = MagicMock(spec=Asset, id=5)
+        service._asset_repo.find_or_create.return_value = (mock_new_asset, True)  # ty: ignore[invalid-assignment]
+        service._holding_repo.find_or_create.return_value = (MagicMock(spec=Holding, id=10), False)  # ty: ignore[invalid-assignment]
+        mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
+
+        # Mock the batch resolver
+        from app.services.market_data.yfinance_client import TickerInfo
+
+        mock_info = TickerInfo(
+            symbol="AAPL",
+            name="Apple Inc.",
+            quote_type="EQUITY",
+            sector="Technology",
+            category=None,
+            industry="Consumer Electronics",
+            currency="USD",
+            exchange="NMS",
+            price=Decimal("175.50"),
+            price_timestamp=None,
+        )
+        mock_client_cls.return_value.resolve_symbols.return_value = {"AAPL": mock_info}
+
+        data = BrokerImportData(
+            start_date=date(2025, 1, 15),
+            end_date=date(2025, 1, 15),
+            transactions=[
+                ParsedTransaction(
+                    trade_date=date(2025, 1, 15),
+                    symbol="AAPL",
+                    transaction_type="Buy",
+                    quantity=Decimal("10"),
+                    price_per_unit=Decimal("175.50"),
+                    amount=Decimal("1755.00"),
+                    currency="USD",
+                ),
+            ],
+        )
+
+        stats = service.import_data(1, data, source_id=100, skip_reconstruction=True)
+        assert stats["status"] == "completed"
+        # Verify batch resolve was called with the new symbols
+        mock_client_cls.return_value.resolve_symbols.assert_called_once()

@@ -18,9 +18,17 @@ from decimal import Decimal
 
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
-from app.services.market_data.yfinance_client import YFinanceClient
+from app.services.market_data.yfinance_client import QUOTE_TYPE_MAP, YFinanceClient
 
 logger = logging.getLogger(__name__)
+
+# Additional quote type mappings beyond the core QUOTE_TYPE_MAP in yfinance_client.
+# These are only relevant to MarketDataService routing, not to asset type detection.
+_EXTENDED_QUOTE_TYPE_MAP: dict[str, str] = {
+    "CRYPTOCURRENCY": "Crypto",
+    "INDEX": "Index",
+    "BOND": "Bond",
+}
 
 
 @dataclass
@@ -252,12 +260,6 @@ class MarketDataService:
     @staticmethod
     def _map_quote_type(quote_type: str | None) -> str:
         """Map YFinance quote type to our asset class."""
-        mapping = {
-            "EQUITY": "Stock",
-            "ETF": "ETF",
-            "MUTUALFUND": "MutualFund",
-            "CRYPTOCURRENCY": "Crypto",
-            "INDEX": "Index",
-            "BOND": "Bond",
-        }
-        return mapping.get(quote_type, "Stock") if quote_type else "Stock"
+        if quote_type is None:
+            return "Stock"
+        return QUOTE_TYPE_MAP.get(quote_type) or _EXTENDED_QUOTE_TYPE_MAP.get(quote_type) or "Stock"

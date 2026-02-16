@@ -6,6 +6,7 @@ but follows similar patterns for error handling and caching.
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -14,6 +15,13 @@ from typing import Any
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+QUOTE_TYPE_MAP: dict[str, str] = {
+    "ETF": "ETF",
+    "MUTUALFUND": "MutualFund",
+    "MONEYMARKET": "MoneyMarket",
+    "EQUITY": "Stock",
+}
 
 
 class YFinanceError(Exception):
@@ -35,6 +43,13 @@ class TickerInfo:
     price: Decimal | None
     price_timestamp: datetime | None
 
+    @property
+    def asset_class(self) -> str | None:
+        """Map quote_type to portfolio asset class."""
+        if self.quote_type is None:
+            return None
+        return QUOTE_TYPE_MAP.get(self.quote_type)
+
 
 class YFinanceClient:
     """Wrapper around yfinance with caching and error handling.
@@ -51,8 +66,18 @@ class YFinanceClient:
         price = client.get_current_price("MSFT")
     """
 
+    _last_request_time: float = 0.0
+    _min_request_interval: float = 0.5  # seconds between yfinance requests
+
     # Fields to try for company name, in order of preference
     NAME_FIELDS = ["longName", "shortName", "name"]
+
+    def _rate_limit(self) -> None:
+        """Enforce minimum interval between yfinance API calls."""
+        elapsed = time.time() - YFinanceClient._last_request_time
+        if elapsed < YFinanceClient._min_request_interval:
+            time.sleep(YFinanceClient._min_request_interval - elapsed)
+        YFinanceClient._last_request_time = time.time()
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
@@ -64,6 +89,7 @@ class YFinanceClient:
             TickerInfo dataclass or None if symbol not found
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -125,6 +151,7 @@ class YFinanceClient:
             Tuple of (price, timestamp) or None if not found
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -152,6 +179,7 @@ class YFinanceClient:
             List of (date, close_price) tuples
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             history = ticker.history(period=period)
 
@@ -182,6 +210,7 @@ class YFinanceClient:
             True if symbol has valid market data
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
             return info is not None and info.get("regularMarketPrice") is not None
@@ -201,8 +230,28 @@ class YFinanceClient:
             Raw info dict from yfinance, or empty dict on error
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             return ticker.info or {}
         except Exception as e:
             logger.error(f"Error fetching raw info for {symbol}: {e}")
             return {}
+
+    def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
+        """Fetch ticker info for multiple symbols with dedup and rate limiting.
+
+        Args:
+            symbols: List of ticker symbols (duplicates handled automatically)
+
+        Returns:
+            Dict mapping each unique symbol to its TickerInfo or None
+        """
+        unique_symbols = list(dict.fromkeys(symbols))
+        results: dict[str, TickerInfo | None] = {}
+
+        for symbol in unique_symbols:
+            results[symbol] = self.get_ticker_info(symbol)
+
+        resolved_count = sum(1 for v in results.values() if v is not None)
+        logger.info("Resolved %d/%d symbols", resolved_count, len(unique_symbols))
+        return results
