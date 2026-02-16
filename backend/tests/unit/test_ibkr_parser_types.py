@@ -216,9 +216,8 @@ class TestValidateRequiredSections:
             '<OpenPositions><OpenPosition symbol="AAPL" /></OpenPositions>'
             '<Trades><Trade symbol="AAPL" /></Trades>'
             '<CashTransactions><CashTransaction type="Dividends" /></CashTransactions>'
-            "<Transfers><Transfer /></Transfers>"
-            "<ConversionRates><ConversionRate /></ConversionRates>"
-            '<CashReport><CashReportCurrency currency="USD" /></CashReport>'
+            '<FxPositions><FxPosition currency="USD" /></FxPositions>'
+            "<FxTransactions><FxTransaction /></FxTransactions>"
         )
 
     def test_all_sections_present(self):
@@ -231,9 +230,8 @@ class TestValidateRequiredSections:
             "<OpenPositions><OpenPosition /></OpenPositions>"
             "<Trades><Trade /></Trades>"
             "<CashTransactions><CashTransaction /></CashTransactions>"
-            "<Transfers><Transfer /></Transfers>"
-            "<ConversionRates><ConversionRate /></ConversionRates>"
-            "<CashReport><CashReportCurrency /></CashReport>"
+            "<FxPositions><FxPosition /></FxPositions>"
+            "<FxTransactions><FxTransaction /></FxTransactions>"
         )
         missing = IBKRParser.validate_required_sections(root)
         assert "Account Information" in missing
@@ -243,12 +241,12 @@ class TestValidateRequiredSections:
         missing = IBKRParser.validate_required_sections(root)
         assert "Account Information" in missing
         assert "Open Positions" in missing
-        assert "Cash Report" in missing
+        assert "Forex Balances" in missing
 
     def test_empty_statement(self):
         root = _build_xml("")
         missing = IBKRParser.validate_required_sections(root)
-        assert len(missing) == 7
+        assert len(missing) == 6
 
     def test_empty_containers_are_present(self):
         """Sections configured but with no data should NOT be flagged as missing."""
@@ -257,9 +255,8 @@ class TestValidateRequiredSections:
             "<OpenPositions />"
             "<Trades />"
             "<CashTransactions />"
-            "<Transfers />"
-            "<ConversionRates />"
-            "<CashReport />"
+            "<FxPositions />"
+            "<FxTransactions />"
         )
         missing = IBKRParser.validate_required_sections(root)
         assert missing == []

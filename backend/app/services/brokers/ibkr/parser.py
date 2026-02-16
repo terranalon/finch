@@ -1161,17 +1161,17 @@ class IBKRParser:
 
         return None
 
-    # Section name -> XPath to detect the section *container* (not child elements).
+    # Display name (matching IBKR Flex Query UI) -> XPath for the container element.
     # Checks whether the user configured the section in their Flex Query,
     # regardless of whether the section has data (e.g. zero trades is fine).
+    # Note: Transfers are extracted from CashTransactions, no separate section needed.
     _REQUIRED_SECTIONS: list[tuple[str, str]] = [
         ("Account Information", ".//AccountInformation"),
         ("Open Positions", ".//OpenPositions"),
         ("Trades", ".//Trades"),
         ("Cash Transactions", ".//CashTransactions"),
-        ("Transfers", ".//Transfers"),
-        ("Forex Trades", ".//ConversionRates"),
-        ("Cash Report", ".//CashReport"),
+        ("Forex Balances", ".//FxPositions"),
+        ("Forex P&L Details", ".//FxTransactions"),
     ]
 
     @staticmethod
