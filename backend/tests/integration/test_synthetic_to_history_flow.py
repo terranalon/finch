@@ -215,9 +215,9 @@ class TestSyntheticSnapshotImport:
         assert symbols == {"AAPL", "MSFT"}
 
         # Assert: transactions exist linked to the synthetic source
-        # AAPL + MSFT equity positions, plus USD cash holding = 3 transactions
+        # 2 equity Buys + 1 inflated Deposit + 2 Trade Settlements = 5
         transactions = db.query(Transaction).filter(Transaction.broker_source_id == source.id).all()
-        assert len(transactions) == 3
+        assert len(transactions) == 5
 
         # Check AAPL transaction
         aapl_txn = next(t for t in transactions if t.notes and "AAPL" in _get_holding_symbol(db, t))
@@ -230,6 +230,32 @@ class TestSyntheticSnapshotImport:
         assert msft_txn.type == "Buy"
         assert msft_txn.quantity == Decimal("50")
         assert msft_txn.price_per_unit == Decimal("400")  # 20000 / 50
+
+        # Check Trade Settlement transactions
+        settlements = [t for t in transactions if t.type == "Trade Settlement"]
+        assert len(settlements) == 2
+        settlement_amounts = sorted(s.amount for s in settlements)
+        assert settlement_amounts == [Decimal("-20000"), Decimal("-15000")]
+
+        # Check inflated Deposit: 5000 (cash) + 15000 (AAPL) + 20000 (MSFT) = 40000
+        deposits = [t for t in transactions if t.type == "Deposit"]
+        assert len(deposits) == 1
+        assert deposits[0].amount == Decimal("40000")
+
+        # Assert: DailyCashBalance record created for actual cash (not inflated)
+        from app.models.daily_cash_balance import DailyCashBalance
+
+        cash_balance = (
+            db.query(DailyCashBalance)
+            .filter(
+                DailyCashBalance.account_id == test_account.id,
+                DailyCashBalance.currency == "USD",
+            )
+            .first()
+        )
+        assert cash_balance is not None
+        assert cash_balance.balance == Decimal("5000.00000000")
+        assert cash_balance.broker_source_id == source.id
 
         # Assert: holdings were created for the account
         holdings = db.query(Holding).filter(Holding.account_id == test_account.id).all()
@@ -692,7 +718,7 @@ class TestFullSyntheticToHistoryFlow:
         cleanup_result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         assert cleanup_result["deleted_sources"] == 1
-        assert cleanup_result["deleted_transactions"] == 3  # 2 equity + 1 cash
+        assert cleanup_result["deleted_transactions"] == 5  # 2 equity + 1 inflated Deposit + 2 Trade Settlements
         assert len(cleanup_result["snapshot_positions"]) == 2
 
         # Verify synthetic source is gone
@@ -705,6 +731,16 @@ class TestFullSyntheticToHistoryFlow:
             .count()
         )
         assert remaining == 0
+
+        # Assert: DailyCashBalance was also cleaned up
+        from app.models.daily_cash_balance import DailyCashBalance
+
+        remaining_cash = (
+            db.query(DailyCashBalance)
+            .filter(DailyCashBalance.account_id == test_account.id)
+            .count()
+        )
+        assert remaining_cash == 0
 
         # -- Step 3: Validate with matching data --
         # Simulate what finalize_batch_upload does: compare snapshot vs reconstructed
