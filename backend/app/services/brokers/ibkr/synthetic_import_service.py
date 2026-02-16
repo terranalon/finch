@@ -74,6 +74,16 @@ def _find_or_create_holding(db: Session, account_id: int, asset_id: int) -> Hold
     return holding
 
 
+def _compute_cost_basis_by_currency(positions: list[IBKRPosition]) -> dict[str, Decimal]:
+    """Sum abs(cost_basis) of non-zero positions, grouped by currency."""
+    totals: dict[str, Decimal] = {}
+    for p in positions:
+        if p.quantity == 0:
+            continue
+        totals[p.currency] = totals.get(p.currency, Decimal("0")) + abs(p.cost_basis)
+    return totals
+
+
 def _build_snapshot_positions(positions_data: list[IBKRPosition]) -> list[dict]:
     """Extract non-zero positions into the serializable snapshot format."""
     return [
