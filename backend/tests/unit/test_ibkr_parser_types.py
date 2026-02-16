@@ -249,3 +249,17 @@ class TestValidateRequiredSections:
         root = _build_xml("")
         missing = IBKRParser.validate_required_sections(root)
         assert len(missing) == 7
+
+    def test_empty_containers_are_present(self):
+        """Sections configured but with no data should NOT be flagged as missing."""
+        root = _build_xml(
+            '<AccountInformation accountId="U12345" dateOpened="2025-06-15" />'
+            "<OpenPositions />"
+            "<Trades />"
+            "<CashTransactions />"
+            "<Transfers />"
+            "<ConversionRates />"
+            "<CashReport />"
+        )
+        missing = IBKRParser.validate_required_sections(root)
+        assert missing == []

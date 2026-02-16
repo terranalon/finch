@@ -1161,22 +1161,26 @@ class IBKRParser:
 
         return None
 
+    # Section name -> XPath to detect the section *container* (not child elements).
+    # Checks whether the user configured the section in their Flex Query,
+    # regardless of whether the section has data (e.g. zero trades is fine).
     _REQUIRED_SECTIONS: list[tuple[str, str]] = [
         ("Account Information", ".//AccountInformation"),
-        ("Open Positions", ".//OpenPositions/OpenPosition"),
-        ("Trades", ".//Trades/Trade"),
-        ("Cash Transactions", ".//CashTransactions/CashTransaction"),
-        ("Transfers", ".//Transfers/Transfer"),
-        ("Forex Trades", ".//ConversionRates/ConversionRate"),
-        ("Cash Report", ".//CashReport/CashReportCurrency"),
+        ("Open Positions", ".//OpenPositions"),
+        ("Trades", ".//Trades"),
+        ("Cash Transactions", ".//CashTransactions"),
+        ("Transfers", ".//Transfers"),
+        ("Forex Trades", ".//ConversionRates"),
+        ("Cash Report", ".//CashReport"),
     ]
 
     @staticmethod
     def validate_required_sections(root: ET.Element) -> list[str]:
-        """Check which required Flex Query sections are missing.
+        """Check which required Flex Query sections are missing from the report.
 
-        Returns a list of human-readable names for missing sections.
-        An empty list means all required sections are present.
+        Checks for section *containers*, not child elements -- an empty section
+        (e.g. zero trades) is considered present. Returns human-readable names
+        for missing sections. An empty list means all required sections are present.
         """
         return [name for name, xpath in IBKRParser._REQUIRED_SECTIONS if root.find(xpath) is None]
 

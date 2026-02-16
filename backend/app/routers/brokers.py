@@ -7,7 +7,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 import logging
 import os
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -31,9 +31,11 @@ from app.services.brokers.broker_config import (
     remove_credential_fields,
 )
 from app.services.brokers.credential_test_service import test_credentials
-from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
-from app.services.brokers.ibkr.parser import IBKRParser
+from app.services.brokers.ibkr.smart_import_service import (
+    IBKRSmartImportService,
+    MissingFlexSectionsError,
+)
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio.snapshot_service import (
@@ -101,7 +103,7 @@ class SmartImportResponse(BaseModel):
     status: str
     message: str
     account_id: int
-    import_mode: str  # "full_history" or "snapshot"
+    import_mode: Literal["full_history", "snapshot"]
     stats: dict[str, Any]
 
 
@@ -206,7 +208,6 @@ def _update_last_import(account: Account, broker_key: str, db: Session) -> None:
 
 
 _INCREMENTAL_BUFFER_DAYS = 1
-_MAX_API_HISTORY_DAYS = 365
 
 
 def _get_incremental_start_date(account: Account, broker_key: str) -> date | None:
@@ -470,7 +471,7 @@ async def smart_import_ibkr(
     background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] -- FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> SmartImportResponse:
     """Smart IBKR import: validates Flex Query sections, then imports based on account age.
 
     For accounts younger than 365 days, fetches full transaction history.
@@ -486,81 +487,42 @@ async def smart_import_ibkr(
         account, config.key, config.name, config.env_fallback_prefix
     )
 
-    # Step 1: Fetch XML once
-    xml_data = IBKRFlexClient.fetch_flex_report(flex_token, flex_query_id)
-    if not xml_data:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch Flex Query report. Check your token and query ID.",
-        )
-
-    root = IBKRParser.parse_xml(xml_data)
-    if root is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to parse Flex Query XML response.",
-        )
-
-    # Step 2: Validate required sections
-    missing = IBKRParser.validate_required_sections(root)
-    if missing:
+    try:
+        result = IBKRSmartImportService.execute(db, account_id, flex_token, flex_query_id)
+    except MissingFlexSectionsError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
+                "error_code": "MISSING_FLEX_SECTIONS",
                 "message": "Your Flex Query is missing required sections. Please update it in IBKR and try again.",
-                "missing_sections": missing,
+                "missing_sections": e.missing_sections,
             },
         )
-
-    # Step 3: Determine import mode based on account age
-    account_info = IBKRParser.extract_account_info(root)
-
-    if account_info and (date.today() - account_info.date_opened).days <= _MAX_API_HISTORY_DAYS:
-        import_mode = "full_history"
-        snapshot_start = account_info.date_opened
-        logger.info("Account %d opened %s -- using full history import", account_id, snapshot_start)
-        stats = IBKRFlexImportService.import_all(
-            db,
-            account_id,
-            flex_token,
-            flex_query_id,
-            start_date=account_info.date_opened,
-            pre_fetched_root=root,
-        )
-    else:
-        import_mode = "snapshot"
-        snapshot_start = date.today()
-        logger.info("Account %d too old or missing date -- using snapshot import", account_id)
-        stats = IBKRSyntheticImportService.import_snapshot(
-            db, account_id, flex_token, flex_query_id, pre_fetched_root=root
-        )
-
-    if stats.get("status") == "failed":
+    except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {stats.get('errors', ['Unknown error'])}",
+            detail=str(e),
         )
 
     _update_last_import(account, config.key, db)
 
-    # Trigger background snapshot generation
     if background_tasks:
         update_snapshot_status(db, account_id, "generating")
-        background_tasks.add_task(generate_snapshots_background, account_id, snapshot_start)
+        background_tasks.add_task(generate_snapshots_background, account_id, result.snapshot_start)
 
     mode_message = (
         f"Full transaction history imported for account {account.name}"
-        if import_mode == "full_history"
+        if result.import_mode == "full_history"
         else f"Synthetic snapshot created for account {account.name}"
     )
 
-    return {
-        "status": "completed",
-        "message": mode_message,
-        "account_id": account_id,
-        "import_mode": import_mode,
-        "stats": stats,
-    }
+    return SmartImportResponse(
+        status="completed",
+        message=mode_message,
+        account_id=account_id,
+        import_mode=result.import_mode,
+        stats=result.stats,
+    )
 
 
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)

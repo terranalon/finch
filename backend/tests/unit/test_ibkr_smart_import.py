@@ -1,10 +1,10 @@
-"""Tests for IBKR smart import endpoint logic."""
+"""Tests for IBKR smart import service logic."""
 
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
-from app.routers.brokers import _MAX_API_HISTORY_DAYS
 from app.services.brokers.ibkr.parser import IBKRParser
+from app.services.brokers.ibkr.smart_import_service import _MAX_API_HISTORY_DAYS
 
 
 def _build_flex_xml(inner: str) -> ET.Element:
