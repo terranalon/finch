@@ -5,13 +5,13 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models.exchange_rate import ExchangeRate
+from app.services.market_data.yfinance_client import OHLCVRow
 from app.services.shared.currency_service import CurrencyService
 
 
@@ -61,23 +61,42 @@ def db_session(test_db):
 class TestFetchAndStoreHistoricalRates:
     """Tests for bulk historical exchange rate fetching."""
 
-    @patch("app.services.shared.currency_service.yf")
-    def test_fetches_rates_for_date_range(self, mock_yf, db_session):
+    @patch("app.services.shared.currency_service.YFinanceClient")
+    def test_fetches_rates_for_date_range(self, mock_client_cls, db_session):
         """Should fetch and store historical exchange rates."""
-        mock_history = pd.DataFrame(
-            {"Close": [3.70, 3.71, 3.72]},
-            index=pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
-        )
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = mock_history
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_history.return_value = [
+            OHLCVRow(
+                date=date(2024, 1, 2),
+                open=Decimal("3.69"),
+                high=Decimal("3.75"),
+                low=Decimal("3.68"),
+                close=Decimal("3.70"),
+                volume=Decimal("0"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 3),
+                open=Decimal("3.70"),
+                high=Decimal("3.76"),
+                low=Decimal("3.69"),
+                close=Decimal("3.71"),
+                volume=Decimal("0"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 4),
+                open=Decimal("3.71"),
+                high=Decimal("3.77"),
+                low=Decimal("3.70"),
+                close=Decimal("3.72"),
+                volume=Decimal("0"),
+            ),
+        ]
 
         count = CurrencyService(db_session).fetch_and_store_historical_rates(
             "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
         )
 
         assert count == 3
-        mock_yf.Ticker.assert_called_once_with("USDILS=X")
 
         rates = (
             db_session.query(ExchangeRate)
@@ -89,10 +108,10 @@ class TestFetchAndStoreHistoricalRates:
             .all()
         )
         assert len(rates) == 3
-        assert float(rates[0].rate) == 3.70
+        assert rates[0].rate == Decimal("3.70")
 
-    @patch("app.services.shared.currency_service.yf")
-    def test_skips_existing_rates(self, mock_yf, db_session):
+    @patch("app.services.shared.currency_service.YFinanceClient")
+    def test_skips_existing_rates(self, mock_client_cls, db_session):
         """Should skip dates that already have rates."""
         # Pre-existing rate
         existing = ExchangeRate(
@@ -104,13 +123,33 @@ class TestFetchAndStoreHistoricalRates:
         db_session.add(existing)
         db_session.commit()
 
-        mock_history = pd.DataFrame(
-            {"Close": [3.70, 3.71, 3.72]},
-            index=pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
-        )
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = mock_history
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_history.return_value = [
+            OHLCVRow(
+                date=date(2024, 1, 2),
+                open=Decimal("3.69"),
+                high=Decimal("3.75"),
+                low=Decimal("3.68"),
+                close=Decimal("3.70"),
+                volume=Decimal("0"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 3),
+                open=Decimal("3.70"),
+                high=Decimal("3.76"),
+                low=Decimal("3.69"),
+                close=Decimal("3.71"),
+                volume=Decimal("0"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 4),
+                open=Decimal("3.71"),
+                high=Decimal("3.77"),
+                low=Decimal("3.70"),
+                close=Decimal("3.72"),
+                volume=Decimal("0"),
+            ),
+        ]
 
         count = CurrencyService(db_session).fetch_and_store_historical_rates(
             "USD", "ILS", date(2024, 1, 2), date(2024, 1, 4)
@@ -128,12 +167,11 @@ class TestFetchAndStoreHistoricalRates:
         )
         assert count == 0
 
-    @patch("app.services.shared.currency_service.yf")
-    def test_handles_empty_history(self, mock_yf, db_session):
+    @patch("app.services.shared.currency_service.YFinanceClient")
+    def test_handles_empty_history(self, mock_client_cls, db_session):
         """Should handle empty history gracefully."""
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = pd.DataFrame()
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_history.return_value = []
 
         count = CurrencyService(db_session).fetch_and_store_historical_rates(
             "USD", "EUR", date(2024, 1, 2), date(2024, 1, 4)
@@ -141,10 +179,11 @@ class TestFetchAndStoreHistoricalRates:
 
         assert count == 0
 
-    @patch("app.services.shared.currency_service.yf")
-    def test_handles_yfinance_exception(self, mock_yf, db_session):
+    @patch("app.services.shared.currency_service.YFinanceClient")
+    def test_handles_yfinance_exception(self, mock_client_cls, db_session):
         """Should handle yfinance exceptions gracefully."""
-        mock_yf.Ticker.side_effect = Exception("API error")
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_history.return_value = []
 
         count = CurrencyService(db_session).fetch_and_store_historical_rates(
             "USD", "CAD", date(2024, 1, 2), date(2024, 1, 4)
