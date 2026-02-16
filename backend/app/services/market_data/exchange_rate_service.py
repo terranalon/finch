@@ -33,7 +33,7 @@ class ExchangeRateService:
 
     def refresh(
         self, db: Session, target_date: date | None = None
-    ) -> dict[str, date | int | list[str]]:
+    ) -> dict:
         """Fetch and store exchange rates for the given date.
 
         Args:

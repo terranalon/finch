@@ -99,9 +99,7 @@ async def get_benchmark_performance(
                 if isinstance(row.date, date)
                 else str(row.date),
                 "price": round(float(row.close), 2),
-                "performance": round(
-                    ((float(row.close) - start_price) / start_price) * 100, 2
-                )
+                "performance": round(((float(row.close) - start_price) / start_price) * 100, 2)
                 if start_price > 0
                 else 0,
             }

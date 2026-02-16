@@ -8,7 +8,6 @@ import pytest
 
 from app.models import User
 from app.services.auth.auth_service import AuthService
-from app.services.market_data.yfinance_client import OHLCVRow
 
 
 @pytest.fixture
