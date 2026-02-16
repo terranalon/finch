@@ -1,9 +1,9 @@
 """Dashboard API router."""
 
 import logging
+from datetime import date
 from decimal import Decimal
 
-import yfinance as yf
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
 from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse
+from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.portfolio.dashboard_service import DashboardService
 from app.services.portfolio.types import (
     AccountValue,
@@ -71,10 +72,10 @@ async def get_benchmark_performance(
     default_name = "S&P 500 ETF"
 
     try:
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period=period)
+        client = YFinanceClient()
+        rows = client.get_historical_data(symbol, period=period)
 
-        if hist.empty:
+        if not rows:
             logger.warning(f"No historical data found for benchmark {symbol}")
             return {
                 "symbol": symbol,
@@ -83,24 +84,28 @@ async def get_benchmark_performance(
                 "error": "No data available",
             }
 
-        # Get benchmark name, falling back to default
+        # Get benchmark name from ticker info
         try:
-            info = ticker.info
-            name = info.get("shortName") or info.get("longName") or default_name
+            info = client.get_ticker_info(symbol)
+            name = info.name if info and info.name else default_name
         except Exception:
             name = default_name
 
         # Calculate performance relative to first data point
-        start_price = float(hist.iloc[0]["Close"])
+        start_price = float(rows[0].close)
         data = [
             {
-                "date": dt.strftime("%Y-%m-%d"),
-                "price": round(float(row["Close"]), 2),
-                "performance": round(((float(row["Close"]) - start_price) / start_price) * 100, 2)
+                "date": row.date.strftime("%Y-%m-%d")
+                if isinstance(row.date, date)
+                else str(row.date),
+                "price": round(float(row.close), 2),
+                "performance": round(
+                    ((float(row.close) - start_price) / start_price) * 100, 2
+                )
                 if start_price > 0
                 else 0,
             }
-            for dt, row in hist.iterrows()
+            for row in rows
         ]
 
         return {"symbol": symbol, "name": name, "data": data}
