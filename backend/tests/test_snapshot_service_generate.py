@@ -158,8 +158,10 @@ class TestGenerateAccountSnapshots:
 
     @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
     @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
+    @patch("app.services.portfolio.holding_valuation_service.PriceFetcher")
+    @patch("app.services.portfolio.holding_valuation_service.CurrencyService")
     def test_skips_existing_snapshots_when_not_invalidating(
-        self, mock_recon, mock_fetcher, db_session, test_account
+        self, mock_currency, mock_price, mock_recon, mock_fetcher, db_session, test_account
     ):
         """Should skip dates that already have snapshots when not invalidating."""
         # Pre-existing snapshot
@@ -172,14 +174,23 @@ class TestGenerateAccountSnapshots:
         db_session.add(old_snapshot)
         db_session.commit()
 
+        holding = {
+            "asset_id": 1,
+            "quantity": Decimal("10"),
+            "currency": "USD",
+            "asset_class": "Stock",
+            "symbol": "AAPL",
+        }
         mock_recon.reconstruct_holdings_timeline.return_value = iter(
             [
-                (date(2024, 1, 1), []),
-                (date(2024, 1, 2), []),  # Already exists
-                (date(2024, 1, 3), []),
+                (date(2024, 1, 1), [holding]),
+                (date(2024, 1, 2), [holding]),  # Already exists
+                (date(2024, 1, 3), [holding]),
             ]
         )
         mock_fetcher.ensure_historical_data.return_value = {}
+        mock_price.get_price_for_date.return_value = Decimal("150")
+        mock_currency.return_value.get_exchange_rate.return_value = Decimal("3.70")
 
         stats = SnapshotService(db_session).generate_account_snapshots(
             test_account.id,
@@ -195,6 +206,37 @@ class TestGenerateAccountSnapshots:
         db_session.refresh(old_snapshot)
         assert old_snapshot.total_value_usd is not None
         assert float(old_snapshot.total_value_usd) == 9999
+
+    @patch("app.services.portfolio.snapshot_service.HistoricalDataFetcher")
+    @patch("app.services.portfolio.snapshot_service.PortfolioReconstructionService")
+    def test_skips_dates_with_empty_holdings(
+        self, mock_recon, mock_fetcher, db_session, test_account
+    ):
+        """Should skip dates with empty holdings (no $0 snapshots)."""
+        mock_recon.reconstruct_holdings_timeline.return_value = iter(
+            [
+                (date(2024, 1, 1), []),  # No holdings yet
+                (date(2024, 1, 2), []),  # Still empty
+                (date(2024, 1, 3), []),  # Still empty
+            ]
+        )
+        mock_fetcher.ensure_historical_data.return_value = {}
+
+        stats = SnapshotService(db_session).generate_account_snapshots(
+            test_account.id,
+            date(2024, 1, 1),
+            date(2024, 1, 3),
+        )
+
+        assert stats["created"] == 0
+        assert stats["skipped"] == 3
+
+        snapshots = (
+            db_session.query(HistoricalSnapshot)
+            .filter(HistoricalSnapshot.account_id == test_account.id)
+            .all()
+        )
+        assert len(snapshots) == 0
 
 
 class TestAmbiguousJoinRegression:

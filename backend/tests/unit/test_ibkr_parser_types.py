@@ -208,6 +208,48 @@ class TestExtractAccountInfo:
         assert info.date_opened == date(2025, 6, 15)
 
 
+class TestStripBeforeDate:
+    def test_removes_old_trades_and_keeps_recent(self):
+        root = _build_xml(
+            "<Trades>"
+            '<Trade symbol="AAPL" tradeDate="20240101" />'
+            '<Trade symbol="MSFT" tradeDate="20240601" />'
+            '<Trade symbol="GOOG" tradeDate="20241201" />'
+            "</Trades>"
+            "<CashTransactions>"
+            '<CashTransaction type="Dividends" dateTime="20240115" />'
+            '<CashTransaction type="Dividends" dateTime="20240701" />'
+            "</CashTransactions>"
+            "<FxTransactions>"
+            '<FxTransaction dateTime="20240201" />'
+            '<FxTransaction dateTime="20240801" />'
+            "</FxTransactions>"
+        )
+        removed = IBKRParser.strip_before_date(root, date(2024, 6, 1))
+        assert removed == 3  # 1 trade + 1 cash + 1 fx
+
+        trades = root.findall(".//Trade")
+        assert len(trades) == 2
+        assert trades[0].get("symbol") == "MSFT"
+
+        cash = root.findall(".//CashTransaction")
+        assert len(cash) == 1
+
+        fx = root.findall(".//FxTransaction")
+        assert len(fx) == 1
+
+    def test_no_removal_when_all_after_cutoff(self):
+        root = _build_xml('<Trades><Trade symbol="AAPL" tradeDate="20240601" /></Trades>')
+        removed = IBKRParser.strip_before_date(root, date(2024, 1, 1))
+        assert removed == 0
+        assert len(root.findall(".//Trade")) == 1
+
+    def test_empty_containers_unchanged(self):
+        root = _build_xml("<Trades /><CashTransactions />")
+        removed = IBKRParser.strip_before_date(root, date(2024, 6, 1))
+        assert removed == 0
+
+
 class TestValidateRequiredSections:
     def _build_complete_xml(self) -> ET.Element:
         """Build XML with all required sections present."""

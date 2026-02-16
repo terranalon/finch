@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models import Account
+from app.models.broker_data_source import BrokerDataSource
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
 from app.services.brokers.ibkr.parser import IBKRParser
@@ -104,7 +105,9 @@ class IBKRFlexImportService:
                     stats["errors"].append("Failed to parse Flex Query XML response")
                     return stats
 
-            # Step 3: Extract all data types
+            if start_date:
+                IBKRParser.strip_before_date(root, start_date)
+
             logger.info("Extracting transactions and cash data...")
             cash_data = IBKRParser.extract_cash_balances(root)
             transactions = IBKRParser.extract_transactions(root)
@@ -124,36 +127,48 @@ class IBKRFlexImportService:
                 len(cash_data),
             )
 
-            # Step 4: Import cash balances
+            today = date.today()
+            source = BrokerDataSource(
+                account_id=account_id,
+                broker_type="ibkr",
+                source_type="api_fetch",
+                source_identifier="IBKR Flex Query API",
+                start_date=start_date or today,
+                end_date=today,
+                status="pending",
+            )
+            db.add(source)
+            db.flush()
+
             logger.info("Importing cash balances...")
             stats["cash"] = IBKRImportService._import_cash_balances(db, account_id, cash_data)
 
-            # Step 5: Import all transaction types
             logger.info("Importing transactions...")
             stats["transactions"] = IBKRImportService._import_transactions(
-                db, account_id, transactions, source_id=None
+                db, account_id, transactions, source_id=source.id
             )
             stats["dividends"] = IBKRImportService._import_dividends(
-                db, account_id, dividends, source_id=None
+                db, account_id, dividends, source_id=source.id
             )
             stats["transfers"] = IBKRImportService._import_transfers(
-                db, account_id, transfers, source_id=None
+                db, account_id, transfers, source_id=source.id
             )
             stats["forex"] = IBKRImportService._import_forex_transactions(
-                db, account_id, forex_txns, source_id=None
+                db, account_id, forex_txns, source_id=source.id
             )
             stats["other_cash"] = IBKRImportService._import_other_cash_transactions(
-                db, account_id, other_cash, source_id=None
+                db, account_id, other_cash, source_id=source.id
             )
             stats["dividend_cash"] = IBKRImportService._import_dividend_cash(
-                db, account_id, dividends, source_id=None
+                db, account_id, dividends, source_id=source.id
             )
 
-            # Step 6: Reconstruct holdings from transaction history
             logger.info("Reconstructing holdings from transactions...")
             stats["holdings_reconstruction"] = reconstruct_and_update_holdings(db, account_id)
 
-            # Step 7: Update asset prices (symbols from transactions)
+            source.status = "completed"
+            source.import_stats = stats
+
             all_symbols = {
                 item.symbol for items in (transactions, dividends) for item in items if item.symbol
             }
