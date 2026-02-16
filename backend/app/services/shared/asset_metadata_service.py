@@ -43,7 +43,7 @@ class AssetMetadataService:
         try:
             client = YFinanceClient()
             info = client.get_ticker_info(symbol)
-            return AssetMetadataService._result_from_ticker_info(symbol, info, asset_class)
+            return AssetMetadataService.from_ticker_info(symbol, info, asset_class)
         except Exception as e:
             logger.error("Error fetching metadata for %s: %s", symbol, e)
             return AssetMetadataResult(
@@ -60,12 +60,6 @@ class AssetMetadataService:
         symbol: str, info: TickerInfo | None, asset_class: str | None = None
     ) -> AssetMetadataResult:
         """Build AssetMetadataResult from pre-fetched TickerInfo."""
-        return AssetMetadataService._result_from_ticker_info(symbol, info, asset_class)
-
-    @staticmethod
-    def _result_from_ticker_info(
-        symbol: str, info: TickerInfo | None, asset_class: str | None = None
-    ) -> AssetMetadataResult:
         if info is None:
             return AssetMetadataResult(
                 symbol=symbol,

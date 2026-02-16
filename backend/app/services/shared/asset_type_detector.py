@@ -29,7 +29,7 @@ class AssetTypeDetector:
         try:
             client = YFinanceClient()
             info = client.get_ticker_info(symbol)
-            return AssetTypeDetector._result_from_ticker_info(symbol, info)
+            return AssetTypeDetector.detect_from_ticker_info(symbol, info)
         except Exception as e:
             logger.error("Error detecting asset type for %s: %s", symbol, e)
             return AssetTypeResult(symbol=symbol, detected_type=None, source="error", error=str(e))
@@ -37,10 +37,6 @@ class AssetTypeDetector:
     @staticmethod
     def detect_from_ticker_info(symbol: str, info: TickerInfo | None) -> AssetTypeResult:
         """Detect asset type from pre-fetched TickerInfo (avoids redundant API call)."""
-        return AssetTypeDetector._result_from_ticker_info(symbol, info)
-
-    @staticmethod
-    def _result_from_ticker_info(symbol: str, info: TickerInfo | None) -> AssetTypeResult:
         if info is None:
             return AssetTypeResult(
                 symbol=symbol,

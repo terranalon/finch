@@ -54,6 +54,7 @@ class ManualImportService(BaseBrokerImportService):
         stats["symbols_in_file"] = list(unique_symbols)
 
         # Pre-fetch: batch resolve symbols not already in DB
+        self._resolved_symbols: dict[str, TickerInfo | None] = {}
         self._prefetch_symbols(unique_symbols)
 
         try:
@@ -189,7 +190,6 @@ class ManualImportService(BaseBrokerImportService):
         """Batch-resolve unknown symbols via YFinanceClient before import loop."""
         new_symbols = [s for s in symbols if not self.asset_repo.find_by_symbol(s)]
         if not new_symbols:
-            self._resolved_symbols: dict[str, TickerInfo | None] = {}
             return
 
         client = YFinanceClient()
