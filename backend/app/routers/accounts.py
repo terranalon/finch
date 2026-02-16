@@ -16,7 +16,7 @@ from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
-from app.schemas.common import PaginatedResponse
+from app.schemas.common import PaginatedResponse, error_responses
 from app.schemas.holding import ReconstructionStatsResponse
 from app.services.portfolio.holding_service import HoldingService
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
@@ -76,7 +76,7 @@ async def list_accounts(
     )
 
 
-@router.get("/{account_id}", response_model=AccountSchema)
+@router.get("/{account_id}", response_model=AccountSchema, responses={404: error_responses[404]})
 async def get_account(
     account_id: int,
     db: Session = Depends(get_db),
@@ -89,7 +89,12 @@ async def get_account(
     return account
 
 
-@router.post("", response_model=AccountSchema, status_code=201)
+@router.post(
+    "",
+    response_model=AccountSchema,
+    status_code=201,
+    responses={409: error_responses[409]},
+)
 async def create_account(
     account: AccountCreate,
     db: Session = Depends(get_db),
@@ -125,7 +130,11 @@ async def create_account(
     return db_account
 
 
-@router.put("/{account_id}", response_model=AccountSchema)
+@router.put(
+    "/{account_id}",
+    response_model=AccountSchema,
+    responses={404: error_responses[404], 409: error_responses[409]},
+)
 async def update_account(
     account_id: int,
     account_update: AccountUpdate,

@@ -496,15 +496,14 @@ class TestFinalizeBatchEndpoint:
         """Finalize should raise 404 when no staged sources match the session_id."""
         import asyncio
 
-        from fastapi import HTTPException
-
+        from app.exceptions import NotFoundError
         from app.routers.broker_data import finalize_batch_upload
 
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.all.return_value = []
         mock_user = MagicMock()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(NotFoundError) as exc_info:
             asyncio.run(
                 finalize_batch_upload(
                     account_id=1,

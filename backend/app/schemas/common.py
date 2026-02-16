@@ -74,6 +74,16 @@ class ErrorResponse(BaseModel):
     path: str | None = Field(None, description="Request path that caused the error")
 
 
+error_responses: dict[int | str, dict[str, Any]] = {
+    400: {"model": ErrorResponse, "description": "Bad request"},
+    401: {"model": ErrorResponse, "description": "Not authenticated"},
+    403: {"model": ErrorResponse, "description": "Forbidden"},
+    404: {"model": ErrorResponse, "description": "Resource not found"},
+    409: {"model": ErrorResponse, "description": "Conflict"},
+    422: {"model": ErrorResponse, "description": "Validation error"},
+}
+
+
 class MessageResponse(BaseModel):
     """Simple message response for operations that return only a message.
 

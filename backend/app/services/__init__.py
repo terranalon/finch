@@ -17,17 +17,11 @@ Common imports for convenience:
 # Re-export commonly used components for convenience
 from app.services.repositories import (
     AssetRepository,
-    DuplicateError,
     HoldingRepository,
-    NotFoundError,
-    RepositoryError,
 )
 
 __all__ = [
     # Repositories
     "AssetRepository",
-    "DuplicateError",
     "HoldingRepository",
-    "NotFoundError",
-    "RepositoryError",
 ]

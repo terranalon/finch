@@ -17,6 +17,7 @@ from app.models.portfolio_account import portfolio_accounts
 from app.models.user import User
 from app.routers.accounts import raise_duplicate_account_name
 from app.schemas.account import Account as AccountSchema
+from app.schemas.common import error_responses
 from app.schemas.portfolio import (
     DeletionPreview,
     PortfolioCreate,
@@ -87,7 +88,11 @@ async def create_portfolio(
     return db_portfolio
 
 
-@router.get("/{portfolio_id}", response_model=PortfolioWithAccountCount)
+@router.get(
+    "/{portfolio_id}",
+    response_model=PortfolioWithAccountCount,
+    responses={404: error_responses[404]},
+)
 async def get_portfolio(
     portfolio_id: str,
     db: Session = Depends(get_db),
@@ -158,7 +163,11 @@ async def get_deletion_preview(
     )
 
 
-@router.delete("/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{portfolio_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: error_responses[404]},
+)
 async def delete_portfolio(
     portfolio_id: str,
     confirm: bool = Query(False, description="Must be true to delete portfolio with accounts"),
@@ -217,7 +226,10 @@ async def patch_portfolio(
     return db_portfolio
 
 
-@router.put("/{portfolio_id}/accounts/{account_id}")
+@router.put(
+    "/{portfolio_id}/accounts/{account_id}",
+    responses={400: error_responses[400], 404: error_responses[404], 409: error_responses[409]},
+)
 async def link_account_to_portfolio(
     portfolio_id: str,
     account_id: int,
