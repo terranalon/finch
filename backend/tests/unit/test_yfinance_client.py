@@ -381,3 +381,122 @@ class TestGetCurrentPriceFallbacks:
 
         result = client.get_current_price("BAD")
         assert result is None
+
+
+def _single_ticker_df(
+    close: float = 153.0,
+    dt: str = "2024-01-02",
+    *,
+    open_: float = 150.0,
+    high: float = 155.0,
+    low: float = 149.0,
+    volume: int = 1000000,
+) -> pd.DataFrame:
+    """Build a single-ticker DataFrame matching yf.download() output."""
+    return pd.DataFrame(
+        {
+            "Open": [open_],
+            "High": [high],
+            "Low": [low],
+            "Close": [close],
+            "Volume": [volume],
+        },
+        index=pd.to_datetime([dt]),
+    )
+
+
+def _multi_ticker_df(tickers: dict[str, float], dt: str = "2024-01-02") -> pd.DataFrame:
+    """Build a MultiIndex DataFrame matching yf.download(group_by='ticker')."""
+    frames: dict[str, pd.DataFrame] = {}
+    idx = pd.to_datetime([dt])
+    for sym, close in tickers.items():
+        frames[sym] = pd.DataFrame(
+            {
+                "Open": [close - 3],
+                "High": [close + 2],
+                "Low": [close - 4],
+                "Close": [close],
+                "Volume": [1000000],
+            },
+            index=idx,
+        )
+    return pd.concat(frames, axis=1)
+
+
+class TestGetBatchPricesDownload:
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_returns_dict_of_ohlcv_rows(self, mock_download):
+        """Should return OHLCVRow for each successful ticker."""
+        mock_download.return_value = _multi_ticker_df({"AAPL": 153.0, "MSFT": 400.0})
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL", "MSFT"])
+
+        assert len(result) == 2
+        assert isinstance(result["AAPL"], OHLCVRow)
+        assert result["AAPL"].close == Decimal("153.0")
+        assert isinstance(result["MSFT"], OHLCVRow)
+        assert result["MSFT"].close == Decimal("400.0")
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_single_ticker_no_multiindex(self, mock_download):
+        """Should handle single-ticker download (no MultiIndex)."""
+        mock_download.return_value = _single_ticker_df(close=153.0)
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL"])
+
+        assert len(result) == 1
+        assert isinstance(result["AAPL"], OHLCVRow)
+        assert result["AAPL"].close == Decimal("153.0")
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_returns_none_for_failed_tickers(self, mock_download):
+        """Should return None for tickers with NaN/empty data."""
+        # Build frame with only AAPL data, BAD will be missing from MultiIndex
+        mock_download.return_value = _multi_ticker_df({"AAPL": 153.0})
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL", "BAD"])
+
+        assert result["AAPL"] is not None
+        assert result["BAD"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_chunks_large_symbol_lists(self, mock_download):
+        """Should call yf.download multiple times for lists > chunk_size."""
+        mock_download.return_value = pd.DataFrame()
+        client = YFinanceClient()
+        symbols = [f"SYM{i}" for i in range(600)]
+
+        client.get_batch_prices_download(symbols, chunk_size=250, chunk_delay=0.0)
+
+        assert mock_download.call_count == 3
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_returns_empty_dict_for_empty_input(self, mock_download):
+        """Should handle empty symbol list."""
+        result = YFinanceClient().get_batch_prices_download([])
+        assert result == {}
+        mock_download.assert_not_called()
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_handles_download_exception(self, mock_download):
+        """Should return None for all tickers when download raises."""
+        mock_download.side_effect = Exception("Network error")
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL", "MSFT"])
+
+        assert result["AAPL"] is None
+        assert result["MSFT"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_handles_none_return(self, mock_download):
+        """Should handle yf.download returning None."""
+        mock_download.return_value = None
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL"])
+
+        assert result["AAPL"] is None
