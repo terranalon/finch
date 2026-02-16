@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Account
+from app.models.daily_cash_balance import DailyCashBalance
 from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.shared.transaction_hash_service import DedupResult
@@ -51,6 +52,29 @@ USD_CASH_BALANCE = IBKRCashBalance(
     description="US Dollar",
     asset_class="Cash",
     account_id="U12345",
+)
+
+EUR_CASH_BALANCE = IBKRCashBalance(
+    symbol="EUR",
+    currency="EUR",
+    balance=Decimal("500"),
+    description="Euro",
+    asset_class="Cash",
+    account_id="U12345",
+)
+
+BMW_POSITION = IBKRPosition(
+    symbol="BMW.DE",
+    original_symbol="BMW",
+    description="BMW AG",
+    asset_category="STK",
+    asset_class="Stock",
+    listing_exchange="IBIS",
+    quantity=Decimal("10"),
+    cost_basis=Decimal("5000"),
+    currency="EUR",
+    account_id="U12345",
+    needs_validation=False,
 )
 
 
@@ -191,3 +215,167 @@ class TestSyntheticImportService:
         )
 
         assert stats["status"] == "failed"
+
+
+def _added_objects(mock_db: MagicMock) -> list:
+    """Extract all objects passed to mock_db.add() calls."""
+    return [call[0][0] for call in mock_db.add.call_args_list]
+
+
+def _deposit_calls(mock_create_txn: MagicMock) -> list:
+    """Filter create_or_transfer_transaction calls to Deposit type only."""
+    return [c for c in mock_create_txn.call_args_list if c.kwargs.get("txn_type") == "Deposit"]
+
+
+def _setup_snapshot_mocks(
+    mock_client: MagicMock,
+    mock_parser: MagicMock,
+    mock_import_service: MagicMock,
+    mock_reconstruct: MagicMock,
+    mock_create_txn: MagicMock,
+    *,
+    positions: list[IBKRPosition],
+    cash_balances: list[IBKRCashBalance],
+) -> None:
+    """Wire up the standard mock chain for import_snapshot tests."""
+    mock_client.fetch_flex_report.return_value = b"<xml/>"
+    mock_parser.parse_xml.return_value = MagicMock()
+    mock_parser.extract_positions.return_value = positions
+    mock_parser.extract_cash_balances.return_value = cash_balances
+    mock_import_service._import_cash_balances.return_value = {}
+    mock_import_service._find_or_create_asset.return_value = (MagicMock(id=10), False)
+    mock_reconstruct.return_value = {"holdings_updated": len(positions)}
+    mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
+
+
+@patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
+@patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
+class TestSyntheticDepositInflation:
+    """Tests for inflated deposits, Trade Settlements, and DailyCashBalance."""
+
+    def test_deposit_inflated_by_position_cost_basis(
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
+    ):
+        """Deposit amount should be cash balance + total cost basis for that currency."""
+        _setup_snapshot_mocks(
+            mock_client,
+            mock_parser,
+            mock_import_service,
+            mock_reconstruct,
+            mock_create_txn,
+            positions=[AAPL_POSITION, MSFT_POSITION],
+            cash_balances=[USD_CASH_BALANCE],
+        )
+
+        IBKRSyntheticImportService.import_snapshot(
+            mock_db_with_account, account_id=1, flex_token="t", flex_query_id="q"
+        )
+
+        # amount should be 5000 (cash) + 15000 + 20000 = 40000
+        deposits = _deposit_calls(mock_create_txn)
+        assert len(deposits) == 1
+        assert deposits[0].kwargs["amount"] == Decimal("40000")
+        assert deposits[0].kwargs["quantity"] == Decimal("40000")
+
+    def test_trade_settlements_created_for_each_buy(
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
+    ):
+        """Each Buy should have a matching Trade Settlement with negative cost basis."""
+        _setup_snapshot_mocks(
+            mock_client,
+            mock_parser,
+            mock_import_service,
+            mock_reconstruct,
+            mock_create_txn,
+            positions=[AAPL_POSITION, MSFT_POSITION],
+            cash_balances=[USD_CASH_BALANCE],
+        )
+
+        IBKRSyntheticImportService.import_snapshot(
+            mock_db_with_account, account_id=1, flex_token="t", flex_query_id="q"
+        )
+
+        settlements = [
+            obj
+            for obj in _added_objects(mock_db_with_account)
+            if hasattr(obj, "type") and obj.type == "Trade Settlement"
+        ]
+        assert len(settlements) == 2
+        settlement_amounts = sorted(s.amount for s in settlements)
+        assert settlement_amounts == [Decimal("-20000"), Decimal("-15000")]
+
+    def test_daily_cash_balance_created(
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
+    ):
+        """A DailyCashBalance record should be created for the actual cash balance."""
+        _setup_snapshot_mocks(
+            mock_client,
+            mock_parser,
+            mock_import_service,
+            mock_reconstruct,
+            mock_create_txn,
+            positions=[AAPL_POSITION],
+            cash_balances=[USD_CASH_BALANCE],
+        )
+
+        IBKRSyntheticImportService.import_snapshot(
+            mock_db_with_account, account_id=1, flex_token="t", flex_query_id="q"
+        )
+
+        cash_balances = [
+            obj for obj in _added_objects(mock_db_with_account) if isinstance(obj, DailyCashBalance)
+        ]
+        assert len(cash_balances) == 1
+        assert cash_balances[0].currency == "USD"
+        assert cash_balances[0].balance == Decimal("5000")
+
+    def test_deposit_created_for_currency_with_no_cash_entry(
+        self,
+        mock_client,
+        mock_parser,
+        mock_import_service,
+        mock_reconstruct,
+        mock_create_txn,
+        mock_db_with_account,
+    ):
+        """Positions in a currency with no cash entry should still get a deposit."""
+        _setup_snapshot_mocks(
+            mock_client,
+            mock_parser,
+            mock_import_service,
+            mock_reconstruct,
+            mock_create_txn,
+            positions=[AAPL_POSITION, BMW_POSITION],
+            cash_balances=[USD_CASH_BALANCE],
+        )
+
+        IBKRSyntheticImportService.import_snapshot(
+            mock_db_with_account, account_id=1, flex_token="t", flex_query_id="q"
+        )
+
+        # USD (5000+15000=20000) and EUR (0+5000=5000)
+        deposits = _deposit_calls(mock_create_txn)
+        assert len(deposits) == 2
+        deposit_amounts = sorted(c.kwargs["amount"] for c in deposits)
+        assert deposit_amounts == [Decimal("5000"), Decimal("20000")]

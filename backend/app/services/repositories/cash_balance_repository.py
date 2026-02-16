@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -95,3 +96,25 @@ class CashBalanceRepository:
             .filter(DailyCashBalance.account_id == account_id)
             .all()
         )
+
+    def create(
+        self,
+        account_id: int,
+        balance_date: date,
+        currency: str,
+        balance: Decimal,
+        activity: str | None = None,
+        broker_source_id: int | None = None,
+    ) -> DailyCashBalance:
+        """Create a new daily cash balance record."""
+        record = DailyCashBalance(
+            account_id=account_id,
+            date=balance_date,
+            currency=currency,
+            balance=balance,
+            activity=activity,
+            broker_source_id=broker_source_id,
+        )
+        self._db.add(record)
+        self._db.flush()
+        return record

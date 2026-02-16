@@ -11,13 +11,14 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Account, Asset, BrokerDataSource, Holding, Transaction
+from app.models import Account, BrokerDataSource, Transaction
 from app.models.daily_cash_balance import DailyCashBalance
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.import_service import IBKRImportService
-from app.services.brokers.ibkr.models import IBKRPosition
+from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.parser import IBKRParser
 from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
+from app.services.repositories import AssetRepository, CashBalanceRepository, HoldingRepository
 from app.services.shared.transaction_hash_service import (
     DedupResult,
     create_or_transfer_transaction,
@@ -49,29 +50,14 @@ def _fail_stats(stats: dict, error: str) -> dict:
     return stats_copy
 
 
-def _find_or_create_holding(db: Session, account_id: int, asset_id: int) -> Holding:
-    """Find an existing holding or create a new zero-quantity one."""
-    holding = (
-        db.query(Holding)
-        .filter(
-            Holding.account_id == account_id,
-            Holding.asset_id == asset_id,
-        )
-        .first()
-    )
-    if holding:
-        return holding
-
-    holding = Holding(
-        account_id=account_id,
-        asset_id=asset_id,
-        quantity=Decimal("0"),
-        cost_basis=Decimal("0"),
-        is_active=False,
-    )
-    db.add(holding)
-    db.flush()
-    return holding
+def _compute_cost_basis_by_currency(positions: list[IBKRPosition]) -> dict[str, Decimal]:
+    """Sum abs(cost_basis) of non-zero positions, grouped by currency."""
+    totals: dict[str, Decimal] = {}
+    for p in positions:
+        if p.quantity == 0:
+            continue
+        totals[p.currency] = totals.get(p.currency, Decimal("0")) + abs(p.cost_basis)
+    return totals
 
 
 def _build_snapshot_positions(positions_data: list[IBKRPosition]) -> list[dict]:
@@ -86,6 +72,82 @@ def _build_snapshot_positions(positions_data: list[IBKRPosition]) -> list[dict]:
         for p in positions_data
         if p.quantity != 0
     ]
+
+
+def _create_inflated_deposits(
+    db: Session,
+    account_id: int,
+    source_id: int,
+    cash_data: list[IBKRCashBalance],
+    cost_basis_by_currency: dict[str, Decimal],
+    today: date,
+) -> None:
+    """Create inflated deposit transactions and DailyCashBalance records.
+
+    Each deposit amount = actual cash balance + total cost basis for that currency.
+    For currencies with positions but no cash entry, creates a deposit for just
+    the cost basis and a zero-balance DailyCashBalance record.
+    """
+    asset_repo = AssetRepository(db)
+    holding_repo = HoldingRepository(db)
+    cash_balance_repo = CashBalanceRepository(db)
+
+    # Build a unified list of (currency, symbol, cash_balance, deposit_amount, holding)
+    # tuples from both cash entries and gap-fill currencies.
+    currencies_with_cash: set[str] = set()
+    deposits: list[tuple[str, str, Decimal, Decimal, int]] = []
+
+    for cash in cash_data:
+        if cash.balance == 0 and cash.currency not in cost_basis_by_currency:
+            continue
+
+        cash_asset = asset_repo.find_by_symbol(cash.symbol)
+        if not cash_asset:
+            continue
+
+        currencies_with_cash.add(cash.currency)
+        cash_holding, _ = holding_repo.find_or_create(account_id, cash_asset.id)
+
+        position_cost = cost_basis_by_currency.get(cash.currency, Decimal("0"))
+        deposit_amount = cash.balance + position_cost
+        if deposit_amount == 0:
+            continue
+
+        deposits.append((cash.currency, cash.symbol, cash.balance, deposit_amount, cash_holding.id))
+
+    # Gap-fill: currencies with positions but no cash entry
+    for currency, cost in cost_basis_by_currency.items():
+        if currency in currencies_with_cash or cost == 0:
+            continue
+
+        cash_asset, _ = IBKRImportService._find_or_create_asset(
+            db, symbol=currency, name=f"{currency} Cash", asset_class="Cash", currency=currency
+        )
+        cash_holding, _ = holding_repo.find_or_create(account_id, cash_asset.id)
+        deposits.append((currency, currency, Decimal("0"), cost, cash_holding.id))
+
+    for currency, symbol, actual_balance, deposit_amount, holding_id in deposits:
+        create_or_transfer_transaction(
+            db=db,
+            holding_id=holding_id,
+            source_id=source_id,
+            account_id=account_id,
+            txn_date=today,
+            txn_type="Deposit",
+            symbol=symbol,
+            quantity=deposit_amount,
+            amount=deposit_amount,
+            fees=Decimal("0"),
+            notes=f"Synthetic deposit from IBKR snapshot ({currency})",
+        )
+        cash_balance_repo.create(
+            account_id=account_id,
+            balance_date=today,
+            currency=currency,
+            balance=actual_balance,
+            activity="Synthetic snapshot",
+            broker_source_id=source_id,
+        )
 
 
 def delete_synthetic_sources(db: Session, account_id: int, broker_type: str) -> dict:
@@ -213,34 +275,17 @@ class IBKRSyntheticImportService:
             db.add(source)
             db.flush()
 
+            cost_basis_by_currency = _compute_cost_basis_by_currency(positions_data)
+
             cash_stats = IBKRImportService._import_cash_balances(db, account_id, cash_data)
             stats["cash_balances"] = cash_stats
 
-            # Create synthetic Deposit transactions for cash balances so that
-            # portfolio reconstruction (which replays transactions) includes cash.
-            # _import_cash_balances already created the Holding + Asset records;
-            # reconstruct_and_update_holdings will overwrite the holding quantities
-            # from these transactions, so there is no double-counting.
-            for cash in cash_data:
-                if cash.balance == 0:
-                    continue
-                cash_asset = db.query(Asset).filter(Asset.symbol == cash.symbol).first()
-                if not cash_asset:
-                    continue
-                cash_holding = _find_or_create_holding(db, account_id, cash_asset.id)
-                result, _ = create_or_transfer_transaction(
-                    db=db,
-                    holding_id=cash_holding.id,
-                    source_id=source.id,
-                    account_id=account_id,
-                    txn_date=today,
-                    txn_type="Deposit",
-                    symbol=cash.symbol,
-                    quantity=cash.balance,
-                    amount=cash.balance,
-                    fees=Decimal("0"),
-                    notes=f"Synthetic cash balance from IBKR snapshot ({cash.currency})",
-                )
+            _create_inflated_deposits(
+                db, account_id, source.id, cash_data, cost_basis_by_currency, today
+            )
+
+            asset_repo = AssetRepository(db)
+            holding_repo = HoldingRepository(db)
 
             for position in positions_data:
                 quantity = position.quantity
@@ -264,7 +309,7 @@ class IBKRSyntheticImportService:
                 if created:
                     stats["assets_created"] += 1
 
-                holding = _find_or_create_holding(db, account_id, asset.id)
+                holding, _ = holding_repo.find_or_create(account_id, asset.id)
                 price_per_unit = abs(cost_basis / quantity)
 
                 result, txn = create_or_transfer_transaction(
@@ -283,6 +328,21 @@ class IBKRSyntheticImportService:
                 )
                 if result in (DedupResult.NEW, DedupResult.TRANSFERRED):
                     stats["positions_imported"] += 1
+
+                # Trade Settlement: record cash impact (matches import_service.py pattern)
+                cash_asset = asset_repo.find_by_symbol(position.currency)
+                if cash_asset:
+                    cash_holding, _ = holding_repo.find_or_create(account_id, cash_asset.id)
+                    db.add(
+                        Transaction(
+                            holding_id=cash_holding.id,
+                            broker_source_id=source.id,
+                            date=today,
+                            type="Trade Settlement",
+                            amount=-abs(cost_basis),
+                            notes=f"Cash settlement for {position.symbol} synthetic buy",
+                        )
+                    )
 
             source.import_stats = {
                 "snapshot_positions": _build_snapshot_positions(positions_data),
