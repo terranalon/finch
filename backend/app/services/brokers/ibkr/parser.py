@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app.services.brokers.ibkr.models import (
+    IBKRAccountInfo,
     IBKRCashBalance,
     IBKRDividend,
     IBKRForexTransaction,
@@ -1130,6 +1131,63 @@ class IBKRParser:
             original_symbol=ibkr_symbol,
             needs_validation=True,
         )
+
+    @staticmethod
+    def extract_account_info(root: ET.Element) -> IBKRAccountInfo | None:
+        """Extract account metadata from the AccountInformation section.
+
+        Returns None if the section is missing or dateOpened is absent/empty.
+        """
+        for stmt in root.findall(".//FlexStatement"):
+            acct_info = stmt.find(".//AccountInformation")
+            if acct_info is None:
+                continue
+
+            account_id = acct_info.get("accountId", "")
+            date_opened_str = acct_info.get("dateOpened", "")
+            if not date_opened_str:
+                return None
+
+            try:
+                if "-" in date_opened_str:
+                    opened = date.fromisoformat(date_opened_str)
+                else:
+                    opened = datetime.strptime(date_opened_str, "%Y%m%d").date()
+            except (ValueError, TypeError):
+                logger.warning("Could not parse dateOpened: %s", date_opened_str)
+                return None
+
+            return IBKRAccountInfo(account_id=account_id, date_opened=opened)
+
+        return None
+
+    # Section name -> XPath to detect the section *container* (not child elements).
+    # Checks whether the user configured the section in their Flex Query,
+    # regardless of whether the section has data (e.g. zero trades is fine).
+    _REQUIRED_SECTIONS: list[tuple[str, str]] = [
+        ("Account Information", ".//AccountInformation"),
+        ("Open Positions", ".//OpenPositions"),
+        ("Trades", ".//Trades"),
+        ("Cash Transactions", ".//CashTransactions"),
+        ("Transfers", ".//Transfers"),
+        ("Forex Trades", ".//ConversionRates"),
+        ("Cash Report", ".//CashReport"),
+    ]
+
+    @staticmethod
+    def get_required_section_names() -> list[str]:
+        """Return the human-readable names of all required Flex Query sections."""
+        return [name for name, _ in IBKRParser._REQUIRED_SECTIONS]
+
+    @staticmethod
+    def validate_required_sections(root: ET.Element) -> list[str]:
+        """Check which required Flex Query sections are missing from the report.
+
+        Checks for section *containers*, not child elements -- an empty section
+        (e.g. zero trades) is considered present. Returns human-readable names
+        for missing sections. An empty list means all required sections are present.
+        """
+        return [name for name, xpath in IBKRParser._REQUIRED_SECTIONS if root.find(xpath) is None]
 
     @staticmethod
     def map_asset_class(ibkr_category: str, symbol: str | None = None) -> str:

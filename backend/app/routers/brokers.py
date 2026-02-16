@@ -7,7 +7,7 @@ using a registry pattern to minimize code duplication while supporting broker-sp
 import logging
 import os
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -32,6 +32,10 @@ from app.services.brokers.broker_config import (
 )
 from app.services.brokers.credential_test_service import test_credentials
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
+from app.services.brokers.ibkr.import_orchestrator import (
+    IBKRImportOrchestrator,
+    MissingFlexSectionsError,
+)
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
 from app.services.brokers.import_service_registry import BrokerImportServiceRegistry
 from app.services.portfolio.snapshot_service import (
@@ -91,6 +95,16 @@ class SnapshotImportResponse(BaseModel):
     message: str
     account_id: int
     stats: SnapshotImportStats
+
+
+class OnboardingImportResponse(BaseModel):
+    """Response model for POST /ibkr/onboard/{account_id}."""
+
+    status: str
+    message: str
+    account_id: int
+    import_mode: Literal["full_history", "snapshot"]
+    stats: dict[str, Any]
 
 
 router = APIRouter(prefix="/api/brokers", tags=["brokers"])
@@ -449,6 +463,67 @@ async def import_broker_data(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"{config.name} import failed: {str(e)}",
         )
+
+
+@router.post("/ibkr/onboard/{account_id}", response_model=OnboardingImportResponse)
+async def onboard_ibkr(
+    account_id: int,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] -- FastAPI injects BackgroundTasks
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OnboardingImportResponse:
+    """IBKR onboarding import: validates Flex Query sections, then imports based on account age.
+
+    For accounts younger than 365 days, fetches full transaction history.
+    For older accounts, creates a synthetic snapshot of current positions.
+
+    Returns 422 if the Flex Query is missing required sections, with a list
+    of missing section names for the frontend to display.
+    """
+    config = _get_broker_config(BrokerType.IBKR)
+    account = _get_validated_account(account_id, current_user, db)
+
+    flex_token, flex_query_id = _get_flex_query_credentials(
+        account, config.key, config.name, config.env_fallback_prefix
+    )
+
+    try:
+        result = IBKRImportOrchestrator.execute(db, account_id, flex_token, flex_query_id)
+    except MissingFlexSectionsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "MISSING_FLEX_SECTIONS",
+                "message": "Your Flex Query is missing required sections. "
+                "Please update it in IBKR and try again.",
+                "missing_sections": e.missing_sections,
+                "required_sections": e.required_sections,
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    _update_last_import(account, config.key, db)
+
+    if background_tasks:
+        update_snapshot_status(db, account_id, "generating")
+        background_tasks.add_task(generate_snapshots_background, account_id, result.snapshot_start)
+
+    if result.import_mode == "full_history":
+        message = f"Full transaction history imported for account {account.name}"
+    else:
+        message = f"Synthetic snapshot created for account {account.name}"
+
+    return OnboardingImportResponse(
+        status="completed",
+        message=message,
+        account_id=account_id,
+        import_mode=result.import_mode,
+        stats=result.stats,
+    )
 
 
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)

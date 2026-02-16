@@ -147,3 +147,11 @@ class IBKRStatementOfFundsBalance:
     currency: str
     balance: Decimal
     activity: str
+
+
+@dataclass(frozen=True)
+class IBKRAccountInfo:
+    """Account metadata from the AccountInformation section."""
+
+    account_id: str
+    date_opened: date

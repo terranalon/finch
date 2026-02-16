@@ -53,6 +53,24 @@ export function SuccessStep({
         )}
       </div>
 
+      {/* Full history success message */}
+      {!hasSnapshotData && !skippedData && !isManual && (
+        <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-left mb-8">
+          <div className="flex items-start gap-3">
+            <CheckIcon className="size-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Your complete transaction history has been imported.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                All trades, dividends, transfers, and cash transactions are included.
+                New transactions will be imported automatically.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload History section -- only for snapshot-onboarded accounts */}
       {hasSnapshotData && (
         <div className="p-5 rounded-2xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-left mb-8">

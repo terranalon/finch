@@ -5,6 +5,7 @@ Positions are derived from transaction history via holdings reconstruction.
 """
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from typing import Any
 
@@ -29,6 +30,7 @@ class IBKRFlexImportService:
         flex_token: str,
         flex_query_id: str,
         start_date: date | None = None,
+        pre_fetched_root: ET.Element | None = None,
     ) -> dict[str, Any]:
         """
         Import transactions and cash from IBKR Flex Query API, then reconstruct holdings.
@@ -43,12 +45,13 @@ class IBKRFlexImportService:
             flex_query_id: Flex Query ID
             start_date: Optional start date for incremental import. When set,
                 only transactions from this date onwards are fetched.
+            pre_fetched_root: Optional pre-parsed XML root to skip fetching.
 
         Returns:
             Statistics dictionary with import results
         """
         mode = f"incremental from {start_date}" if start_date else "full snapshot"
-        logger.info(f"Starting IBKR Flex Query import for account {account_id} ({mode})")
+        logger.info("Starting IBKR Flex Query import for account %s (%s)", account_id, mode)
 
         stats: dict[str, Any] = {
             "account_id": account_id,
@@ -74,29 +77,32 @@ class IBKRFlexImportService:
                 stats["errors"].append(f"Account {account_id} not found")
                 return stats
 
-            # Step 1: Fetch Flex Query report (with optional date range)
-            logger.info("Fetching IBKR Flex Query report...")
-            xml_data = IBKRFlexClient.fetch_flex_report(
-                flex_token, flex_query_id, from_date=start_date
-            )
-
-            if not xml_data:
-                stats["status"] = "failed"
-                stats["errors"].append(
-                    "Failed to fetch Flex Query report. Check your token and query ID."
+            if pre_fetched_root is not None:
+                root = pre_fetched_root
+            else:
+                # Step 1: Fetch Flex Query report (with optional date range)
+                logger.info("Fetching IBKR Flex Query report...")
+                xml_data = IBKRFlexClient.fetch_flex_report(
+                    flex_token, flex_query_id, from_date=start_date
                 )
-                return stats
 
-            logger.info(f"Successfully fetched Flex Query data ({len(xml_data)} bytes)")
+                if not xml_data:
+                    stats["status"] = "failed"
+                    stats["errors"].append(
+                        "Failed to fetch Flex Query report. Check your token and query ID."
+                    )
+                    return stats
 
-            # Step 2: Parse XML
-            logger.info("Parsing Flex Query XML...")
-            root = IBKRParser.parse_xml(xml_data)
+                logger.info("Successfully fetched Flex Query data (%d bytes)", len(xml_data))
 
-            if root is None:
-                stats["status"] = "failed"
-                stats["errors"].append("Failed to parse Flex Query XML response")
-                return stats
+                # Step 2: Parse XML
+                logger.info("Parsing Flex Query XML...")
+                root = IBKRParser.parse_xml(xml_data)
+
+                if root is None:
+                    stats["status"] = "failed"
+                    stats["errors"].append("Failed to parse Flex Query XML response")
+                    return stats
 
             # Step 3: Extract all data types
             logger.info("Extracting transactions and cash data...")
@@ -108,9 +114,14 @@ class IBKRFlexImportService:
             other_cash = IBKRParser.extract_other_cash_transactions(root)
 
             logger.info(
-                f"Extracted {len(transactions)} transactions, {len(dividends)} dividends, "
-                f"{len(transfers)} transfers, {len(forex_txns)} forex, "
-                f"{len(other_cash)} other cash, {len(cash_data)} cash balances"
+                "Extracted %d transactions, %d dividends, %d transfers, "
+                "%d forex, %d other cash, %d cash balances",
+                len(transactions),
+                len(dividends),
+                len(transfers),
+                len(forex_txns),
+                len(other_cash),
+                len(cash_data),
             )
 
             # Step 4: Import cash balances
@@ -147,7 +158,7 @@ class IBKRFlexImportService:
                 item.symbol for items in (transactions, dividends) for item in items if item.symbol
             }
             if all_symbols:
-                logger.info(f"Updating prices for {len(all_symbols)} symbols...")
+                logger.info("Updating prices for %d symbols...", len(all_symbols))
                 stats["price_updates"] = IBKRImportService._update_asset_prices(
                     db, list(all_symbols)
                 )
@@ -162,7 +173,7 @@ class IBKRFlexImportService:
 
         except Exception as e:
             db.rollback()
-            logger.error(f"IBKR Flex Query import failed: {str(e)}", exc_info=True)
+            logger.error("IBKR Flex Query import failed: %s", e, exc_info=True)
             stats["status"] = "failed"
             stats["errors"].append(str(e))
             stats["end_time"] = datetime.now().isoformat()

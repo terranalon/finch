@@ -26,7 +26,7 @@ function getTestButtonLabel(status) {
   }
 }
 
-export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials, onError }) {
+export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials, onError, sectionValidation, isImporting }) {
   const [connectionMethod, setConnectionMethod] = useState(broker.hasApi ? 'api' : 'file');
   const [testStatus, setTestStatus] = useState('idle');
   const [testError, setTestError] = useState(null);
@@ -222,6 +222,45 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
             </div>
           )}
 
+          {/* Missing sections checklist */}
+          {sectionValidation?.missing?.length > 0 && (
+            <div className="p-5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-700">
+              <h4 className="font-semibold text-amber-800 dark:text-amber-300 mb-3">
+                Your Flex Query is missing required sections
+              </h4>
+              <p className="text-sm text-amber-700 dark:text-amber-400 mb-4">
+                Please update your Flex Query in IBKR to include these sections, then try importing again.
+              </p>
+              <div className="space-y-2">
+                {sectionValidation.required.map((section) => {
+                  const isMissing = sectionValidation.missing.includes(section);
+                  return (
+                    <div key={section} className="flex items-center gap-2">
+                      {isMissing ? (
+                        <XIcon className="size-5 text-red-500" />
+                      ) : (
+                        <CheckIcon className="size-5 text-emerald-500" />
+                      )}
+                      <span className={cn(
+                        'text-sm',
+                        isMissing
+                          ? 'font-semibold text-red-700 dark:text-red-400'
+                          : 'text-gray-600 dark:text-gray-400'
+                      )}>
+                        {section}
+                        {section === 'Account Information' && (
+                          <span className="text-xs ml-1 text-gray-500">
+                            (only &quot;Date Opened&quot; field needed)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Test button */}
           <button
             type="button"
@@ -328,9 +367,10 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
             <button
               type="button"
               onClick={() => onComplete({ credentials })}
-              className="px-6 py-3 rounded-xl text-base font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+              disabled={isImporting}
+              className="px-6 py-3 rounded-xl text-base font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Import Data
+              {isImporting ? 'Importing...' : 'Import Data'}
             </button>
           )}
         </div>

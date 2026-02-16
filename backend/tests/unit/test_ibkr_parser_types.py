@@ -1,8 +1,12 @@
 """Tests that IBKRParser methods return typed dataclasses, not raw dicts."""
 
 import xml.etree.ElementTree as ET
+from datetime import date
+
+import pytest
 
 from app.services.brokers.ibkr.models import (
+    IBKRAccountInfo,
     IBKRCashBalance,
     IBKRDividend,
     IBKRForexTransaction,
@@ -156,3 +160,106 @@ class TestExtractStmtFundsBalancesReturnsDataclass:
         balances = IBKRParser.extract_statement_of_funds_balances(root)
         assert len(balances) == 1
         assert isinstance(balances[0], IBKRStatementOfFundsBalance)
+
+
+class TestIBKRAccountInfoDataclass:
+    def test_create_account_info(self):
+        info = IBKRAccountInfo(
+            account_id="U12345",
+            date_opened=date(2025, 6, 15),
+        )
+        assert info.account_id == "U12345"
+        assert info.date_opened == date(2025, 6, 15)
+
+    def test_frozen(self):
+        info = IBKRAccountInfo(account_id="U12345", date_opened=date(2025, 6, 15))
+        with pytest.raises(AttributeError):
+            info.account_id = "U99999"  # ty: ignore[invalid-assignment] -- verifying frozen behavior at runtime
+
+
+class TestExtractAccountInfo:
+    def test_extracts_date_opened(self):
+        root = _build_xml('<AccountInformation accountId="U12345" dateOpened="2025-06-15" />')
+        info = IBKRParser.extract_account_info(root)
+        assert info is not None
+        assert info.account_id == "U12345"
+        assert info.date_opened == date(2025, 6, 15)
+
+    def test_returns_none_when_section_missing(self):
+        root = _build_xml("")
+        info = IBKRParser.extract_account_info(root)
+        assert info is None
+
+    def test_returns_none_when_date_opened_empty(self):
+        root = _build_xml('<AccountInformation accountId="U12345" dateOpened="" />')
+        info = IBKRParser.extract_account_info(root)
+        assert info is None
+
+    def test_returns_none_when_date_opened_missing(self):
+        root = _build_xml('<AccountInformation accountId="U12345" />')
+        info = IBKRParser.extract_account_info(root)
+        assert info is None
+
+    def test_handles_yyyymmdd_format(self):
+        """IBKR sometimes uses YYYYMMDD without dashes."""
+        root = _build_xml('<AccountInformation accountId="U12345" dateOpened="20250615" />')
+        info = IBKRParser.extract_account_info(root)
+        assert info is not None
+        assert info.date_opened == date(2025, 6, 15)
+
+
+class TestValidateRequiredSections:
+    def _build_complete_xml(self) -> ET.Element:
+        """Build XML with all required sections present."""
+        return _build_xml(
+            '<AccountInformation accountId="U12345" dateOpened="2025-06-15" />'
+            '<OpenPositions><OpenPosition symbol="AAPL" /></OpenPositions>'
+            '<Trades><Trade symbol="AAPL" /></Trades>'
+            '<CashTransactions><CashTransaction type="Dividends" /></CashTransactions>'
+            "<Transfers><Transfer /></Transfers>"
+            "<ConversionRates><ConversionRate /></ConversionRates>"
+            '<CashReport><CashReportCurrency currency="USD" /></CashReport>'
+        )
+
+    def test_all_sections_present(self):
+        root = self._build_complete_xml()
+        missing = IBKRParser.validate_required_sections(root)
+        assert missing == []
+
+    def test_missing_account_info(self):
+        root = _build_xml(
+            "<OpenPositions><OpenPosition /></OpenPositions>"
+            "<Trades><Trade /></Trades>"
+            "<CashTransactions><CashTransaction /></CashTransactions>"
+            "<Transfers><Transfer /></Transfers>"
+            "<ConversionRates><ConversionRate /></ConversionRates>"
+            "<CashReport><CashReportCurrency /></CashReport>"
+        )
+        missing = IBKRParser.validate_required_sections(root)
+        assert "Account Information" in missing
+
+    def test_missing_multiple_sections(self):
+        root = _build_xml("<Trades><Trade /></Trades>")
+        missing = IBKRParser.validate_required_sections(root)
+        assert "Account Information" in missing
+        assert "Open Positions" in missing
+        assert "Cash Report" in missing
+
+    def test_empty_statement(self):
+        root = _build_xml("")
+        missing = IBKRParser.validate_required_sections(root)
+        assert len(missing) == 7
+
+    def test_empty_containers_are_present(self):
+        """Sections configured but with no data should NOT be flagged as missing."""
+        root = _build_xml(
+            '<AccountInformation accountId="U12345" dateOpened="2025-06-15" />'
+            "<OpenPositions />"
+            "<Trades />"
+            "<CashTransactions />"
+            "<Transfers />"
+            "<ConversionRates />"
+            "<CashReport />"
+        )
+        missing = IBKRParser.validate_required_sections(root)
+        assert missing == []
