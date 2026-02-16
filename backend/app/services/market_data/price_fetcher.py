@@ -189,17 +189,14 @@ class PriceFetcher:
         other_assets = []
 
         for asset in assets:
-            if not asset.symbol:
-                stats["skipped"] += 1
-                continue
-            if asset.asset_class == "Cash":
+            if not asset.symbol or asset.asset_class == "Cash":
                 stats["skipped"] += 1
                 continue
 
             if asset.asset_class == "Crypto":
-                crypto_assets.append(asset)
+                crypto_assets = [*crypto_assets, asset]
             else:
-                other_assets.append(asset)
+                other_assets = [*other_assets, asset]
 
         # Batch fetch crypto prices in a single API call
         if crypto_assets:
@@ -314,7 +311,7 @@ class PriceFetcher:
             try:
                 cc_client = CryptoCompareClient()
                 cc_prices = cc_client.get_price_history(symbol, start_date, cc_end, "USD")
-                prices.extend(cc_prices)
+                prices = [*prices, *cc_prices]
             except Exception as e:
                 logger.error(f"CryptoCompare failed for {symbol}: {e}")
 
@@ -324,7 +321,7 @@ class PriceFetcher:
             try:
                 cg_client = CoinGeckoClient()
                 cg_prices = cg_client.get_price_history(symbol, cg_start, end_date, "usd")
-                prices.extend(cg_prices)
+                prices = [*prices, *cg_prices]
             except Exception as e:
                 logger.error(f"CoinGecko failed for {symbol}: {e}")
 
@@ -386,13 +383,13 @@ class PriceFetcher:
                 client = YFinanceClient()
                 rows = client.get_history_for_range(asset.symbol, start_date, end_date)
                 is_israeli = asset.symbol.endswith(".TA")
+                divisor = Decimal("100") if is_israeli else Decimal("1")
 
-                for row in rows:
-                    if row.close is not None and row.close > 0:
-                        close_price = row.close
-                        if is_israeli:
-                            close_price = close_price / 100
-                        prices_to_insert = [*prices_to_insert, (row.date, Decimal(str(close_price)))]
+                prices_to_insert = [
+                    (row.date, Decimal(str(row.close / divisor)))
+                    for row in rows
+                    if row.close is not None and row.close > 0
+                ]
 
             except Exception as e:
                 logger.error(f"yfinance failed for {asset.symbol}: {e}")

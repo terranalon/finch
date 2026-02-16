@@ -16,6 +16,26 @@ from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.market_data.yfinance_client import OHLCVRow
 
 
+def _ohlcv(
+    row_date: date,
+    close: Decimal,
+    *,
+    open_: Decimal | None = None,
+    high: Decimal | None = None,
+    low: Decimal | None = None,
+    volume: Decimal = Decimal("1000000"),
+) -> OHLCVRow:
+    """Build an OHLCVRow with sensible defaults -- only date and close are required."""
+    return OHLCVRow(
+        date=row_date,
+        open=open_ or close,
+        high=high or close,
+        low=low or close,
+        close=close,
+        volume=volume,
+    )
+
+
 @pytest.fixture
 def test_db():
     """Create a PostgreSQL test database for full compatibility."""
@@ -68,30 +88,9 @@ class TestFetchAndStoreHistoricalPrices:
 
         mock_client = mock_client_cls.return_value
         mock_client.get_history_for_range.return_value = [
-            OHLCVRow(
-                date=date(2024, 1, 2),
-                open=Decimal("149"),
-                high=Decimal("155"),
-                low=Decimal("148"),
-                close=Decimal("150.0"),
-                volume=Decimal("1000000"),
-            ),
-            OHLCVRow(
-                date=date(2024, 1, 3),
-                open=Decimal("150"),
-                high=Decimal("156"),
-                low=Decimal("149"),
-                close=Decimal("151.0"),
-                volume=Decimal("1100000"),
-            ),
-            OHLCVRow(
-                date=date(2024, 1, 4),
-                open=Decimal("151"),
-                high=Decimal("157"),
-                low=Decimal("150"),
-                close=Decimal("152.0"),
-                volume=Decimal("1200000"),
-            ),
+            _ohlcv(date(2024, 1, 2), Decimal("150.0")),
+            _ohlcv(date(2024, 1, 3), Decimal("151.0")),
+            _ohlcv(date(2024, 1, 4), Decimal("152.0")),
         ]
 
         count = PriceFetcher.fetch_and_store_historical_prices(
@@ -137,30 +136,9 @@ class TestFetchAndStoreHistoricalPrices:
 
         mock_client = mock_client_cls.return_value
         mock_client.get_history_for_range.return_value = [
-            OHLCVRow(
-                date=date(2024, 1, 2),
-                open=Decimal("149"),
-                high=Decimal("155"),
-                low=Decimal("148"),
-                close=Decimal("150.0"),
-                volume=Decimal("1000000"),
-            ),
-            OHLCVRow(
-                date=date(2024, 1, 3),
-                open=Decimal("150"),
-                high=Decimal("156"),
-                low=Decimal("149"),
-                close=Decimal("151.0"),
-                volume=Decimal("1100000"),
-            ),
-            OHLCVRow(
-                date=date(2024, 1, 4),
-                open=Decimal("151"),
-                high=Decimal("157"),
-                low=Decimal("150"),
-                close=Decimal("152.0"),
-                volume=Decimal("1200000"),
-            ),
+            _ohlcv(date(2024, 1, 2), Decimal("150.0")),
+            _ohlcv(date(2024, 1, 3), Decimal("151.0")),
+            _ohlcv(date(2024, 1, 4), Decimal("152.0")),
         ]
 
         count = PriceFetcher.fetch_and_store_historical_prices(
@@ -186,14 +164,7 @@ class TestFetchAndStoreHistoricalPrices:
 
         mock_client = mock_client_cls.return_value
         mock_client.get_history_for_range.return_value = [
-            OHLCVRow(
-                date=date(2024, 1, 2),
-                open=Decimal("1200"),
-                high=Decimal("1250"),
-                low=Decimal("1190"),
-                close=Decimal("1234.0"),
-                volume=Decimal("500000"),
-            ),
+            _ohlcv(date(2024, 1, 2), Decimal("1234.0"), volume=Decimal("500000")),
         ]
 
         PriceFetcher.fetch_and_store_historical_prices(
