@@ -20,7 +20,7 @@ from .cryptocompare_client import CryptoCompareClient
 from .historical_data_fetcher import HistoricalDataFetcher
 from .market_data_service import AssetMetadata, MarketDataService, PricePoint
 from .price_fetcher import PriceFetcher
-from .yfinance_client import TickerInfo, YFinanceClient, YFinanceError
+from .yfinance_client import QUOTE_TYPE_MAP, TickerInfo, YFinanceClient, YFinanceError
 
 __all__ = [
     "AssetMetadata",
@@ -31,6 +31,7 @@ __all__ = [
     "MarketDataService",
     "PriceFetcher",
     "PricePoint",
+    "QUOTE_TYPE_MAP",
     "TickerInfo",
     "YFinanceClient",
     "YFinanceError",

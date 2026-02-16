@@ -15,6 +15,13 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
+QUOTE_TYPE_MAP: dict[str, str] = {
+    "ETF": "ETF",
+    "MUTUALFUND": "MutualFund",
+    "MONEYMARKET": "MoneyMarket",
+    "EQUITY": "Stock",
+}
+
 
 class YFinanceError(Exception):
     """Exception raised for yfinance API errors."""
@@ -34,6 +41,13 @@ class TickerInfo:
     exchange: str | None
     price: Decimal | None
     price_timestamp: datetime | None
+
+    @property
+    def asset_class(self) -> str | None:
+        """Map quote_type to portfolio asset class."""
+        if self.quote_type is None:
+            return None
+        return QUOTE_TYPE_MAP.get(self.quote_type)
 
 
 class YFinanceClient:
