@@ -226,3 +226,95 @@ class TestGetHistoryForRange:
 
         rows = client.get_history_for_range("ERR", date(2024, 1, 2), date(2024, 1, 3))
         assert rows == []
+
+
+class TestGetForexRate:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_current_rate(self, mock_ticker):
+        import pandas as pd
+
+        mock_history = pd.DataFrame(
+            {"Close": [3.70]},
+            index=pd.to_datetime(["2024-01-15"]),
+        )
+        mock_ticker.return_value.history.return_value = mock_history
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rate = client.get_forex_rate("USD", "ILS")
+
+        assert rate == Decimal("3.7")
+        mock_ticker.assert_called_with("USDILS=X")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_rate_for_target_date(self, mock_ticker):
+        import pandas as pd
+
+        mock_history = pd.DataFrame(
+            {"Close": [3.72]},
+            index=pd.to_datetime(["2024-01-10"]),
+        )
+        mock_ticker.return_value.history.return_value = mock_history
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rate = client.get_forex_rate("USD", "ILS", target_date=date(2024, 1, 10))
+
+        assert rate == Decimal("3.72")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_on_empty(self, mock_ticker):
+        import pandas as pd
+
+        mock_ticker.return_value.history.return_value = pd.DataFrame()
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rate = client.get_forex_rate("USD", "XYZ")
+        assert rate is None
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_on_exception(self, mock_ticker):
+        mock_ticker.side_effect = Exception("API error")
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rate = client.get_forex_rate("USD", "ILS")
+        assert rate is None
+
+
+class TestGetForexHistory:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_ohlcv_rows(self, mock_ticker):
+        import pandas as pd
+
+        mock_history = pd.DataFrame(
+            {
+                "Open": [3.69, 3.70],
+                "High": [3.75, 3.76],
+                "Low": [3.68, 3.69],
+                "Close": [3.70, 3.71],
+                "Volume": [0, 0],
+            },
+            index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
+        )
+        mock_ticker.return_value.history.return_value = mock_history
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_forex_history("USD", "ILS", start=date(2024, 1, 2), end=date(2024, 1, 3))
+
+        assert len(rows) == 2
+        assert rows[0].close == Decimal("3.7")
+        mock_ticker.assert_called_with("USDILS=X")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_empty_on_no_data(self, mock_ticker):
+        import pandas as pd
+
+        mock_ticker.return_value.history.return_value = pd.DataFrame()
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_forex_history("USD", "XYZ", start=date(2024, 1, 2), end=date(2024, 1, 3))
+        assert rows == []

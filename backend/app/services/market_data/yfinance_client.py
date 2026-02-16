@@ -261,6 +261,60 @@ class YFinanceClient:
             logger.error(f"Error fetching history for {symbol}: {e}")
             return []
 
+    def get_forex_rate(
+        self, from_currency: str, to_currency: str, *, target_date: date | None = None
+    ) -> Decimal | None:
+        """Get forex exchange rate.
+
+        Args:
+            from_currency: Source currency code (e.g., "USD")
+            to_currency: Target currency code (e.g., "ILS")
+            target_date: Specific date for the rate (defaults to current)
+
+        Returns:
+            Exchange rate as Decimal, or None if unavailable
+        """
+        try:
+            symbol = f"{from_currency}{to_currency}=X"
+            self._rate_limit()
+            ticker = yf.Ticker(symbol)
+
+            if target_date is not None:
+                hist = ticker.history(
+                    start=target_date.isoformat(),
+                    end=(target_date + timedelta(days=1)).isoformat(),
+                )
+            else:
+                hist = ticker.history(period="1d")
+
+            if hist.empty:
+                logger.warning(f"No forex data for {symbol}")
+                return None
+
+            rate = hist["Close"].iloc[-1]
+            return Decimal(str(rate))
+
+        except Exception as e:
+            logger.error(f"Error fetching forex rate for {from_currency}/{to_currency}: {e}")
+            return None
+
+    def get_forex_history(
+        self, from_currency: str, to_currency: str, *, start: date, end: date
+    ) -> list[OHLCVRow]:
+        """Get historical forex rates for a date range.
+
+        Args:
+            from_currency: Source currency code (e.g., "USD")
+            to_currency: Target currency code (e.g., "ILS")
+            start: Start date (inclusive)
+            end: End date (inclusive)
+
+        Returns:
+            List of OHLCVRow, one per trading day
+        """
+        symbol = f"{from_currency}{to_currency}=X"
+        return self.get_history_for_range(symbol, start, end)
+
     def is_valid_symbol(self, symbol: str) -> bool:
         """Check if a symbol exists in Yahoo Finance.
 
