@@ -1,5 +1,6 @@
 """Tests for YFinanceClient rate limiting, batch resolution, and TickerInfo."""
 
+import threading
 import time
 from datetime import date, datetime
 from decimal import Decimal
@@ -12,6 +13,7 @@ from app.services.market_data.yfinance_client import (
     OHLCVRow,
     TickerInfo,
     YFinanceClient,
+    _TokenBucket,
 )
 
 
@@ -421,6 +423,58 @@ def _multi_ticker_df(tickers: dict[str, float], dt: str = "2024-01-02") -> pd.Da
             index=idx,
         )
     return pd.concat(frames, axis=1)
+
+
+class TestTokenBucket:
+    def test_allows_burst_up_to_capacity(self):
+        """Should allow rapid requests up to capacity."""
+        bucket = _TokenBucket(rate=10.0, capacity=5)
+        start = time.monotonic()
+        for _ in range(5):
+            bucket.acquire()
+        elapsed = time.monotonic() - start
+        # 5 tokens available immediately, should be very fast
+        assert elapsed < 0.1
+
+    def test_throttles_after_burst(self):
+        """Should sleep after burst capacity exhausted."""
+        bucket = _TokenBucket(rate=10.0, capacity=1)
+        bucket.acquire()  # Consumes the one token
+        start = time.monotonic()
+        bucket.acquire()  # Should wait ~0.1s for refill
+        elapsed = time.monotonic() - start
+        assert elapsed >= 0.05
+
+    def test_thread_safety(self):
+        """Should handle concurrent access without errors."""
+        bucket = _TokenBucket(rate=100.0, capacity=10)
+        results: list[bool] = []
+        lock = threading.Lock()
+
+        def worker() -> None:
+            bucket.acquire()
+            with lock:
+                results.append(True)
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+        assert len(results) == 20
+
+    def test_refills_over_time(self):
+        """Should refill tokens gradually based on rate."""
+        bucket = _TokenBucket(rate=20.0, capacity=5)
+        # Drain all tokens
+        for _ in range(5):
+            bucket.acquire()
+        # Wait for ~2 tokens to refill (0.1s at 20/s)
+        time.sleep(0.15)
+        start = time.monotonic()
+        bucket.acquire()  # Should have a token available
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.05  # Should not need to wait
 
 
 class TestGetBatchPricesDownload:

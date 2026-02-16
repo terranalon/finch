@@ -6,6 +6,7 @@ but follows similar patterns for error handling and caching.
 """
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -64,6 +65,32 @@ class OHLCVRow:
     low: Decimal
     close: Decimal
     volume: Decimal
+
+
+class _TokenBucket:
+    """Thread-safe token bucket rate limiter."""
+
+    def __init__(self, rate: float, capacity: int) -> None:
+        self._rate = rate  # tokens per second
+        self._capacity = capacity
+        self._tokens = float(capacity)
+        self._last_refill = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        """Block until a token is available."""
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                self._tokens = min(
+                    self._capacity,
+                    self._tokens + (now - self._last_refill) * self._rate,
+                )
+                self._last_refill = now
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return
+            time.sleep(1.0 / self._rate)
 
 
 class YFinanceClient:
