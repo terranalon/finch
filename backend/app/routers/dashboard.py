@@ -1,7 +1,6 @@
 """Dashboard API router."""
 
 import logging
-from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -95,9 +94,7 @@ async def get_benchmark_performance(
         start_price = float(rows[0].close)
         data = [
             {
-                "date": row.date.strftime("%Y-%m-%d")
-                if isinstance(row.date, date)
-                else str(row.date),
+                "date": row.date.isoformat(),
                 "price": round(float(row.close), 2),
                 "performance": round(((float(row.close) - start_price) / start_price) * 100, 2)
                 if start_price > 0

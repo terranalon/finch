@@ -31,9 +31,7 @@ class ExchangeRateService:
     def __init__(self, yf_client: YFinanceClient | None = None) -> None:
         self._yf_client = yf_client or YFinanceClient()
 
-    def refresh(
-        self, db: Session, target_date: date | None = None
-    ) -> dict:
+    def refresh(self, db: Session, target_date: date | None = None) -> dict:
         """Fetch and store exchange rates for the given date.
 
         Args:
