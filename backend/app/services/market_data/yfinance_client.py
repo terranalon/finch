@@ -6,6 +6,7 @@ but follows similar patterns for error handling and caching.
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -65,8 +66,18 @@ class YFinanceClient:
         price = client.get_current_price("MSFT")
     """
 
+    _last_request_time: float = 0.0
+    _min_request_interval: float = 0.5  # seconds between yfinance requests
+
     # Fields to try for company name, in order of preference
     NAME_FIELDS = ["longName", "shortName", "name"]
+
+    def _rate_limit(self) -> None:
+        """Enforce minimum interval between yfinance API calls."""
+        elapsed = time.time() - YFinanceClient._last_request_time
+        if elapsed < YFinanceClient._min_request_interval:
+            time.sleep(YFinanceClient._min_request_interval - elapsed)
+        YFinanceClient._last_request_time = time.time()
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
@@ -78,6 +89,7 @@ class YFinanceClient:
             TickerInfo dataclass or None if symbol not found
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -139,6 +151,7 @@ class YFinanceClient:
             Tuple of (price, timestamp) or None if not found
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -166,6 +179,7 @@ class YFinanceClient:
             List of (date, close_price) tuples
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             history = ticker.history(period=period)
 
@@ -196,6 +210,7 @@ class YFinanceClient:
             True if symbol has valid market data
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             info = ticker.info
             return info is not None and info.get("regularMarketPrice") is not None
@@ -215,6 +230,7 @@ class YFinanceClient:
             Raw info dict from yfinance, or empty dict on error
         """
         try:
+            self._rate_limit()
             ticker = yf.Ticker(symbol)
             return ticker.info or {}
         except Exception as e:

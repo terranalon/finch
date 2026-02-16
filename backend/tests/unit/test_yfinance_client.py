@@ -1,11 +1,14 @@
 """Tests for YFinanceClient rate limiting, batch resolution, and TickerInfo."""
 
+import time
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
     TickerInfo,
+    YFinanceClient,
 )
 
 
@@ -60,3 +63,43 @@ class TestTickerInfoAssetClass:
     def test_none_quote_type_returns_none(self):
         info = _make_ticker_info(quote_type=None)
         assert info.asset_class is None
+
+
+class TestRateLimiting:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_consecutive_calls_are_throttled(self, mock_ticker):
+        mock_ticker.return_value.info = {
+            "regularMarketPrice": 100.0,
+            "quoteType": "EQUITY",
+            "longName": "Test Corp",
+        }
+        client = YFinanceClient()
+        # Override interval for fast testing
+        YFinanceClient._min_request_interval = 0.1
+
+        start = time.time()
+        client.get_ticker_info("AAPL")
+        client.get_ticker_info("MSFT")
+        elapsed = time.time() - start
+
+        assert elapsed >= 0.1, f"Expected >= 0.1s, got {elapsed:.3f}s"
+        # Restore default
+        YFinanceClient._min_request_interval = 0.5
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_first_call_not_delayed(self, mock_ticker):
+        mock_ticker.return_value.info = {
+            "regularMarketPrice": 100.0,
+            "quoteType": "EQUITY",
+            "longName": "Test Corp",
+        }
+        # Reset class-level state
+        YFinanceClient._last_request_time = 0.0
+        client = YFinanceClient()
+
+        start = time.time()
+        client.get_ticker_info("AAPL")
+        elapsed = time.time() - start
+
+        # First call should not be delayed (< 0.1s unless yf is slow)
+        assert elapsed < 0.5
