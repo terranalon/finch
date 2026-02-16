@@ -60,6 +60,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [showFileUploadResult, setShowFileUploadResult] = useState(false);
   const [lastFileUpload, setLastFileUpload] = useState(null);
   const [hasSnapshotData, setHasSnapshotData] = useState(false);
+  const [missingSections, setMissingSections] = useState(null);
 
   // Notification state (replaces alert())
   const [notification, setNotification] = useState({ message: null, type: 'error' });
@@ -125,6 +126,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setShowFileUploadResult(false);
     setLastFileUpload(null);
     setHasSnapshotData(false);
+    setMissingSections(null);
     setNotification({ message: null, type: 'error' });
   };
 
@@ -191,8 +193,34 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           throw new Error(error.detail || 'Failed to save credentials');
         }
 
-        if (broker.supportsSnapshot) {
-          // Snapshot-capable broker: import current positions
+        if (broker.type === 'ibkr') {
+          // IBKR onboarding: validates sections, then imports based on account age
+          setMissingSections(null);
+
+          const importResponse = await api(`/brokers/ibkr/onboard/${accountId}`, {
+            method: 'POST',
+          });
+
+          if (!importResponse.ok) {
+            const error = await importResponse.json();
+
+            if (importResponse.status === 422 && error.detail?.missing_sections) {
+              setMissingSections(error.detail.missing_sections);
+              setIsImporting(false);
+              return;
+            }
+
+            throw new Error(error.detail?.message || error.detail || 'Failed to import data');
+          }
+
+          const results = await importResponse.json();
+          const isFullHistory = results.import_mode === 'full_history';
+          setImportResults(
+            isFullHistory ? transformImportResults(results) : transformSnapshotResults(results)
+          );
+          setHasSnapshotData(!isFullHistory);
+        } else if (broker.supportsSnapshot) {
+          // Other snapshot-capable brokers (future)
           const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${accountId}`, {
             method: 'POST',
           });
@@ -501,6 +529,8 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           onBack={() => goToStep(3)}
           onShowGuide={(type) => setShowGuide(type)}
           onTestCredentials={handleTestCredentials}
+          missingSections={missingSections}
+          isImporting={isImporting}
         />
       );
     }
