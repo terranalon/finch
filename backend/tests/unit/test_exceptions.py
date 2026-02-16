@@ -78,6 +78,7 @@ class TestConflictError:
                 "hint": "Use confirm_overlap=true",
             },
         )
+        assert err.extra is not None
         assert err.extra["conflicting_source"]["id"] == 5
 
 
@@ -95,4 +96,5 @@ class TestUnprocessableEntityError:
                 "required_sections": ["Trades", "CashTransactions", "Transfers"],
             },
         )
+        assert err.extra is not None
         assert "Trades" in err.extra["missing_sections"]
