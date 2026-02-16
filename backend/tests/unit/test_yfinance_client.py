@@ -26,7 +26,7 @@ def _make_ticker_info(**overrides) -> TickerInfo:
         price_timestamp=datetime(2026, 1, 15),
     )
     defaults.update(overrides)
-    return TickerInfo(**defaults)
+    return TickerInfo(**defaults)  # ty: ignore[invalid-argument-type] — dict values are mixed types
 
 
 class TestQuoteTypeMap:

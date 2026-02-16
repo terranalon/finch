@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from unittest.mock import patch
 
-from app.services.market_data.yfinance_client import QUOTE_TYPE_MAP, TickerInfo
+from app.services.market_data.yfinance_client import TickerInfo
 from app.services.shared.asset_type_detector import AssetTypeDetector, AssetTypeResult
 
 
@@ -22,7 +22,7 @@ def _make_ticker_info(**overrides) -> TickerInfo:
         price_timestamp=datetime(2026, 1, 15),
     )
     defaults.update(overrides)
-    return TickerInfo(**defaults)
+    return TickerInfo(**defaults)  # ty: ignore[invalid-argument-type] — dict values are mixed types
 
 
 class TestAssetTypeDetector:

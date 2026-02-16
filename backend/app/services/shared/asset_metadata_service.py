@@ -7,9 +7,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.services.market_data.yfinance_client import TickerInfo, YFinanceClient
-
 from app.models import Asset
+from app.services.market_data.yfinance_client import TickerInfo, YFinanceClient
 
 logger = logging.getLogger(__name__)
 
