@@ -10,9 +10,12 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yfinance as yf
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +94,22 @@ class YFinanceClient:
             time.sleep(YFinanceClient._min_request_interval - elapsed)
         YFinanceClient._last_request_time = time.time()
 
+    @staticmethod
+    def _dataframe_to_ohlcv_rows(df: "pd.DataFrame") -> list[OHLCVRow]:
+        """Convert a pandas DataFrame of historical data to OHLCVRow list."""
+        return [
+            OHLCVRow(
+                date=idx.date(),
+                open=Decimal(str(row.get("Open", 0))),
+                high=Decimal(str(row.get("High", 0))),
+                low=Decimal(str(row.get("Low", 0))),
+                close=Decimal(str(close)),
+                volume=Decimal(str(int(row.get("Volume", 0)))),
+            )
+            for idx, row in df.iterrows()
+            if (close := row.get("Close")) is not None
+        ]
+
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
 
@@ -110,14 +129,15 @@ class YFinanceClient:
                 logger.warning(f"No data found for symbol {symbol}")
                 return None
 
-            # Extract name from various fields
-            name = None
-            for field in self.NAME_FIELDS:
-                if field in info and info[field]:
-                    name = info[field].strip()
-                    if name and name != symbol:
-                        break
-                    name = None
+            # Extract name from various fields (first non-empty, non-symbol match)
+            name = next(
+                (
+                    stripped
+                    for field in self.NAME_FIELDS
+                    if (val := info.get(field)) and (stripped := val.strip()) and stripped != symbol
+                ),
+                None,
+            )
 
             # Determine quote type
             quote_type = info.get("quoteType")
@@ -184,9 +204,7 @@ class YFinanceClient:
             logger.error(f"Error fetching price for {symbol}: {e}")
             return None
 
-    def get_historical_data(
-        self, symbol: str, period: str = "1y"
-    ) -> list[OHLCVRow]:
+    def get_historical_data(self, symbol: str, period: str = "1y") -> list[OHLCVRow]:
         """Get historical OHLCV data by period.
 
         Args:
@@ -205,23 +223,7 @@ class YFinanceClient:
                 logger.warning(f"No historical data for {symbol}")
                 return []
 
-            rows: list[OHLCVRow] = []
-            for idx, row in history.iterrows():
-                close = row.get("Close")
-                if close is None:
-                    continue
-                rows = [
-                    *rows,
-                    OHLCVRow(
-                        date=idx.date(),
-                        open=Decimal(str(row.get("Open", 0))),
-                        high=Decimal(str(row.get("High", 0))),
-                        low=Decimal(str(row.get("Low", 0))),
-                        close=Decimal(str(close)),
-                        volume=Decimal(str(int(row.get("Volume", 0)))),
-                    ),
-                ]
-
+            rows = self._dataframe_to_ohlcv_rows(history)
             logger.info(f"Fetched {len(rows)} historical prices for {symbol}")
             return rows
 
@@ -229,9 +231,7 @@ class YFinanceClient:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
             return []
 
-    def get_history_for_range(
-        self, symbol: str, start: date, end: date
-    ) -> list[OHLCVRow]:
+    def get_history_for_range(self, symbol: str, start: date, end: date) -> list[OHLCVRow]:
         """Get historical OHLCV data for a date range.
 
         Args:
@@ -254,23 +254,7 @@ class YFinanceClient:
                 logger.warning(f"No historical data for {symbol}")
                 return []
 
-            rows: list[OHLCVRow] = []
-            for idx, row in history.iterrows():
-                close = row.get("Close")
-                if close is None:
-                    continue
-                rows = [
-                    *rows,
-                    OHLCVRow(
-                        date=idx.date(),
-                        open=Decimal(str(row.get("Open", 0))),
-                        high=Decimal(str(row.get("High", 0))),
-                        low=Decimal(str(row.get("Low", 0))),
-                        close=Decimal(str(close)),
-                        volume=Decimal(str(int(row.get("Volume", 0)))),
-                    ),
-                ]
-
+            rows = self._dataframe_to_ohlcv_rows(history)
             logger.info(f"Fetched {len(rows)} rows for {symbol}")
             return rows
 
@@ -379,10 +363,7 @@ class YFinanceClient:
             Dict mapping each unique symbol to its TickerInfo or None
         """
         unique_symbols = list(dict.fromkeys(symbols))
-        results: dict[str, TickerInfo | None] = {}
-
-        for symbol in unique_symbols:
-            results[symbol] = self.get_ticker_info(symbol)
+        results = {symbol: self.get_ticker_info(symbol) for symbol in unique_symbols}
 
         resolved_count = sum(1 for v in results.values() if v is not None)
         logger.info("Resolved %d/%d symbols", resolved_count, len(unique_symbols))

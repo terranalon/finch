@@ -5,6 +5,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
+import pandas as pd
+
 from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
     OHLCVRow,
@@ -13,21 +15,20 @@ from app.services.market_data.yfinance_client import (
 )
 
 
-def _make_ticker_info(**overrides) -> TickerInfo:
-    defaults = dict(
-        symbol="AAPL",
-        name="Apple Inc.",
-        quote_type="EQUITY",
-        sector="Technology",
-        category=None,
-        industry="Consumer Electronics",
-        currency="USD",
-        exchange="NMS",
-        price=Decimal("175.50"),
-        price_timestamp=datetime(2026, 1, 15),
-    )
-    defaults.update(overrides)
-    return TickerInfo(**defaults)  # ty: ignore[invalid-argument-type] — dict values are mixed types
+def _make_ticker_info(**overrides: object) -> TickerInfo:
+    defaults = {
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "quote_type": "EQUITY",
+        "sector": "Technology",
+        "category": None,
+        "industry": "Consumer Electronics",
+        "currency": "USD",
+        "exchange": "NMS",
+        "price": Decimal("175.50"),
+        "price_timestamp": datetime(2026, 1, 15),
+    }
+    return TickerInfo(**{**defaults, **overrides})  # ty: ignore[invalid-argument-type]
 
 
 class TestQuoteTypeMap:
@@ -183,8 +184,6 @@ class TestOHLCVRow:
 class TestGetHistoryForRange:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_ohlcv_rows(self, mock_ticker):
-        import pandas as pd
-
         mock_history = pd.DataFrame(
             {
                 "Open": [150.0, 151.0],
@@ -209,8 +208,6 @@ class TestGetHistoryForRange:
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_empty_on_no_data(self, mock_ticker):
-        import pandas as pd
-
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
         YFinanceClient._min_request_interval = 0.0
@@ -231,8 +228,6 @@ class TestGetHistoryForRange:
 class TestGetForexRate:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_current_rate(self, mock_ticker):
-        import pandas as pd
-
         mock_history = pd.DataFrame(
             {"Close": [3.70]},
             index=pd.to_datetime(["2024-01-15"]),
@@ -248,8 +243,6 @@ class TestGetForexRate:
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_rate_for_target_date(self, mock_ticker):
-        import pandas as pd
-
         mock_history = pd.DataFrame(
             {"Close": [3.72]},
             index=pd.to_datetime(["2024-01-10"]),
@@ -264,8 +257,6 @@ class TestGetForexRate:
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_none_on_empty(self, mock_ticker):
-        import pandas as pd
-
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
         YFinanceClient._min_request_interval = 0.0
@@ -286,8 +277,6 @@ class TestGetForexRate:
 class TestGetForexHistory:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_ohlcv_rows(self, mock_ticker):
-        import pandas as pd
-
         mock_history = pd.DataFrame(
             {
                 "Open": [3.69, 3.70],
@@ -310,8 +299,6 @@ class TestGetForexHistory:
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_empty_on_no_data(self, mock_ticker):
-        import pandas as pd
-
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
         YFinanceClient._min_request_interval = 0.0
@@ -325,8 +312,6 @@ class TestGetHistoricalDataOHLCV:
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_ohlcv_rows(self, mock_ticker):
-        import pandas as pd
-
         mock_history = pd.DataFrame(
             {
                 "Open": [150.0],
