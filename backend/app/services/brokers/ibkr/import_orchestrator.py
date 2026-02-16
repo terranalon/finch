@@ -73,8 +73,7 @@ class IBKRImportOrchestrator:
 
         missing = IBKRParser.validate_required_sections(root)
         if missing:
-            required = [name for name, _ in IBKRParser._REQUIRED_SECTIONS]
-            raise MissingFlexSectionsError(missing, required)
+            raise MissingFlexSectionsError(missing, IBKRParser.get_required_section_names())
 
         account_info = IBKRParser.extract_account_info(root)
 

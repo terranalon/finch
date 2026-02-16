@@ -1175,6 +1175,11 @@ class IBKRParser:
     ]
 
     @staticmethod
+    def get_required_section_names() -> list[str]:
+        """Return the human-readable names of all required Flex Query sections."""
+        return [name for name, _ in IBKRParser._REQUIRED_SECTIONS]
+
+    @staticmethod
     def validate_required_sections(root: ET.Element) -> list[str]:
         """Check which required Flex Query sections are missing from the report.
 
