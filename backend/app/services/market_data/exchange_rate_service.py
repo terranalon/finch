@@ -4,10 +4,10 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-import yfinance as yf
 from sqlalchemy.orm import Session
 
 from app.models.exchange_rate import ExchangeRate
+from app.services.market_data.yfinance_client import YFinanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,14 @@ CURRENCY_PAIRS = (
 
 
 class ExchangeRateService:
-    """Service for refreshing exchange rates from yfinance."""
+    """Service for refreshing exchange rates via YFinanceClient."""
 
-    @staticmethod
-    def refresh(db: Session, target_date: date | None = None) -> dict:
+    CURRENCY_PAIRS = CURRENCY_PAIRS
+
+    def __init__(self, yf_client: YFinanceClient | None = None) -> None:
+        self._yf_client = yf_client or YFinanceClient()
+
+    def refresh(self, db: Session, target_date: date | None = None) -> dict:
         """Fetch and store exchange rates for the given date.
 
         Args:
@@ -63,19 +67,15 @@ class ExchangeRateService:
                     skipped += 1
                     continue
 
-                ticker_symbol = f"{from_curr}{to_curr}=X"
-                ticker = yf.Ticker(ticker_symbol)
-                hist = ticker.history(
-                    start=target_date,
-                    end=target_date + timedelta(days=1),
+                rate = self._yf_client.get_forex_rate(
+                    from_curr, to_curr, target_date=target_date
                 )
 
-                if hist.empty or "Close" not in hist.columns:
+                if rate is None:
                     logger.warning("No data for %s/%s on %s", from_curr, to_curr, target_date)
                     failed += 1
                     continue
 
-                rate = Decimal(str(hist["Close"].iloc[0]))
                 db.add(
                     ExchangeRate(
                         from_currency=from_curr,
