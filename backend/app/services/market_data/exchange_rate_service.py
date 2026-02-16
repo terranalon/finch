@@ -2,7 +2,6 @@
 
 import logging
 from datetime import date, timedelta
-from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -32,7 +31,9 @@ class ExchangeRateService:
     def __init__(self, yf_client: YFinanceClient | None = None) -> None:
         self._yf_client = yf_client or YFinanceClient()
 
-    def refresh(self, db: Session, target_date: date | None = None) -> dict:
+    def refresh(
+        self, db: Session, target_date: date | None = None
+    ) -> dict[str, date | int | list[str]]:
         """Fetch and store exchange rates for the given date.
 
         Args:
@@ -62,14 +63,12 @@ class ExchangeRateService:
                     .first()
                 )
 
-                if existing:
+                if existing is not None:
                     logger.info("Rate %s/%s already exists for %s", from_curr, to_curr, target_date)
                     skipped += 1
                     continue
 
-                rate = self._yf_client.get_forex_rate(
-                    from_curr, to_curr, target_date=target_date
-                )
+                rate = self._yf_client.get_forex_rate(from_curr, to_curr, target_date=target_date)
 
                 if rate is None:
                     logger.warning("No data for %s/%s on %s", from_curr, to_curr, target_date)

@@ -16,8 +16,7 @@ class CurrencyService:
     """Service for managing currency exchange rates.
 
     Instance-based: accepts a db session in __init__ so callers don't
-    pass it to every method.  ``fetch_exchange_rate`` remains a
-    @staticmethod because it is pure I/O with no database access.
+    pass it to every method.
     """
 
     SUPPORTED_CURRENCIES = ["USD", "ILS", "CAD", "EUR", "GBP"]
@@ -49,18 +48,18 @@ class CurrencyService:
         # Try to find cached rate
         rate = self._rate_repo.find_by_pair_and_date(from_currency, to_currency, target_date)
 
-        if rate:
+        if rate is not None:
             return rate.rate
 
         # Not cached, fetch from Yahoo Finance
         fetched_rate = self.fetch_exchange_rate(from_currency, to_currency)
 
-        if fetched_rate:
+        if fetched_rate is not None:
             self._rate_repo.create(from_currency, to_currency, fetched_rate, target_date)
             try:
                 self._db.commit()
             except Exception as e:
-                logger.error(f"Error saving exchange rate: {str(e)}")
+                logger.error(f"Error saving exchange rate: {e}")
                 self._db.rollback()
 
             return fetched_rate
@@ -102,7 +101,7 @@ class CurrencyService:
 
         rate = self.get_exchange_rate(from_currency, to_currency, target_date)
 
-        if rate:
+        if rate is not None:
             return amount * rate
 
         return None
@@ -113,8 +112,10 @@ class CurrencyService:
         Returns:
             Statistics dict with success/failure counts
         """
-        stats = {"total": 0, "updated": 0, "failed": 0, "pairs": []}
-
+        total = 0
+        updated = 0
+        failed = 0
+        pairs: list[str] = []
         target_date = date.today()
 
         for from_curr in self.SUPPORTED_CURRENCIES:
@@ -122,35 +123,34 @@ class CurrencyService:
                 if from_curr == to_curr:
                     continue
 
-                stats["total"] += 1
+                total += 1
 
                 existing = self._rate_repo.find_by_pair_and_date(from_curr, to_curr, target_date)
 
-                if existing:
+                if existing is not None:
                     logger.debug(f"Rate {from_curr}/{to_curr} already exists for {target_date}")
-                    stats["updated"] += 1
+                    updated += 1
                     continue
 
                 rate = self.fetch_exchange_rate(from_curr, to_curr)
 
-                if rate:
+                if rate is not None:
                     self._rate_repo.create(from_curr, to_curr, rate, target_date)
-                    stats["updated"] += 1
-                    stats["pairs"].append(f"{from_curr}/{to_curr}")
+                    updated += 1
+                    pairs = [*pairs, f"{from_curr}/{to_curr}"]
                     logger.info(f"Updated rate {from_curr}/{to_curr} = {rate}")
                 else:
-                    stats["failed"] += 1
+                    failed += 1
                     logger.warning(f"Failed to fetch rate {from_curr}/{to_curr}")
 
         try:
             self._db.commit()
         except Exception as e:
-            logger.error(f"Error committing exchange rates: {str(e)}")
+            logger.error(f"Error committing exchange rates: {e}")
             self._db.rollback()
-            stats["failed"] = stats["total"]
-            stats["updated"] = 0
+            return {"total": total, "updated": 0, "failed": total, "pairs": []}
 
-        return stats
+        return {"total": total, "updated": updated, "failed": failed, "pairs": pairs}
 
     def fetch_and_store_historical_rates(
         self,

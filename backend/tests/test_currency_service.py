@@ -3,7 +3,7 @@
 import os
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -13,6 +13,10 @@ from app.database import Base
 from app.models.exchange_rate import ExchangeRate
 from app.services.market_data.yfinance_client import OHLCVRow
 from app.services.shared.currency_service import CurrencyService
+
+_CLEANUP_SQL = text(
+    "DELETE FROM exchange_rates WHERE date IN ('2024-01-02', '2024-01-03', '2024-01-04')"
+)
 
 
 @pytest.fixture
@@ -27,24 +31,14 @@ def test_db():
     engine = create_engine(test_db_url)
     Base.metadata.create_all(engine)
 
-    # Clean up before test to avoid interference from previous runs
     with engine.connect() as conn:
-        conn.execute(
-            text(
-                "DELETE FROM exchange_rates WHERE date IN ('2024-01-02', '2024-01-03', '2024-01-04')"
-            )
-        )
+        conn.execute(_CLEANUP_SQL)
         conn.commit()
 
     yield engine
 
-    # Clean up test data
     with engine.connect() as conn:
-        conn.execute(
-            text(
-                "DELETE FROM exchange_rates WHERE date IN ('2024-01-02', '2024-01-03', '2024-01-04')"
-            )
-        )
+        conn.execute(_CLEANUP_SQL)
         conn.commit()
 
 
@@ -180,8 +174,8 @@ class TestFetchAndStoreHistoricalRates:
         assert count == 0
 
     @patch("app.services.shared.currency_service.YFinanceClient")
-    def test_handles_yfinance_exception(self, mock_client_cls, db_session):
-        """Should handle yfinance exceptions gracefully."""
+    def test_handles_no_data_for_pair(self, mock_client_cls, db_session):
+        """Should return 0 when yfinance returns no data for the pair."""
         mock_client = mock_client_cls.return_value
         mock_client.get_forex_history.return_value = []
 
