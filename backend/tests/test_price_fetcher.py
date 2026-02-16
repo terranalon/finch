@@ -5,7 +5,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -14,6 +13,7 @@ from app.database import Base
 from app.models import Asset
 from app.models.asset_price import AssetPrice
 from app.services.market_data.price_fetcher import PriceFetcher
+from app.services.market_data.yfinance_client import OHLCVRow
 
 
 @pytest.fixture
@@ -54,10 +54,9 @@ def db_session(test_db):
 class TestFetchAndStoreHistoricalPrices:
     """Tests for bulk historical price fetching."""
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_fetches_stock_prices_for_date_range(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_fetches_stock_prices_for_date_range(self, mock_client_cls, db_session):
         """Should fetch and store historical prices for a stock."""
-        # Setup: create a stock asset
         asset = Asset(
             symbol="TEST_AAPL",
             name="Apple Inc Test",
@@ -67,18 +66,34 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(asset)
         db_session.commit()
 
-        # Mock yfinance response
-        mock_history = pd.DataFrame(
-            {
-                "Close": [150.0, 151.0, 152.0],
-            },
-            index=pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
-        )
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = mock_history
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = [
+            OHLCVRow(
+                date=date(2024, 1, 2),
+                open=Decimal("149"),
+                high=Decimal("155"),
+                low=Decimal("148"),
+                close=Decimal("150.0"),
+                volume=Decimal("1000000"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 3),
+                open=Decimal("150"),
+                high=Decimal("156"),
+                low=Decimal("149"),
+                close=Decimal("151.0"),
+                volume=Decimal("1100000"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 4),
+                open=Decimal("151"),
+                high=Decimal("157"),
+                low=Decimal("150"),
+                close=Decimal("152.0"),
+                volume=Decimal("1200000"),
+            ),
+        ]
 
-        # Act
         count = PriceFetcher.fetch_and_store_historical_prices(
             db_session,
             asset.id,
@@ -86,11 +101,8 @@ class TestFetchAndStoreHistoricalPrices:
             date(2024, 1, 4),
         )
 
-        # Assert
         assert count == 3
-        mock_yf.Ticker.assert_called_once_with("TEST_AAPL")
 
-        # Verify prices stored in DB
         prices = (
             db_session.query(AssetPrice)
             .filter(AssetPrice.asset_id == asset.id)
@@ -101,8 +113,8 @@ class TestFetchAndStoreHistoricalPrices:
         assert float(prices[0].closing_price) == 150.0
         assert prices[0].date == date(2024, 1, 2)
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_skips_dates_already_in_db(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_skips_dates_already_in_db(self, mock_client_cls, db_session):
         """Should skip dates that already have prices."""
         asset = Asset(
             symbol="TEST_AAPL2",
@@ -113,7 +125,6 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(asset)
         db_session.flush()
 
-        # Pre-existing price
         existing = AssetPrice(
             asset_id=asset.id,
             date=date(2024, 1, 3),
@@ -124,28 +135,45 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(existing)
         db_session.commit()
 
-        # Mock returns all 3 days
-        mock_history = pd.DataFrame(
-            {"Close": [150.0, 151.0, 152.0]},
-            index=pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
-        )
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = mock_history
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = [
+            OHLCVRow(
+                date=date(2024, 1, 2),
+                open=Decimal("149"),
+                high=Decimal("155"),
+                low=Decimal("148"),
+                close=Decimal("150.0"),
+                volume=Decimal("1000000"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 3),
+                open=Decimal("150"),
+                high=Decimal("156"),
+                low=Decimal("149"),
+                close=Decimal("151.0"),
+                volume=Decimal("1100000"),
+            ),
+            OHLCVRow(
+                date=date(2024, 1, 4),
+                open=Decimal("151"),
+                high=Decimal("157"),
+                low=Decimal("150"),
+                close=Decimal("152.0"),
+                volume=Decimal("1200000"),
+            ),
+        ]
 
         count = PriceFetcher.fetch_and_store_historical_prices(
             db_session, asset.id, date(2024, 1, 2), date(2024, 1, 4)
         )
 
-        # Only 2 new prices inserted (skipped Jan 3)
         assert count == 2
 
-        # Existing price unchanged
         db_session.refresh(existing)
         assert float(existing.closing_price) == 999.00
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_handles_israeli_stock_agorot_conversion(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_handles_israeli_stock_agorot_conversion(self, mock_client_cls, db_session):
         """Should convert .TA stocks from Agorot to ILS (divide by 100)."""
         asset = Asset(
             symbol="TEST_TEVA.TA",
@@ -156,24 +184,27 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(asset)
         db_session.commit()
 
-        # Yahoo returns Agorot (1234 = 12.34 ILS)
-        mock_history = pd.DataFrame(
-            {"Close": [1234.0]},
-            index=pd.to_datetime(["2024-01-02"]),
-        )
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = mock_history
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = [
+            OHLCVRow(
+                date=date(2024, 1, 2),
+                open=Decimal("1200"),
+                high=Decimal("1250"),
+                low=Decimal("1190"),
+                close=Decimal("1234.0"),
+                volume=Decimal("500000"),
+            ),
+        ]
 
         PriceFetcher.fetch_and_store_historical_prices(
             db_session, asset.id, date(2024, 1, 2), date(2024, 1, 2)
         )
 
         price = db_session.query(AssetPrice).filter(AssetPrice.asset_id == asset.id).first()
-        assert float(price.closing_price) == 12.34  # Converted from Agorot
+        assert float(price.closing_price) == 12.34
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_skips_cash_assets(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_skips_cash_assets(self, mock_client_cls, db_session):
         """Should skip cash assets entirely."""
         asset = Asset(
             symbol="TEST_USD",
@@ -189,10 +220,10 @@ class TestFetchAndStoreHistoricalPrices:
         )
 
         assert count == 0
-        mock_yf.Ticker.assert_not_called()
+        mock_client_cls.assert_not_called()
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_handles_empty_history(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_handles_empty_history(self, mock_client_cls, db_session):
         """Should handle empty history gracefully."""
         asset = Asset(
             symbol="TEST_EMPTY",
@@ -203,9 +234,8 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(asset)
         db_session.commit()
 
-        mock_ticker = MagicMock()
-        mock_ticker.history.return_value = pd.DataFrame()
-        mock_yf.Ticker.return_value = mock_ticker
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = []
 
         count = PriceFetcher.fetch_and_store_historical_prices(
             db_session, asset.id, date(2024, 1, 2), date(2024, 1, 4)
@@ -213,8 +243,8 @@ class TestFetchAndStoreHistoricalPrices:
 
         assert count == 0
 
-    @patch("app.services.market_data.price_fetcher.yf")
-    def test_handles_yfinance_exception(self, mock_yf, db_session):
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    def test_handles_yfinance_exception(self, mock_client_cls, db_session):
         """Should handle yfinance exceptions gracefully."""
         asset = Asset(
             symbol="TEST_ERROR",
@@ -225,7 +255,8 @@ class TestFetchAndStoreHistoricalPrices:
         db_session.add(asset)
         db_session.commit()
 
-        mock_yf.Ticker.side_effect = Exception("API error")
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.side_effect = Exception("API error")
 
         count = PriceFetcher.fetch_and_store_historical_prices(
             db_session, asset.id, date(2024, 1, 2), date(2024, 1, 4)
@@ -256,11 +287,9 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         db_session.add(asset)
         db_session.commit()
 
-        # Dates more than 365 days ago
         old_start = date.today() - timedelta(days=400)
         old_end = date.today() - timedelta(days=390)
 
-        # Mock CryptoCompare response
         mock_client = MagicMock()
         mock_client.get_price_history.return_value = [
             (old_start, Decimal("40000")),
@@ -275,7 +304,6 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         assert count >= 2
         mock_client.get_price_history.assert_called()
 
-        # Verify prices stored in DB
         prices = (
             db_session.query(AssetPrice)
             .filter(AssetPrice.asset_id == asset.id)
@@ -297,7 +325,6 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         db_session.add(asset)
         db_session.commit()
 
-        # Recent dates (within 365 days)
         recent_start = date.today() - timedelta(days=30)
         recent_end = date.today() - timedelta(days=25)
 
@@ -328,7 +355,6 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         db_session.add(asset)
         db_session.commit()
 
-        # Date range that spans the 365-day boundary
         old_date = date.today() - timedelta(days=400)
         recent_date = date.today() - timedelta(days=30)
 
@@ -348,7 +374,6 @@ class TestFetchAndStoreHistoricalCryptoPrices:
             db_session, asset.id, old_date, recent_date
         )
 
-        # Both clients should be called
         mock_cc_client.get_price_history.assert_called()
         mock_cg_client.get_price_history.assert_called()
         assert count >= 2
@@ -368,7 +393,6 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         recent_start = date.today() - timedelta(days=30)
         recent_end = date.today() - timedelta(days=28)
 
-        # Pre-existing price
         existing = AssetPrice(
             asset_id=asset.id,
             date=recent_start + timedelta(days=1),
@@ -382,7 +406,7 @@ class TestFetchAndStoreHistoricalCryptoPrices:
         mock_client = MagicMock()
         mock_client.get_price_history.return_value = [
             (recent_start, Decimal("0.10")),
-            (recent_start + timedelta(days=1), Decimal("0.11")),  # Already exists
+            (recent_start + timedelta(days=1), Decimal("0.11")),
             (recent_start + timedelta(days=2), Decimal("0.12")),
         ]
         mock_cg_class.return_value = mock_client
@@ -391,9 +415,7 @@ class TestFetchAndStoreHistoricalCryptoPrices:
             db_session, asset.id, recent_start, recent_end
         )
 
-        # Only 2 new prices inserted (skipped the existing one)
         assert count == 2
 
-        # Existing price unchanged
         db_session.refresh(existing)
         assert float(existing.closing_price) == 0.999
