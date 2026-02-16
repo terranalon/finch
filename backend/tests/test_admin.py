@@ -120,7 +120,7 @@ class TestAdminDisableMfa:
         )
 
         assert response.status_code == 403
-        assert "admin" in response.json()["detail"].lower()
+        assert "admin" in response.json()["message"].lower()
 
     def test_admin_disable_mfa_requires_reason(self, auth_client):
         """Admin must provide reason when disabling MFA."""

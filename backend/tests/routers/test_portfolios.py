@@ -159,7 +159,7 @@ def test_link_account_already_linked(client, auth_headers, test_user, db_session
     )
 
     assert response.status_code == 400
-    assert "already linked" in response.json()["detail"].lower()
+    assert "already linked" in response.json()["message"].lower()
 
 
 def test_unlink_account_from_portfolio(client, auth_headers, test_user, db_session):
@@ -203,7 +203,7 @@ def test_unlink_account_blocked_if_last_portfolio(client, auth_headers, test_use
     )
 
     assert response.status_code == 400
-    assert "only portfolio" in response.json()["detail"].lower()
+    assert "only portfolio" in response.json()["message"].lower()
 
 
 def test_link_account_duplicate_name_rejected(client, auth_headers, test_user, db_session):
@@ -228,7 +228,7 @@ def test_link_account_duplicate_name_rejected(client, auth_headers, test_user, d
     )
 
     assert response.status_code == 409
-    detail = response.json()["detail"]
+    detail = response.json()["message"]
     assert "already exists" in detail.lower()
     assert "rename" in detail.lower()
 

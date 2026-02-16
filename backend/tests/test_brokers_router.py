@@ -234,7 +234,7 @@ class TestAccountValidation:
         client, _ = client_with_user
         response = client.post("/api/brokers/kraken/import/9999", headers=auth_headers)
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert "not found" in response.json()["message"].lower()
 
 
 class TestCryptoBrokerImport:

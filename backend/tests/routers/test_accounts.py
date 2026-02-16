@@ -217,7 +217,7 @@ def test_create_account_duplicate_name_rejected(client, auth_headers, portfolio_
     )
 
     assert response.status_code == 409
-    detail = response.json()["detail"]
+    detail = response.json()["message"]
     assert "already exists" in detail.lower()
     assert "rename" in detail.lower()
 
@@ -263,7 +263,7 @@ def test_update_account_duplicate_name_rejected(
     )
 
     assert response.status_code == 409
-    detail = response.json()["detail"]
+    detail = response.json()["message"]
     assert "already exists" in detail.lower()
     assert "rename" in detail.lower()
 

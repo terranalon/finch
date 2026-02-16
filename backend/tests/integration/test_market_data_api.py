@@ -56,7 +56,7 @@ class TestMarketDataAuthRequirements:
         """Regular user cannot access refresh endpoints."""
         response = auth_client.post("/api/market-data/exchange-rates/refresh")
         assert response.status_code == 403
-        assert "service account" in response.json()["detail"].lower()
+        assert "service account" in response.json()["message"].lower()
 
     def test_stock_prices_requires_service_account(self, auth_client):
         """Regular user cannot access refresh endpoints."""

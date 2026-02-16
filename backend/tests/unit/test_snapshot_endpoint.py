@@ -220,7 +220,7 @@ class TestSnapshotEndpoint:
 
         assert response.status_code == 500
         data = response.json()
-        assert "Snapshot import failed" in data["detail"]
+        assert "Snapshot import failed" in data["message"]
 
     def test_snapshot_endpoint_requires_auth(self, client_with_user):
         """Snapshot endpoint should require authentication."""
@@ -235,7 +235,7 @@ class TestSnapshotEndpoint:
         client, _ = client_with_user
         response = client.post("/api/brokers/ibkr/snapshot/9999", headers=auth_headers)
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert "not found" in response.json()["message"].lower()
 
     def test_snapshot_endpoint_updates_last_import(self, client_with_user, auth_headers):
         """Snapshot endpoint should update last_import timestamp on success."""
@@ -336,4 +336,4 @@ class TestSnapshotEndpointWithoutCredentials:
         client, headers = client_no_creds
         response = client.post("/api/brokers/ibkr/snapshot/2", headers=headers)
         assert response.status_code == 400
-        assert "credentials" in response.json()["detail"].lower()
+        assert "credentials" in response.json()["message"].lower()
