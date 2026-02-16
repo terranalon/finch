@@ -81,19 +81,21 @@ def _create_inflated_deposits(
     cash_data: list[IBKRCashBalance],
     cost_basis_by_currency: dict[str, Decimal],
     today: date,
-) -> set[str]:
+) -> None:
     """Create inflated deposit transactions and DailyCashBalance records.
 
     Each deposit amount = actual cash balance + total cost basis for that currency.
     For currencies with positions but no cash entry, creates a deposit for just
     the cost basis and a zero-balance DailyCashBalance record.
-
-    Returns the set of currencies that had cash entries (for stats tracking).
     """
     asset_repo = AssetRepository(db)
     holding_repo = HoldingRepository(db)
     cash_balance_repo = CashBalanceRepository(db)
+
+    # Build a unified list of (currency, symbol, cash_balance, deposit_amount, holding)
+    # tuples from both cash entries and gap-fill currencies.
     currencies_with_cash: set[str] = set()
+    deposits: list[tuple[str, str, Decimal, Decimal, int]] = []
 
     for cash in cash_data:
         if cash.balance == 0 and cash.currency not in cost_basis_by_currency:
@@ -110,27 +112,7 @@ def _create_inflated_deposits(
         if deposit_amount == 0:
             continue
 
-        create_or_transfer_transaction(
-            db=db,
-            holding_id=cash_holding.id,
-            source_id=source_id,
-            account_id=account_id,
-            txn_date=today,
-            txn_type="Deposit",
-            symbol=cash.symbol,
-            quantity=deposit_amount,
-            amount=deposit_amount,
-            fees=Decimal("0"),
-            notes=f"Synthetic deposit from IBKR snapshot ({cash.currency})",
-        )
-        cash_balance_repo.create(
-            account_id=account_id,
-            balance_date=today,
-            currency=cash.currency,
-            balance=cash.balance,
-            activity="Synthetic snapshot",
-            broker_source_id=source_id,
-        )
+        deposits.append((cash.currency, cash.symbol, cash.balance, deposit_amount, cash_holding.id))
 
     # Gap-fill: currencies with positions but no cash entry
     for currency, cost in cost_basis_by_currency.items():
@@ -138,24 +120,22 @@ def _create_inflated_deposits(
             continue
 
         cash_asset, _ = IBKRImportService._find_or_create_asset(
-            db,
-            symbol=currency,
-            name=f"{currency} Cash",
-            asset_class="Cash",
-            currency=currency,
+            db, symbol=currency, name=f"{currency} Cash", asset_class="Cash", currency=currency
         )
         cash_holding, _ = holding_repo.find_or_create(account_id, cash_asset.id)
+        deposits.append((currency, currency, Decimal("0"), cost, cash_holding.id))
 
+    for currency, symbol, actual_balance, deposit_amount, holding_id in deposits:
         create_or_transfer_transaction(
             db=db,
-            holding_id=cash_holding.id,
+            holding_id=holding_id,
             source_id=source_id,
             account_id=account_id,
             txn_date=today,
             txn_type="Deposit",
-            symbol=currency,
-            quantity=cost,
-            amount=cost,
+            symbol=symbol,
+            quantity=deposit_amount,
+            amount=deposit_amount,
             fees=Decimal("0"),
             notes=f"Synthetic deposit from IBKR snapshot ({currency})",
         )
@@ -163,12 +143,10 @@ def _create_inflated_deposits(
             account_id=account_id,
             balance_date=today,
             currency=currency,
-            balance=Decimal("0"),
+            balance=actual_balance,
             activity="Synthetic snapshot",
             broker_source_id=source_id,
         )
-
-    return currencies_with_cash
 
 
 def delete_synthetic_sources(db: Session, account_id: int, broker_type: str) -> dict:

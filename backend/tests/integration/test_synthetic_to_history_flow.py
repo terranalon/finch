@@ -15,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from app.models import Account, Asset, BrokerDataSource, Holding, Portfolio, Transaction, User
+from app.models.daily_cash_balance import DailyCashBalance
 from app.services.auth.auth_service import AuthService
 from app.services.brokers.ibkr.models import IBKRCashBalance, IBKRPosition
 from app.services.brokers.ibkr.snapshot_validation_service import validate_against_snapshot
@@ -243,8 +244,6 @@ class TestSyntheticSnapshotImport:
         assert deposits[0].amount == Decimal("40000")
 
         # Assert: DailyCashBalance record created for actual cash (not inflated)
-        from app.models.daily_cash_balance import DailyCashBalance
-
         cash_balance = (
             db.query(DailyCashBalance)
             .filter(
@@ -735,8 +734,6 @@ class TestFullSyntheticToHistoryFlow:
         assert remaining == 0
 
         # Assert: DailyCashBalance was also cleaned up
-        from app.models.daily_cash_balance import DailyCashBalance
-
         remaining_cash = (
             db.query(DailyCashBalance)
             .filter(DailyCashBalance.account_id == test_account.id)

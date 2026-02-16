@@ -248,14 +248,14 @@ def _setup_snapshot_mocks(
     mock_create_txn.return_value = (DedupResult.NEW, MagicMock())
 
 
+@patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
+@patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
+@patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
 class TestSyntheticDepositInflation:
     """Tests for inflated deposits, Trade Settlements, and DailyCashBalance."""
 
-    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_deposit_inflated_by_position_cost_basis(
         self,
         mock_client,
@@ -286,11 +286,6 @@ class TestSyntheticDepositInflation:
         assert deposits[0].kwargs["amount"] == Decimal("40000")
         assert deposits[0].kwargs["quantity"] == Decimal("40000")
 
-    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_trade_settlements_created_for_each_buy(
         self,
         mock_client,
@@ -324,11 +319,6 @@ class TestSyntheticDepositInflation:
         settlement_amounts = sorted(s.amount for s in settlements)
         assert settlement_amounts == [Decimal("-20000"), Decimal("-15000")]
 
-    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_daily_cash_balance_created(
         self,
         mock_client,
@@ -360,11 +350,6 @@ class TestSyntheticDepositInflation:
         assert cash_balances[0].currency == "USD"
         assert cash_balances[0].balance == Decimal("5000")
 
-    @patch("app.services.brokers.ibkr.synthetic_import_service.create_or_transfer_transaction")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.reconstruct_and_update_holdings")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRImportService")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRParser")
-    @patch("app.services.brokers.ibkr.synthetic_import_service.IBKRFlexClient")
     def test_deposit_created_for_currency_with_no_cash_entry(
         self,
         mock_client,
