@@ -25,8 +25,9 @@ _MAX_API_HISTORY_DAYS = 365
 class MissingFlexSectionsError(Exception):
     """Raised when the Flex Query is missing required sections."""
 
-    def __init__(self, missing_sections: list[str]) -> None:
+    def __init__(self, missing_sections: list[str], required_sections: list[str]) -> None:
         self.missing_sections = missing_sections
+        self.required_sections = required_sections
         super().__init__(f"Flex Query missing sections: {', '.join(missing_sections)}")
 
 
@@ -72,7 +73,8 @@ class IBKRImportOrchestrator:
 
         missing = IBKRParser.validate_required_sections(root)
         if missing:
-            raise MissingFlexSectionsError(missing)
+            required = [name for name, _ in IBKRParser._REQUIRED_SECTIONS]
+            raise MissingFlexSectionsError(missing, required)
 
         account_info = IBKRParser.extract_account_info(root)
 

@@ -60,7 +60,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const [showFileUploadResult, setShowFileUploadResult] = useState(false);
   const [lastFileUpload, setLastFileUpload] = useState(null);
   const [hasSnapshotData, setHasSnapshotData] = useState(false);
-  const [missingSections, setMissingSections] = useState(null);
+  const [sectionValidation, setSectionValidation] = useState(null);
 
   // Notification state (replaces alert())
   const [notification, setNotification] = useState({ message: null, type: 'error' });
@@ -126,7 +126,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
     setShowFileUploadResult(false);
     setLastFileUpload(null);
     setHasSnapshotData(false);
-    setMissingSections(null);
+    setSectionValidation(null);
     setNotification({ message: null, type: 'error' });
   };
 
@@ -195,7 +195,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
         if (broker.type === 'ibkr') {
           // IBKR onboarding: validates sections, then imports based on account age
-          setMissingSections(null);
+          setSectionValidation(null);
 
           const importResponse = await api(`/brokers/ibkr/onboard/${accountId}`, {
             method: 'POST',
@@ -205,7 +205,10 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             const error = await importResponse.json();
 
             if (importResponse.status === 422 && error.detail?.missing_sections) {
-              setMissingSections(error.detail.missing_sections);
+              setSectionValidation({
+                missing: error.detail.missing_sections,
+                required: error.detail.required_sections,
+              });
               setIsImporting(false);
               return;
             }
@@ -529,7 +532,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           onBack={() => goToStep(3)}
           onShowGuide={(type) => setShowGuide(type)}
           onTestCredentials={handleTestCredentials}
-          missingSections={missingSections}
+          sectionValidation={sectionValidation}
           isImporting={isImporting}
         />
       );

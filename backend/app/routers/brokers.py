@@ -497,6 +497,7 @@ async def onboard_ibkr(
                 "message": "Your Flex Query is missing required sections. "
                 "Please update it in IBKR and try again.",
                 "missing_sections": e.missing_sections,
+                "required_sections": e.required_sections,
             },
         )
     except RuntimeError as e:

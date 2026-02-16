@@ -13,16 +13,6 @@ import {
   XIcon,
 } from '../icons.jsx';
 
-const IBKR_REQUIRED_SECTIONS = [
-  'Account Information',
-  'Open Positions',
-  'Trades',
-  'Cash Transactions',
-  'Transfers',
-  'Forex Trades',
-  'Cash Report',
-];
-
 function getTestButtonLabel(status) {
   switch (status) {
     case 'testing':
@@ -36,7 +26,7 @@ function getTestButtonLabel(status) {
   }
 }
 
-export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials, onError, missingSections, isImporting }) {
+export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowGuide, onTestCredentials, onError, sectionValidation, isImporting }) {
   const [connectionMethod, setConnectionMethod] = useState(broker.hasApi ? 'api' : 'file');
   const [testStatus, setTestStatus] = useState('idle');
   const [testError, setTestError] = useState(null);
@@ -233,7 +223,7 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
           )}
 
           {/* Missing sections checklist */}
-          {missingSections?.length > 0 && (
+          {sectionValidation?.missing?.length > 0 && (
             <div className="p-5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-700">
               <h4 className="font-semibold text-amber-800 dark:text-amber-300 mb-3">
                 Your Flex Query is missing required sections
@@ -242,8 +232,8 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
                 Please update your Flex Query in IBKR to include these sections, then try importing again.
               </p>
               <div className="space-y-2">
-                {IBKR_REQUIRED_SECTIONS.map((section) => {
-                  const isMissing = missingSections.includes(section);
+                {sectionValidation.required.map((section) => {
+                  const isMissing = sectionValidation.missing.includes(section);
                   return (
                     <div key={section} className="flex items-center gap-2">
                       {isMissing ? (
