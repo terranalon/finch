@@ -13,6 +13,7 @@ from app.services.brokers.base_import_service import (
     BaseBrokerImportService,
     extract_date_range_serializable,
 )
+from app.services.market_data.yfinance_client import TickerInfo, YFinanceClient
 from app.services.shared.transaction_hash_service import create_or_transfer_transaction
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,9 @@ class ManualImportService(BaseBrokerImportService):
         unique_symbols = {item.symbol for item in all_items if item.symbol}
         stats["unique_assets_in_file"] = len(unique_symbols)
         stats["symbols_in_file"] = list(unique_symbols)
+
+        # Pre-fetch: batch resolve symbols not already in DB
+        self._prefetch_symbols(unique_symbols)
 
         try:
             if data.cash_transactions:
@@ -179,6 +183,19 @@ class ManualImportService(BaseBrokerImportService):
 
         return stats
 
+    # -- Pre-fetch -------------------------------------------------------------
+
+    def _prefetch_symbols(self, symbols: set[str]) -> None:
+        """Batch-resolve unknown symbols via YFinanceClient before import loop."""
+        new_symbols = [s for s in symbols if not self.asset_repo.find_by_symbol(s)]
+        if not new_symbols:
+            self._resolved_symbols: dict[str, TickerInfo | None] = {}
+            return
+
+        client = YFinanceClient()
+        self._resolved_symbols = client.resolve_symbols(new_symbols)
+        logger.info("Pre-fetched %d new symbols", len(new_symbols))
+
     # -- Asset resolution ------------------------------------------------------
 
     def _find_or_create_asset(self, symbol: str, currency: str) -> tuple[Asset, bool]:
@@ -228,19 +245,20 @@ class ManualImportService(BaseBrokerImportService):
             data_source="manual",
         )
 
-    @staticmethod
-    def _try_yfinance(symbol: str) -> tuple[str | None, str | None, str | None, str | None]:
-        """Returns (asset_class, name, category, industry) or (None, None, None, None)."""
+    def _try_yfinance(self, symbol: str) -> tuple[str | None, str | None, str | None, str | None]:
+        """Returns (asset_class, name, category, industry) using pre-fetched TickerInfo."""
         from app.services.shared.asset_metadata_service import AssetMetadataService
         from app.services.shared.asset_type_detector import AssetTypeDetector
 
         try:
-            type_result = AssetTypeDetector.detect_asset_type(symbol)
+            info = self._resolved_symbols.get(symbol)
+
+            type_result = AssetTypeDetector.detect_from_ticker_info(symbol, info)
             if not type_result.detected_type:
                 return None, None, None, None
 
-            metadata = AssetMetadataService.fetch_name_from_yfinance(
-                symbol, type_result.detected_type
+            metadata = AssetMetadataService.from_ticker_info(
+                symbol, info, type_result.detected_type
             )
             return (
                 type_result.detected_type,
