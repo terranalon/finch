@@ -1,12 +1,13 @@
 """Tests for YFinanceClient rate limiting, batch resolution, and TickerInfo."""
 
 import time
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
 from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
+    OHLCVRow,
     TickerInfo,
     YFinanceClient,
 )
@@ -163,3 +164,65 @@ class TestResolveSymbols:
 
         assert call_order == ["MSFT", "AAPL", "GOOG"]
         assert list(results.keys()) == ["MSFT", "AAPL", "GOOG"]
+
+
+class TestOHLCVRow:
+    def test_fields(self):
+        row = OHLCVRow(
+            date=date(2024, 1, 2),
+            open=Decimal("150.00"),
+            high=Decimal("155.00"),
+            low=Decimal("149.00"),
+            close=Decimal("153.00"),
+            volume=Decimal("1000000"),
+        )
+        assert row.date == date(2024, 1, 2)
+        assert row.close == Decimal("153.00")
+
+
+class TestGetHistoryForRange:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_ohlcv_rows(self, mock_ticker):
+        import pandas as pd
+
+        mock_history = pd.DataFrame(
+            {
+                "Open": [150.0, 151.0],
+                "High": [155.0, 156.0],
+                "Low": [149.0, 150.0],
+                "Close": [153.0, 154.0],
+                "Volume": [1000000, 1100000],
+            },
+            index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
+        )
+        mock_ticker.return_value.history.return_value = mock_history
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_history_for_range("AAPL", date(2024, 1, 2), date(2024, 1, 3))
+
+        assert len(rows) == 2
+        assert isinstance(rows[0], OHLCVRow)
+        assert rows[0].date == date(2024, 1, 2)
+        assert rows[0].close == Decimal("153.0")
+        assert rows[0].volume == Decimal("1000000")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_empty_on_no_data(self, mock_ticker):
+        import pandas as pd
+
+        mock_ticker.return_value.history.return_value = pd.DataFrame()
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_history_for_range("BAD", date(2024, 1, 2), date(2024, 1, 3))
+        assert rows == []
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_empty_on_exception(self, mock_ticker):
+        mock_ticker.side_effect = Exception("API error")
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_history_for_range("ERR", date(2024, 1, 2), date(2024, 1, 3))
+        assert rows == []

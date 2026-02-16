@@ -8,7 +8,7 @@ but follows similar patterns for error handling and caching.
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -49,6 +49,18 @@ class TickerInfo:
         if self.quote_type is None:
             return None
         return QUOTE_TYPE_MAP.get(self.quote_type)
+
+
+@dataclass
+class OHLCVRow:
+    """Single row of OHLCV historical data."""
+
+    date: date
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
 
 
 class YFinanceClient:
@@ -198,6 +210,55 @@ class YFinanceClient:
 
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
+            return []
+
+    def get_history_for_range(
+        self, symbol: str, start: date, end: date
+    ) -> list[OHLCVRow]:
+        """Get historical OHLCV data for a date range.
+
+        Args:
+            symbol: Ticker symbol
+            start: Start date (inclusive)
+            end: End date (inclusive)
+
+        Returns:
+            List of OHLCVRow, one per trading day
+        """
+        try:
+            self._rate_limit()
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(
+                start=start.isoformat(),
+                end=(end + timedelta(days=1)).isoformat(),
+            )
+
+            if history.empty:
+                logger.warning(f"No historical data for {symbol}")
+                return []
+
+            rows: list[OHLCVRow] = []
+            for idx, row in history.iterrows():
+                close = row.get("Close")
+                if close is None:
+                    continue
+                rows = [
+                    *rows,
+                    OHLCVRow(
+                        date=idx.date(),
+                        open=Decimal(str(row.get("Open", 0))),
+                        high=Decimal(str(row.get("High", 0))),
+                        low=Decimal(str(row.get("Low", 0))),
+                        close=Decimal(str(close)),
+                        volume=Decimal(str(int(row.get("Volume", 0)))),
+                    ),
+                ]
+
+            logger.info(f"Fetched {len(rows)} rows for {symbol}")
+            return rows
+
+        except Exception as e:
+            logger.error(f"Error fetching history for {symbol}: {e}")
             return []
 
     def is_valid_symbol(self, symbol: str) -> bool:
