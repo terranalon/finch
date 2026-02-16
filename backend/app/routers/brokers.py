@@ -32,8 +32,8 @@ from app.services.brokers.broker_config import (
 )
 from app.services.brokers.credential_test_service import test_credentials
 from app.services.brokers.ibkr.flex_import_service import IBKRFlexImportService
-from app.services.brokers.ibkr.smart_import_service import (
-    IBKRSmartImportService,
+from app.services.brokers.ibkr.import_orchestrator import (
+    IBKRImportOrchestrator,
     MissingFlexSectionsError,
 )
 from app.services.brokers.ibkr.synthetic_import_service import IBKRSyntheticImportService
@@ -97,8 +97,8 @@ class SnapshotImportResponse(BaseModel):
     stats: SnapshotImportStats
 
 
-class SmartImportResponse(BaseModel):
-    """Response model for POST /ibkr/smart-import/{account_id}."""
+class OnboardingImportResponse(BaseModel):
+    """Response model for POST /ibkr/onboard/{account_id}."""
 
     status: str
     message: str
@@ -465,14 +465,14 @@ async def import_broker_data(
         )
 
 
-@router.post("/ibkr/smart-import/{account_id}", response_model=SmartImportResponse)
-async def smart_import_ibkr(
+@router.post("/ibkr/onboard/{account_id}", response_model=OnboardingImportResponse)
+async def onboard_ibkr(
     account_id: int,
     background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] -- FastAPI injects BackgroundTasks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> SmartImportResponse:
-    """Smart IBKR import: validates Flex Query sections, then imports based on account age.
+) -> OnboardingImportResponse:
+    """IBKR onboarding import: validates Flex Query sections, then imports based on account age.
 
     For accounts younger than 365 days, fetches full transaction history.
     For older accounts, creates a synthetic snapshot of current positions.
@@ -488,13 +488,14 @@ async def smart_import_ibkr(
     )
 
     try:
-        result = IBKRSmartImportService.execute(db, account_id, flex_token, flex_query_id)
+        result = IBKRImportOrchestrator.execute(db, account_id, flex_token, flex_query_id)
     except MissingFlexSectionsError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "error_code": "MISSING_FLEX_SECTIONS",
-                "message": "Your Flex Query is missing required sections. Please update it in IBKR and try again.",
+                "message": "Your Flex Query is missing required sections. "
+                "Please update it in IBKR and try again.",
                 "missing_sections": e.missing_sections,
             },
         )
@@ -510,15 +511,14 @@ async def smart_import_ibkr(
         update_snapshot_status(db, account_id, "generating")
         background_tasks.add_task(generate_snapshots_background, account_id, result.snapshot_start)
 
-    mode_message = (
-        f"Full transaction history imported for account {account.name}"
-        if result.import_mode == "full_history"
-        else f"Synthetic snapshot created for account {account.name}"
-    )
+    if result.import_mode == "full_history":
+        message = f"Full transaction history imported for account {account.name}"
+    else:
+        message = f"Synthetic snapshot created for account {account.name}"
 
-    return SmartImportResponse(
+    return OnboardingImportResponse(
         status="completed",
-        message=mode_message,
+        message=message,
         account_id=account_id,
         import_mode=result.import_mode,
         stats=result.stats,
