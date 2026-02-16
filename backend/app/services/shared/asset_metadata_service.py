@@ -4,9 +4,10 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-import yfinance as yf
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.services.market_data.yfinance_client import TickerInfo, YFinanceClient
 
 from app.models import Asset
 
@@ -35,88 +36,17 @@ class AssetMetadataService:
     # Asset classes that should be skipped
     SKIP_ASSET_CLASSES = {"Cash"}
 
-    # Fields to try for company name, in order of preference
-    NAME_FIELDS = ["longName", "shortName", "name"]
-
     @staticmethod
     def fetch_name_from_yfinance(
         symbol: str, asset_class: str | None = None
     ) -> AssetMetadataResult:
-        """
-        Fetch company name and category for a symbol from Yahoo Finance.
-
-        For stocks: category = sector (e.g., "Technology")
-        For ETFs: category = category (e.g., "Large Blend")
-
-        Args:
-            symbol: The ticker symbol (e.g., 'AAPL', 'MSFT')
-            asset_class: Optional asset class to determine which field to use
-
-        Returns:
-            AssetMetadataResult with name, category, or error information
-        """
+        """Fetch company name and category from Yahoo Finance via YFinanceClient."""
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-
-            # Handle empty response (symbol not found)
-            if not info or info.get("regularMarketPrice") is None:
-                logger.warning(f"No data found for symbol {symbol}")
-                return AssetMetadataResult(
-                    symbol=symbol,
-                    name=None,
-                    category=None,
-                    industry=None,
-                    source="not_found",
-                    error="Symbol not found in Yahoo Finance",
-                )
-
-            # Determine if this is an ETF based on asset_class or quoteType
-            is_etf = asset_class == "ETF" or info.get("quoteType") == "ETF"
-
-            # Extract category: use 'category' for ETFs, 'sector' for stocks
-            if is_etf:
-                category = info.get("category")
-            else:
-                category = info.get("sector")
-
-            # Industry only applies to stocks (not ETFs)
-            industry = None if is_etf else info.get("industry")
-
-            # Try different name fields
-            name = None
-            for field in AssetMetadataService.NAME_FIELDS:
-                if field in info and info[field]:
-                    name = info[field].strip()
-                    if name and name != symbol:  # Avoid setting name to symbol
-                        break
-                    name = None
-
-            if name:
-                logger.info(
-                    f"Found metadata for {symbol}: name='{name}', "
-                    f"category='{category}', industry='{industry}'"
-                )
-                return AssetMetadataResult(
-                    symbol=symbol,
-                    name=name,
-                    category=category,
-                    industry=industry,
-                    source="yfinance",
-                )
-
-            logger.warning(f"No name fields found for {symbol}")
-            return AssetMetadataResult(
-                symbol=symbol,
-                name=None,
-                category=category,
-                industry=industry,
-                source="not_found",
-                error="No name fields in Yahoo Finance response",
-            )
-
+            client = YFinanceClient()
+            info = client.get_ticker_info(symbol)
+            return AssetMetadataService._result_from_ticker_info(symbol, info, asset_class)
         except Exception as e:
-            logger.error(f"Error fetching metadata for {symbol}: {e!s}")
+            logger.error("Error fetching metadata for %s: %s", symbol, e)
             return AssetMetadataResult(
                 symbol=symbol,
                 name=None,
@@ -125,6 +55,57 @@ class AssetMetadataService:
                 source="error",
                 error=str(e),
             )
+
+    @staticmethod
+    def from_ticker_info(
+        symbol: str, info: TickerInfo | None, asset_class: str | None = None
+    ) -> AssetMetadataResult:
+        """Build AssetMetadataResult from pre-fetched TickerInfo."""
+        return AssetMetadataService._result_from_ticker_info(symbol, info, asset_class)
+
+    @staticmethod
+    def _result_from_ticker_info(
+        symbol: str, info: TickerInfo | None, asset_class: str | None = None
+    ) -> AssetMetadataResult:
+        if info is None:
+            return AssetMetadataResult(
+                symbol=symbol,
+                name=None,
+                category=None,
+                industry=None,
+                source="not_found",
+                error="Symbol not found in Yahoo Finance",
+            )
+
+        is_etf = asset_class == "ETF" or info.quote_type == "ETF"
+        category = info.category if is_etf else info.sector
+        industry = None if is_etf else info.industry
+
+        if info.name:
+            logger.info(
+                "Found metadata for %s: name='%s', category='%s', industry='%s'",
+                symbol,
+                info.name,
+                category,
+                industry,
+            )
+            return AssetMetadataResult(
+                symbol=symbol,
+                name=info.name,
+                category=category,
+                industry=industry,
+                source="yfinance",
+            )
+
+        logger.warning("No name fields found for %s", symbol)
+        return AssetMetadataResult(
+            symbol=symbol,
+            name=None,
+            category=category,
+            industry=industry,
+            source="not_found",
+            error="No name fields in Yahoo Finance response",
+        )
 
     @staticmethod
     def should_update_name(asset: Asset, force: bool = False) -> bool:
