@@ -718,7 +718,9 @@ class TestFullSyntheticToHistoryFlow:
         cleanup_result = delete_synthetic_sources(db, test_account.id, "ibkr")
 
         assert cleanup_result["deleted_sources"] == 1
-        assert cleanup_result["deleted_transactions"] == 5  # 2 equity + 1 inflated Deposit + 2 Trade Settlements
+        assert (
+            cleanup_result["deleted_transactions"] == 5
+        )  # 2 equity + 1 inflated Deposit + 2 Trade Settlements
         assert len(cleanup_result["snapshot_positions"]) == 2
 
         # Verify synthetic source is gone
