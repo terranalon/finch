@@ -5,58 +5,33 @@ from decimal import Decimal
 from app.services.brokers.ibkr.models import IBKRPosition
 from app.services.brokers.ibkr.synthetic_import_service import _compute_cost_basis_by_currency
 
-AAPL = IBKRPosition(
-    symbol="AAPL",
-    original_symbol="AAPL",
-    description="Apple",
-    asset_category="STK",
-    asset_class="Stock",
-    listing_exchange="NASDAQ",
-    quantity=Decimal("100"),
-    cost_basis=Decimal("15000"),
-    currency="USD",
-    account_id="U1",
-    needs_validation=False,
-)
-MSFT = IBKRPosition(
-    symbol="MSFT",
-    original_symbol="MSFT",
-    description="Microsoft",
-    asset_category="STK",
-    asset_class="Stock",
-    listing_exchange="NASDAQ",
-    quantity=Decimal("50"),
-    cost_basis=Decimal("20000"),
-    currency="USD",
-    account_id="U1",
-    needs_validation=False,
-)
-BMW = IBKRPosition(
-    symbol="BMW.DE",
-    original_symbol="BMW",
-    description="BMW",
-    asset_category="STK",
-    asset_class="Stock",
-    listing_exchange="IBIS",
-    quantity=Decimal("10"),
-    cost_basis=Decimal("5000"),
-    currency="EUR",
-    account_id="U1",
-    needs_validation=False,
-)
-ZERO_POS = IBKRPosition(
-    symbol="CLOSED",
-    original_symbol="CLOSED",
-    description="Closed",
-    asset_category="STK",
-    asset_class="Stock",
-    listing_exchange="NASDAQ",
-    quantity=Decimal("0"),
-    cost_basis=Decimal("0"),
-    currency="USD",
-    account_id="U1",
-    needs_validation=False,
-)
+
+def _position(
+    symbol: str = "SYM",
+    quantity: Decimal = Decimal("100"),
+    cost_basis: Decimal = Decimal("10000"),
+    currency: str = "USD",
+) -> IBKRPosition:
+    """Build an IBKRPosition with only the fields relevant to cost basis grouping."""
+    return IBKRPosition(
+        symbol=symbol,
+        original_symbol=symbol,
+        description=symbol,
+        asset_category="STK",
+        asset_class="Stock",
+        listing_exchange="NASDAQ",
+        quantity=quantity,
+        cost_basis=cost_basis,
+        currency=currency,
+        account_id="U1",
+        needs_validation=False,
+    )
+
+
+AAPL = _position(symbol="AAPL", quantity=Decimal("100"), cost_basis=Decimal("15000"))
+MSFT = _position(symbol="MSFT", quantity=Decimal("50"), cost_basis=Decimal("20000"))
+BMW = _position(symbol="BMW.DE", quantity=Decimal("10"), cost_basis=Decimal("5000"), currency="EUR")
+ZERO_POS = _position(symbol="CLOSED", quantity=Decimal("0"), cost_basis=Decimal("0"))
 
 
 class TestComputeCostBasisByCurrency:
@@ -78,18 +53,6 @@ class TestComputeCostBasisByCurrency:
 
     def test_uses_absolute_cost_basis(self):
         """Short positions have negative cost basis; we need abs()."""
-        short = IBKRPosition(
-            symbol="TSLA",
-            original_symbol="TSLA",
-            description="Tesla",
-            asset_category="STK",
-            asset_class="Stock",
-            listing_exchange="NASDAQ",
-            quantity=Decimal("-10"),
-            cost_basis=Decimal("-5000"),
-            currency="USD",
-            account_id="U1",
-            needs_validation=False,
-        )
+        short = _position(symbol="TSLA", quantity=Decimal("-10"), cost_basis=Decimal("-5000"))
         result = _compute_cost_basis_by_currency([short])
         assert result == {"USD": Decimal("5000")}
