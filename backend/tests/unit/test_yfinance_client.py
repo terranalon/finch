@@ -103,3 +103,63 @@ class TestRateLimiting:
 
         # First call should not be delayed (< 0.1s unless yf is slow)
         assert elapsed < 0.5
+
+
+class TestResolveSymbols:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_deduplicates_symbols(self, mock_ticker):
+        mock_ticker.return_value.info = {
+            "regularMarketPrice": 100.0,
+            "quoteType": "EQUITY",
+            "longName": "Test Corp",
+        }
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0  # skip delay in tests
+
+        results = client.resolve_symbols(["AAPL", "MSFT", "AAPL"])
+
+        assert len(results) == 2
+        assert "AAPL" in results
+        assert "MSFT" in results
+        # yf.Ticker called only twice (AAPL deduped)
+        assert mock_ticker.call_count == 2
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_for_failed_lookups(self, mock_ticker):
+        mock_ticker.side_effect = Exception("API error")
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        results = client.resolve_symbols(["BAD"])
+
+        assert results["BAD"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_empty_list_returns_empty_dict(self, mock_ticker):
+        client = YFinanceClient()
+        results = client.resolve_symbols([])
+        assert results == {}
+        mock_ticker.assert_not_called()
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_preserves_order(self, mock_ticker):
+        call_order = []
+
+        def side_effect(symbol):
+            call_order.append(symbol)
+            mock = type(mock_ticker.return_value)()
+            mock.info = {
+                "regularMarketPrice": 100.0,
+                "quoteType": "EQUITY",
+                "longName": f"{symbol} Corp",
+            }
+            return mock
+
+        mock_ticker.side_effect = side_effect
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        results = client.resolve_symbols(["MSFT", "AAPL", "GOOG"])
+
+        assert call_order == ["MSFT", "AAPL", "GOOG"]
+        assert list(results.keys()) == ["MSFT", "AAPL", "GOOG"]

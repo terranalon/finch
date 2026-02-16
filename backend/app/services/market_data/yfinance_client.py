@@ -236,3 +236,22 @@ class YFinanceClient:
         except Exception as e:
             logger.error(f"Error fetching raw info for {symbol}: {e}")
             return {}
+
+    def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
+        """Fetch ticker info for multiple symbols with dedup and rate limiting.
+
+        Args:
+            symbols: List of ticker symbols (duplicates handled automatically)
+
+        Returns:
+            Dict mapping each unique symbol to its TickerInfo or None
+        """
+        unique_symbols = list(dict.fromkeys(symbols))
+        results: dict[str, TickerInfo | None] = {}
+
+        for symbol in unique_symbols:
+            results[symbol] = self.get_ticker_info(symbol)
+
+        resolved_count = sum(1 for v in results.values() if v is not None)
+        logger.info("Resolved %d/%d symbols", resolved_count, len(unique_symbols))
+        return results
