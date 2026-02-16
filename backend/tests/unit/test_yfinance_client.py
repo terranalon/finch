@@ -318,3 +318,81 @@ class TestGetForexHistory:
 
         rows = client.get_forex_history("USD", "XYZ", start=date(2024, 1, 2), end=date(2024, 1, 3))
         assert rows == []
+
+
+class TestGetHistoricalDataOHLCV:
+    """Verify get_historical_data returns OHLCVRow list."""
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_ohlcv_rows(self, mock_ticker):
+        import pandas as pd
+
+        mock_history = pd.DataFrame(
+            {
+                "Open": [150.0],
+                "High": [155.0],
+                "Low": [149.0],
+                "Close": [153.0],
+                "Volume": [1000000],
+            },
+            index=pd.to_datetime(["2024-01-02"]),
+        )
+        mock_ticker.return_value.history.return_value = mock_history
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        rows = client.get_historical_data("AAPL", period="1mo")
+
+        assert len(rows) == 1
+        assert isinstance(rows[0], OHLCVRow)
+        assert rows[0].close == Decimal("153.0")
+
+
+class TestGetCurrentPriceFallbacks:
+    """Verify get_current_price tries multiple price fields."""
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_prefers_current_price(self, mock_ticker):
+        mock_ticker.return_value.info = {
+            "currentPrice": 175.50,
+            "regularMarketPrice": 174.00,
+            "previousClose": 173.00,
+        }
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        result = client.get_current_price("AAPL")
+        assert result is not None
+        assert result[0] == Decimal("175.5")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_falls_back_to_regular_market_price(self, mock_ticker):
+        mock_ticker.return_value.info = {
+            "regularMarketPrice": 174.00,
+            "previousClose": 173.00,
+        }
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        result = client.get_current_price("AAPL")
+        assert result is not None
+        assert result[0] == Decimal("174.0")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_falls_back_to_previous_close(self, mock_ticker):
+        mock_ticker.return_value.info = {"previousClose": 173.00}
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        result = client.get_current_price("AAPL")
+        assert result is not None
+        assert result[0] == Decimal("173.0")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_when_no_price(self, mock_ticker):
+        mock_ticker.return_value.info = {}
+        client = YFinanceClient()
+        YFinanceClient._min_request_interval = 0.0
+
+        result = client.get_current_price("BAD")
+        assert result is None

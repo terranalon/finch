@@ -154,7 +154,9 @@ class YFinanceClient:
             return None
 
     def get_current_price(self, symbol: str) -> tuple[Decimal, datetime] | None:
-        """Get current price for a symbol.
+        """Get current price for a symbol, trying multiple price fields.
+
+        Tries: currentPrice -> regularMarketPrice -> previousClose
 
         Args:
             symbol: Ticker symbol
@@ -167,8 +169,12 @@ class YFinanceClient:
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
-            price = info.get("regularMarketPrice")
-            if price is None:
+            price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("previousClose")
+            )
+            if price is None or price <= 0:
                 logger.warning(f"No price found for {symbol}")
                 return None
 
@@ -180,15 +186,15 @@ class YFinanceClient:
 
     def get_historical_data(
         self, symbol: str, period: str = "1y"
-    ) -> list[tuple[datetime, Decimal]]:
-        """Get historical OHLCV data.
+    ) -> list[OHLCVRow]:
+        """Get historical OHLCV data by period.
 
         Args:
             symbol: Ticker symbol
             period: Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
 
         Returns:
-            List of (date, close_price) tuples
+            List of OHLCVRow
         """
         try:
             self._rate_limit()
@@ -199,14 +205,25 @@ class YFinanceClient:
                 logger.warning(f"No historical data for {symbol}")
                 return []
 
-            results = []
+            rows: list[OHLCVRow] = []
             for idx, row in history.iterrows():
-                close_price = row.get("Close")
-                if close_price is not None:
-                    results.append((idx.to_pydatetime(), Decimal(str(close_price))))
+                close = row.get("Close")
+                if close is None:
+                    continue
+                rows = [
+                    *rows,
+                    OHLCVRow(
+                        date=idx.date(),
+                        open=Decimal(str(row.get("Open", 0))),
+                        high=Decimal(str(row.get("High", 0))),
+                        low=Decimal(str(row.get("Low", 0))),
+                        close=Decimal(str(close)),
+                        volume=Decimal(str(int(row.get("Volume", 0)))),
+                    ),
+                ]
 
-            logger.info(f"Fetched {len(results)} historical prices for {symbol}")
-            return results
+            logger.info(f"Fetched {len(rows)} historical prices for {symbol}")
+            return rows
 
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
