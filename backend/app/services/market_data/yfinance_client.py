@@ -8,6 +8,7 @@ but follows similar patterns for error handling and caching.
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -443,6 +444,50 @@ class YFinanceClient:
                 time.sleep(chunk_delay)
 
         return result
+
+    # Class-level bucket shared across all instances (like _last_request_time)
+    _batch_bucket: _TokenBucket | None = None
+
+    def get_batch_prices_threaded(
+        self,
+        symbols: list[str],
+        *,
+        period: str = "1d",
+        max_workers: int = 16,
+        rate: float = 15.0,
+    ) -> dict[str, OHLCVRow | None]:
+        """Batch fetch OHLCV data using ThreadPoolExecutor with token bucket.
+
+        Args:
+            symbols: List of ticker symbols
+            period: yfinance period string (default "1d")
+            max_workers: Thread pool size
+            rate: Max requests per second
+
+        Returns:
+            Dict mapping symbol to OHLCVRow (last row) or None if failed
+        """
+        if not symbols:
+            return {}
+
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1))
+
+        def fetch_one(symbol: str) -> tuple[str, OHLCVRow | None]:
+            try:
+                bucket.acquire()
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period=period)
+                if history.empty:
+                    return symbol, None
+                rows = self._dataframe_to_ohlcv_rows(history)
+                return symbol, rows[-1] if rows else None
+            except Exception:
+                logger.debug("Failed to fetch %s", symbol, exc_info=True)
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
+            return dict(f.result() for f in as_completed(futures))
 
     def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
         """Fetch ticker info for multiple symbols with dedup and rate limiting.

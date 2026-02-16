@@ -554,3 +554,66 @@ class TestGetBatchPricesDownload:
         result = client.get_batch_prices_download(["AAPL"])
 
         assert result["AAPL"] is None
+
+
+class TestGetBatchPricesThreaded:
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_dict_of_ohlcv_rows(self, mock_ticker_cls):
+        """Should return OHLCVRow for each successful ticker."""
+        mock_ticker_cls.return_value.history.return_value = _single_ticker_df(close=153.0)
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(["AAPL", "MSFT"], rate=100.0)
+
+        assert len(result) == 2
+        assert all(isinstance(v, OHLCVRow) for v in result.values())
+        assert result["AAPL"].close == Decimal("153.0")
+        assert result["MSFT"].close == Decimal("153.0")
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_for_failed_tickers(self, mock_ticker_cls):
+        """Should return None for tickers that raise exceptions."""
+        mock_ticker_cls.return_value.history.side_effect = Exception("fail")
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(["BAD1", "BAD2"], rate=100.0)
+
+        assert all(v is None for v in result.values())
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_empty_dict_for_empty_input(self, mock_ticker_cls):
+        """Should handle empty symbol list."""
+        result = YFinanceClient().get_batch_prices_threaded([])
+        assert result == {}
+        mock_ticker_cls.assert_not_called()
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_handles_empty_history(self, mock_ticker_cls):
+        """Should return None for tickers with empty history."""
+        mock_ticker_cls.return_value.history.return_value = pd.DataFrame()
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(["AAPL"], rate=100.0)
+
+        assert result["AAPL"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_concurrent_execution(self, mock_ticker_cls):
+        """Should execute faster than sequential for many tickers."""
+        # Each call takes ~10ms
+        def slow_history(**kwargs):
+            time.sleep(0.01)
+            return _single_ticker_df(close=100.0)
+
+        mock_ticker_cls.return_value.history.side_effect = slow_history
+        client = YFinanceClient()
+        symbols = [f"SYM{i}" for i in range(20)]
+
+        start = time.monotonic()
+        result = client.get_batch_prices_threaded(symbols, rate=1000.0, max_workers=16)
+        elapsed = time.monotonic() - start
+
+        assert len(result) == 20
+        # Sequential would take 20 * 0.01 = 0.2s minimum
+        # Concurrent with 16 workers should be much faster
+        assert elapsed < 0.15
