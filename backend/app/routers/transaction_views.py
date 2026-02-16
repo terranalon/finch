@@ -2,12 +2,13 @@
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import NotFoundError
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.transaction_views import (
@@ -39,7 +40,7 @@ async def list_trades(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     svc = TransactionViewService(db)
     trades, total = svc.get_trades(
@@ -71,7 +72,7 @@ async def list_dividends(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     svc = TransactionViewService(db)
     dividends, total = svc.get_dividends(
@@ -104,7 +105,7 @@ async def list_forex(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     svc = TransactionViewService(db)
     forex, total = svc.get_forex(
@@ -136,7 +137,7 @@ async def list_cash_activity(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
     if account_id and account_id not in allowed_account_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     svc = TransactionViewService(db)
     cash, total = svc.get_cash_activity(

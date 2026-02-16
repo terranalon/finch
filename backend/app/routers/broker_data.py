@@ -18,10 +18,8 @@ from fastapi import (
     Depends,
     File,
     Form,
-    HTTPException,
     Query,
     UploadFile,
-    status,
 )
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
@@ -30,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import AppError, BadRequestError, ConflictError, NotFoundError
 from app.models import BrokerDataSource
 from app.models.daily_cash_balance import DailyCashBalance
 from app.models.historical_snapshot import HistoricalSnapshot
@@ -58,19 +57,15 @@ def _validate_account_access(account_id: int, current_user: User, db: Session) -
     """Verify account belongs to user, raise 404 if not."""
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
 
 
 def _validate_broker_type(broker_type: str) -> None:
     """Validate broker type is supported, raise 400 if not."""
     if not BrokerParserRegistry.is_supported(broker_type):
         supported = BrokerParserRegistry.get_supported_broker_types()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported broker type '{broker_type}'. Supported: {supported}",
+        raise BadRequestError(
+            f"Unsupported broker type '{broker_type}'. Supported: {supported}",
         )
 
 
@@ -79,7 +74,7 @@ def _get_parser_for_file(broker_type: str, filename: str):
     try:
         return BrokerParserRegistry.get_parser_for_file(broker_type, filename)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # Response Models
@@ -229,10 +224,7 @@ async def analyze_upload(
     # Read and validate file
     content = await file.read()
     if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file uploaded",
-        )
+        raise BadRequestError("Empty file uploaded")
 
     is_valid, error = parser.validate_file(content, file.filename or "")
     if not is_valid:
@@ -247,10 +239,7 @@ async def analyze_upload(
     try:
         start_date, end_date = parser.extract_date_range(content)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not determine date range: {e}",
-        )
+        raise BadRequestError(f"Could not determine date range: {e}")
 
     # Analyze overlaps
     overlap_detector = get_overlap_detector()
@@ -328,34 +317,27 @@ async def upload_broker_file(
     # Read file content
     content = await file.read()
     if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file uploaded",
-        )
+        raise BadRequestError("Empty file uploaded")
 
     # Validate file can be parsed
     is_valid, error = parser.validate_file(content, file.filename or "")
     if not is_valid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        raise BadRequestError(error or "Invalid file format")
 
     # Check for duplicate file
     file_storage = get_file_storage()
     file_hash = file_storage.calculate_hash(content)
     existing_file = file_storage.check_duplicate(db, file_hash, account_id)
     if existing_file:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"This file was already uploaded on {existing_file.created_at.date()}",
+        raise BadRequestError(
+            f"This file was already uploaded on {existing_file.created_at.date()}",
         )
 
     # Extract date range
     try:
         start_date, end_date = parser.extract_date_range(content)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not determine date range: {e}",
-        )
+        raise BadRequestError(f"Could not determine date range: {e}")
 
     # Check for overlaps
     overlap_detector = get_overlap_detector()
@@ -366,13 +348,11 @@ async def upload_broker_file(
     # If there are overlaps and user hasn't confirmed, reject
     if overlap_analysis.overlapping_sources and not confirm_overlap:
         conflicting = overlap_analysis.overlapping_sources[0]
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "Date range overlap detected",
+        raise ConflictError(
+            f"Upload covers {start_date} to {end_date}, "
+            f"overlaps with existing source '{conflicting.source_identifier}'",
+            extra={
                 "broker_type": broker_type,
-                "message": f"Upload covers {start_date} to {end_date}, "
-                f"overlaps with existing source '{conflicting.source_identifier}'",
                 "conflicting_source": {
                     "id": conflicting.id,
                     "identifier": conflicting.source_identifier,
@@ -617,10 +597,7 @@ async def upload_broker_file(
         source.errors = [str(e)]
         db.commit()
         logger.exception("Failed to import file for account %d: %s", account_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {e}",
-        )
+        raise AppError(f"Import failed: {e}")
 
 
 @router.post("/finalize-batch/{account_id}", response_model=BatchFinalizeResponse)
@@ -668,10 +645,7 @@ async def finalize_batch_upload(
     ]
 
     if not matching:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No staged uploads found for session {session_id}",
-        )
+        raise NotFoundError("Staged uploads for session", session_id)
 
     # Auto-delete synthetic sources before finalizing
     synthetic_cleanup = delete_synthetic_sources(db, account_id, matching[0].broker_type)
@@ -861,18 +835,12 @@ async def delete_data_source(
     """
     source = db.query(BrokerDataSource).filter(BrokerDataSource.id == source_id).first()
     if not source:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Data source {source_id} not found",
-        )
+        raise NotFoundError("Data source", source_id)
 
     # Verify source's account belongs to user
     allowed_account_ids = get_user_account_ids(current_user, db)
     if source.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Data source {source_id} not found",
-        )
+        raise NotFoundError("Data source", source_id)
 
     source_identifier = source.source_identifier
     account_id = source.account_id

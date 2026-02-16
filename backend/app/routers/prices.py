@@ -2,10 +2,11 @@
 
 from decimal import Decimal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.exceptions import BadRequestError, NotFoundError
 from app.models import Asset
 from app.schemas.price import (
     HistoricalPriceResponse,
@@ -74,18 +75,12 @@ async def get_historical_prices(
     valid_periods = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 
     if period not in valid_periods:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid period. Must be one of: {', '.join(valid_periods)}",
-        )
+        raise BadRequestError(f"Invalid period. Must be one of: {', '.join(valid_periods)}")
 
     data = PriceFetcher.get_historical_prices(symbol, period)
 
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No historical data found for symbol {symbol}",
-        )
+        raise NotFoundError("Historical data", symbol)
 
     # Convert to display currency if requested
     if display_currency:

@@ -1,6 +1,6 @@
 """Portfolios API router."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,6 +10,7 @@ from app.dependencies.user_scope import (
     get_user_account_ids,
     validate_user_portfolio,
 )
+from app.exceptions import BadRequestError, NotFoundError
 from app.models.account import Account
 from app.models.portfolio import Portfolio
 from app.models.portfolio_account import portfolio_accounts
@@ -99,10 +100,7 @@ async def get_portfolio(
         .first()
     )
     if not portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Portfolio with id {portfolio_id} not found",
-        )
+        raise NotFoundError("Portfolio", portfolio_id)
 
     return _to_portfolio_with_account_count(portfolio, db)
 
@@ -121,10 +119,7 @@ async def update_portfolio(
         .first()
     )
     if not db_portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Portfolio with id {portfolio_id} not found",
-        )
+        raise NotFoundError("Portfolio", portfolio_id)
 
     update_data = portfolio_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -144,7 +139,7 @@ async def get_deletion_preview(
     """Preview what happens when this portfolio is deleted."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+        raise NotFoundError("Portfolio", portfolio_id)
 
     svc = PortfolioManagementService(db)
     exclusive, shared = svc.categorize_accounts_for_deletion(portfolio)
@@ -173,18 +168,15 @@ async def delete_portfolio(
     """Delete a portfolio. Exclusive accounts are deleted, shared accounts are unlinked."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+        raise NotFoundError("Portfolio", portfolio_id)
 
     portfolio_count = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).count()
     if portfolio_count <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your only portfolio"
-        )
+        raise BadRequestError("Cannot delete your only portfolio")
 
     if portfolio.accounts and not confirm:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Portfolio has accounts. Use ?confirm=true or call deletion-preview first.",
+        raise BadRequestError(
+            "Portfolio has accounts. Use ?confirm=true or call deletion-preview first."
         )
 
     svc = PortfolioManagementService(db)
@@ -211,10 +203,7 @@ async def patch_portfolio(
         .first()
     )
     if not db_portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Portfolio with id {portfolio_id} not found",
-        )
+        raise NotFoundError("Portfolio", portfolio_id)
 
     if patch.is_default:
         db.query(Portfolio).filter(
@@ -238,11 +227,11 @@ async def link_account_to_portfolio(
     """Link an existing account to a portfolio."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+        raise NotFoundError("Portfolio", portfolio_id)
 
     account = get_user_account(current_user, db, account_id)
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     existing = db.execute(
         portfolio_accounts.select().where(
@@ -252,10 +241,7 @@ async def link_account_to_portfolio(
     ).first()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account already linked to this portfolio",
-        )
+        raise BadRequestError("Account already linked to this portfolio")
 
     repo = AccountRepository(db)
     if repo.find_by_name_in_portfolio(account.name, portfolio_id):
@@ -277,16 +263,15 @@ async def unlink_account_from_portfolio(
     """Unlink an account from a portfolio. Blocked if it's the only portfolio."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+        raise NotFoundError("Portfolio", portfolio_id)
 
     account = get_user_account(current_user, db, account_id)
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     if len(account.portfolios) == 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot unlink account from its only portfolio. Delete the account instead.",
+        raise BadRequestError(
+            "Cannot unlink account from its only portfolio. Delete the account instead."
         )
 
     db.execute(
@@ -309,7 +294,7 @@ async def get_linkable_accounts(
     """Get accounts that can be linked to this portfolio (not already linked)."""
     portfolio = validate_user_portfolio(current_user, db, portfolio_id)
     if not portfolio:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+        raise NotFoundError("Portfolio", portfolio_id)
 
     all_account_ids = get_user_account_ids(current_user, db)
     current_account_ids = {a.id for a in portfolio.accounts}

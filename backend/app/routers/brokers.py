@@ -9,7 +9,7 @@ import os
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -17,6 +17,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_broker_credentials, get_user_account
+from app.exceptions import AppError, BadRequestError, NotFoundError, UnprocessableEntityError
 from app.models.account import Account
 from app.models.user import User
 from app.rate_limiter import limiter
@@ -132,9 +133,9 @@ def _get_broker_config(broker_type: str) -> BrokerConfig:
     config = get_broker_config(broker_type)
     if not config:
         registry = get_all_broker_configs()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown broker type: {broker_type}. Supported: {', '.join(registry.keys())}",
+        raise NotFoundError(
+            "Broker type",
+            f"{broker_type} (supported: {', '.join(registry.keys())})",
         )
     return config
 
@@ -143,10 +144,7 @@ def _get_validated_account(account_id: int, current_user: User, db: Session) -> 
     """Get account if it belongs to user, otherwise raise 404."""
     account = get_user_account(current_user, db, account_id)
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
     return account
 
 
@@ -156,9 +154,8 @@ def _get_api_key_credentials(
     """Get api_key/api_secret credentials from account metadata."""
     api_key, api_secret = get_broker_credentials(account, broker_key)
     if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No {broker_name} credentials configured. "
+        raise BadRequestError(
+            f"No {broker_name} credentials configured. "
             f"Please add {broker_key}.api_key and {broker_key}.api_secret to account metadata.",
         )
     return api_key, api_secret
@@ -188,9 +185,8 @@ def _get_flex_query_credentials(
             env_hint = (
                 f", or\n2. Set {env_prefix}_FLEX_TOKEN and {env_prefix}_FLEX_QUERY_ID in .env file"
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No {broker_name} credentials configured. Please either:\n"
+        raise BadRequestError(
+            f"No {broker_name} credentials configured. Please either:\n"
             f"1. Use /brokers/{broker_key}/credentials endpoint to set credentials{env_hint}",
         )
     return flex_token, flex_query_id
@@ -411,15 +407,11 @@ async def import_broker_data(
                 account_id, flex_token, flex_query_id, use_staging, db, start_date=start_date
             )
         else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Unsupported credential type: {config.credential_type}",
-            )
+            raise AppError(f"Unsupported credential type: {config.credential_type}")
 
         if stats.get("status") == "failed":
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"{config.name} import failed: {stats.get('errors', ['Unknown error'])}",
+            raise AppError(
+                f"{config.name} import failed: {stats.get('errors', ['Unknown error'])}",
             )
 
         _update_last_import(account, config.key, db)
@@ -455,14 +447,11 @@ async def import_broker_data(
 
         return response
 
-    except HTTPException:
+    except AppError:
         raise
     except Exception as e:
         logger.exception(f"{config.name} import failed for account {account_id}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{config.name} import failed: {str(e)}",
-        )
+        raise AppError(f"{config.name} import failed: {str(e)}")
 
 
 @router.post("/ibkr/onboard/{account_id}", response_model=OnboardingImportResponse)
@@ -490,21 +479,16 @@ async def onboard_ibkr(
     try:
         result = IBKRImportOrchestrator.execute(db, account_id, flex_token, flex_query_id)
     except MissingFlexSectionsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
+        raise UnprocessableEntityError(
+            "Your Flex Query is missing required sections. Please update it in IBKR and try again.",
+            extra={
                 "error_code": "MISSING_FLEX_SECTIONS",
-                "message": "Your Flex Query is missing required sections. "
-                "Please update it in IBKR and try again.",
                 "missing_sections": e.missing_sections,
                 "required_sections": e.required_sections,
             },
         )
     except RuntimeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
+        raise AppError(str(e))
 
     _update_last_import(account, config.key, db)
 
@@ -557,9 +541,8 @@ async def import_ibkr_snapshot(
     stats = IBKRSyntheticImportService.import_snapshot(db, account_id, flex_token, flex_query_id)
 
     if stats.get("status") == "failed":
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Snapshot import failed: {stats.get('errors', ['Unknown error'])}",
+        raise AppError(
+            f"Snapshot import failed: {stats.get('errors', ['Unknown error'])}",
         )
 
     _update_last_import(account, config.key, db)
@@ -596,7 +579,7 @@ async def test_credentials_stateless(
     try:
         field1, field2 = get_credential_fields(config.credential_type)
         return test_credentials(config, getattr(credentials, field1), getattr(credentials, field2))
-    except HTTPException:
+    except AppError:
         raise
     except Exception:
         logger.exception(f"{config.name} stateless credential test failed")
@@ -640,7 +623,7 @@ async def test_broker_credentials(
         result["account_id"] = account_id
         return result
 
-    except HTTPException:
+    except AppError:
         raise
     except Exception as e:
         logger.error(f"{config.name} credential test failed for account {account_id}: {e}")
@@ -705,10 +688,7 @@ async def set_broker_credentials(
     )
     if not isinstance(credentials, expected_type):
         field1, field2 = get_credential_fields(config.credential_type)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{config.name} requires {field1} and {field2}",
-        )
+        raise BadRequestError(f"{config.name} requires {field1} and {field2}")
 
     cred_data = build_credential_data(credentials, config.credential_type)
 

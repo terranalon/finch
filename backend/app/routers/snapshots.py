@@ -3,12 +3,13 @@
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import NotFoundError
 from app.models.user import User
 from app.schemas.snapshot import SnapshotCreateResponse, SnapshotPointResponse
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
@@ -80,10 +81,7 @@ async def get_account_snapshots(
     """
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
 
     snapshots = SnapshotService.get_account_history(db, account_id, start_date, end_date, limit)
 
@@ -159,10 +157,7 @@ async def get_portfolio_value(
     """
     allowed_account_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
 
     return PortfolioReconstructionService.calculate_portfolio_value(
         db, account_id, as_of_date, currency

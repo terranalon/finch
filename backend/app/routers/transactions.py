@@ -2,13 +2,14 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import BadRequestError, NotFoundError
 from app.models import Asset, Holding, Transaction
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -49,7 +50,7 @@ async def list_transactions(
 
     if account_id:
         if account_id not in allowed_account_ids:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+            raise NotFoundError("Account", account_id)
         query = query.filter(Holding.account_id == account_id)
 
     if transaction_type:
@@ -78,18 +79,12 @@ async def get_transaction(
     """Get a specific transaction by ID (must belong to user's accounts)."""
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     holding = db.query(Holding).filter(Holding.id == transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     return transaction
 
@@ -112,17 +107,11 @@ async def create_transaction(
     """
     allowed_account_ids = get_user_account_ids(current_user, db)
     if transaction.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {transaction.account_id} not found",
-        )
+        raise NotFoundError("Account", transaction.account_id)
 
     asset = db.query(Asset).filter(Asset.id == transaction.asset_id).first()
     if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with id {transaction.asset_id} not found",
-        )
+        raise NotFoundError("Asset", transaction.asset_id)
 
     svc = TransactionService(db)
     try:
@@ -154,7 +143,7 @@ async def create_transaction(
 
     except TransactionError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e)) from e
 
 
 @router.put("/{transaction_id}", response_model=TransactionSchema)
@@ -173,18 +162,12 @@ async def update_transaction(
     """
     db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not db_transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     holding = db.query(Holding).filter(Holding.id == db_transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     update_data = transaction_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -210,18 +193,12 @@ async def delete_transaction(
     """
     db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not db_transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     holding = db.query(Holding).filter(Holding.id == db_transaction.holding_id).first()
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Transaction with id {transaction_id} not found",
-        )
+        raise NotFoundError("Transaction", transaction_id)
 
     db.delete(db_transaction)
     db.commit()
