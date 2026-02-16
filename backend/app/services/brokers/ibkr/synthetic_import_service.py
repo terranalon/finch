@@ -292,6 +292,7 @@ class IBKRSyntheticImportService:
             }
             source.status = "completed"
 
+            db.flush()  # ensure all transactions are visible to reconstruction
             reconstruction_stats = reconstruct_and_update_holdings(db, account_id)
             stats["holdings_reconstruction"] = reconstruction_stats
 

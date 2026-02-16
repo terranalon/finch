@@ -105,7 +105,9 @@ class IBKRFlexImportService:
                     stats["errors"].append("Failed to parse Flex Query XML response")
                     return stats
 
-            # Step 3: Extract all data types
+            if start_date:
+                IBKRParser.strip_before_date(root, start_date)
+
             logger.info("Extracting transactions and cash data...")
             cash_data = IBKRParser.extract_cash_balances(root)
             transactions = IBKRParser.extract_transactions(root)
@@ -125,7 +127,6 @@ class IBKRFlexImportService:
                 len(cash_data),
             )
 
-            # Step 4: Create data source record for coverage tracking
             today = date.today()
             source = BrokerDataSource(
                 account_id=account_id,
@@ -139,11 +140,9 @@ class IBKRFlexImportService:
             db.add(source)
             db.flush()
 
-            # Step 5: Import cash balances
             logger.info("Importing cash balances...")
             stats["cash"] = IBKRImportService._import_cash_balances(db, account_id, cash_data)
 
-            # Step 6: Import all transaction types
             logger.info("Importing transactions...")
             stats["transactions"] = IBKRImportService._import_transactions(
                 db, account_id, transactions, source_id=source.id
@@ -164,15 +163,12 @@ class IBKRFlexImportService:
                 db, account_id, dividends, source_id=source.id
             )
 
-            # Step 7: Reconstruct holdings from transaction history
             logger.info("Reconstructing holdings from transactions...")
             stats["holdings_reconstruction"] = reconstruct_and_update_holdings(db, account_id)
 
-            # Step 8: Finalize data source
             source.status = "completed"
             source.import_stats = stats
 
-            # Step 9: Update asset prices (symbols from transactions)
             all_symbols = {
                 item.symbol for items in (transactions, dividends) for item in items if item.symbol
             }

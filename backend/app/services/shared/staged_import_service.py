@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 from app.models import Account
 from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 from app.services.brokers.ibkr.parser import IBKRParser
-from app.services.portfolio.holdings_reconstruction import reconstruct_and_update_holdings
 from app.services.shared.staging_utils import (
     cleanup_staging,
     copy_production_to_staging,
@@ -121,6 +120,9 @@ class StagedImportService:
                 cleanup_staging(db)
                 return stats
 
+            if start_date:
+                IBKRParser.strip_before_date(root, start_date)
+
             # Extract all data types
             cash_data = IBKRParser.extract_cash_balances(root)
             transactions_data = IBKRParser.extract_transactions(root)
@@ -166,6 +168,10 @@ class StagedImportService:
 
             # Phase 4.5: Reconstruct holdings from transactions
             logger.info("Phase 4.5: Reconstructing holdings from transactions...")
+            from app.services.portfolio.holdings_reconstruction import (
+                reconstruct_and_update_holdings,
+            )
+
             stats["holdings_reconstruction"] = reconstruct_and_update_holdings(db, account_id)
 
             # Phase 5: Cleanup

@@ -157,7 +157,9 @@ def staged_import_mocks():
         patch(f"{STAGED_MODULE}.copy_production_to_staging", return_value={}),
         patch(f"{STAGED_MODULE}.IBKRFlexClient") as mock_client,
         patch(f"{STAGED_MODULE}.IBKRParser") as mock_parser,
-        patch(f"{STAGED_MODULE}.reconstruct_and_update_holdings") as mock_reconstruct,
+        patch(
+            "app.services.portfolio.holdings_reconstruction.reconstruct_and_update_holdings"
+        ) as mock_reconstruct,
         patch(f"{STAGED_MODULE}.merge_staging_to_production", return_value={}),
         patch(f"{STAGED_MODULE}.cleanup_staging"),
     ):

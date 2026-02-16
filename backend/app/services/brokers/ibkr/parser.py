@@ -57,6 +57,33 @@ CURRENCY_NAMES: dict[str, str] = {
 class IBKRParser:
     """Parser for IBKR Flex Query XML responses."""
 
+    # XML container tag -> child date attribute used by strip_before_date().
+    _DATE_ATTRS: dict[str, str] = {
+        "Trades": "tradeDate",
+        "CashTransactions": "dateTime",
+        "FxTransactions": "dateTime",
+    }
+
+    @staticmethod
+    def strip_before_date(root: ET.Element, cutoff: date) -> int:
+        """Remove XML elements dated before *cutoff* (in-place).
+
+        Returns the number of elements removed.
+        """
+        cutoff_str = cutoff.strftime("%Y%m%d")
+        removed = 0
+        for stmt in root.iter("FlexStatement"):
+            for tag, attr in IBKRParser._DATE_ATTRS.items():
+                for container in stmt.findall(tag):
+                    for child in list(container):
+                        raw = (child.get(attr) or "")[:8]
+                        if raw and raw < cutoff_str:
+                            container.remove(child)
+                            removed += 1
+        if removed:
+            logger.info("Stripped %d XML elements dated before %s", removed, cutoff)
+        return removed
+
     @staticmethod
     def parse_xml(xml_data: bytes) -> ET.Element | None:
         """Parse XML bytes into ElementTree Element."""

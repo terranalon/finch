@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.services.repositories import HoldingRepository, TransactionRepository
+from app.services.repositories import HoldingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,6 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
 
         reconstructed_map = {h["asset_id"]: h for h in reconstructed}
         holding_repo = HoldingRepository(db)
-        txn_repo = TransactionRepository(db)
         holdings = holding_repo.find_by_account(account_id)
 
         for holding in holdings:
@@ -76,16 +75,14 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
                     f"cost_basis={holding.cost_basis}"
                 )
             else:
-                # Not in reconstruction - check if it has transactions that sum to 0
-                has_transactions = txn_repo.find_first_by_holding(holding.id) is not None
-
-                if has_transactions and holding.quantity != 0:
+                # Not in reconstruction -- zero out and deactivate.
+                if holding.quantity != 0:
                     holding.quantity = Decimal("0")
                     holding.cost_basis = Decimal("0")
                     holding.is_active = False
                     stats["holdings_deactivated"] += 1
                     stats["holdings_updated"] += 1
-                elif holding.quantity == 0:
+                elif holding.is_active:
                     holding.is_active = False
 
         # Log any orphaned reconstructed holdings
