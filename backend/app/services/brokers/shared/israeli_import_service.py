@@ -534,56 +534,38 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
         return None, tase_number
 
     def _fetch_yfinance_metadata(self, symbol: str) -> dict | None:
-        """Fetch asset metadata from yfinance.
-
-        Args:
-            symbol: Yahoo Finance symbol
-
-        Returns:
-            Dictionary with name, sector, industry, price or None on error
-        """
-        import yfinance as yf
+        """Fetch asset metadata from yfinance via centralized client."""
+        from app.services.market_data.yfinance_client import YFinanceClient
 
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            client = YFinanceClient()
+            info = client.get_ticker_info(symbol)
+            if info is None:
+                return None
 
-            result = {}
+            result: dict = {}
 
-            # Get English name (prefer longName over shortName)
-            if info.get("longName"):
-                result["name"] = info["longName"]
-            elif info.get("shortName"):
-                result["name"] = info["shortName"]
+            if info.name:
+                result["name"] = info.name
+            if info.sector:
+                result["sector"] = info.sector
+            if info.industry:
+                result["industry"] = info.industry
+            if info.quote_type:
+                result["quoteType"] = info.quote_type
 
-            # Get sector and industry
-            if info.get("sector"):
-                result["sector"] = info["sector"]
-            if info.get("industry"):
-                result["industry"] = info["industry"]
-
-            # Get quote type to determine asset class (EQUITY, ETF, MUTUALFUND, etc.)
-            if info.get("quoteType"):
-                result["quoteType"] = info["quoteType"]
-
-            # Get current price (try multiple fields in order of preference)
-            price = (
-                info.get("currentPrice")
-                or info.get("regularMarketPrice")
-                or info.get("previousClose")
-            )
-
-            if price and price > 0:
+            if info.price is not None:
+                price = info.price
                 # Convert from Agorot to ILS for Israeli stocks
                 if symbol.endswith(".TA"):
-                    price = price / 100
-                result["price"] = Decimal(str(price))
+                    price = price / Decimal("100")
+                result["price"] = price
 
-            logger.debug(f"Fetched yfinance metadata for {symbol}: {result}")
+            logger.debug("Fetched yfinance metadata for %s: %s", symbol, result)
             return result if result else None
 
         except Exception as e:
-            logger.warning(f"Failed to fetch yfinance metadata for {symbol}: {e}")
+            logger.warning("Failed to fetch yfinance metadata for %s: %s", symbol, e)
             return None
 
     def _update_existing_asset(
