@@ -759,7 +759,7 @@ export default function Accounts() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || `Failed to ${isUnlink ? 'unlink' : 'delete'} account`);
+        throw new Error(data.message || `Failed to ${isUnlink ? 'unlink' : 'delete'} account`);
       }
 
       // Remove from local state

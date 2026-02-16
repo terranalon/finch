@@ -183,7 +183,7 @@ export function BatchUploadModal({
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || 'Finalization failed');
+        throw new Error(errData.message || 'Finalization failed');
       }
 
       const result = await res.json();

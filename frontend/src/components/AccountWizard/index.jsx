@@ -93,7 +93,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to create account');
+        throw new Error(error.message || 'Failed to create account');
       }
 
       const account = await response.json();
@@ -190,7 +190,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
         if (!credResponse.ok) {
           const error = await credResponse.json();
-          throw new Error(error.detail || 'Failed to save credentials');
+          throw new Error(error.message || 'Failed to save credentials');
         }
 
         if (broker.type === 'ibkr') {
@@ -204,16 +204,16 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
           if (!importResponse.ok) {
             const error = await importResponse.json();
 
-            if (importResponse.status === 422 && error.detail?.missing_sections) {
+            if (importResponse.status === 422 && error.extra?.missing_sections) {
               setSectionValidation({
-                missing: error.detail.missing_sections,
-                required: error.detail.required_sections,
+                missing: error.extra.missing_sections,
+                required: error.extra.required_sections,
               });
               setIsImporting(false);
               return;
             }
 
-            throw new Error(error.detail?.message || error.detail || 'Failed to import data');
+            throw new Error(error.message || 'Failed to import data');
           }
 
           const results = await importResponse.json();
@@ -230,7 +230,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
           if (!snapshotResponse.ok) {
             const error = await snapshotResponse.json();
-            throw new Error(error.detail || 'Failed to import snapshot');
+            throw new Error(error.message || 'Failed to import snapshot');
           }
 
           const results = await snapshotResponse.json();
@@ -244,7 +244,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
           if (!importResponse.ok) {
             const error = await importResponse.json();
-            throw new Error(error.detail || 'Failed to import data');
+            throw new Error(error.message || 'Failed to import data');
           }
 
           const results = await importResponse.json();
@@ -267,7 +267,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
         if (!uploadResponse.ok) {
           const error = await uploadResponse.json();
-          throw new Error(error.detail || 'Failed to upload file');
+          throw new Error(error.message || 'Failed to upload file');
         }
 
         const results = await uploadResponse.json();
@@ -427,7 +427,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to link account');
+        throw new Error(error.message || 'Failed to link account');
       }
 
       handleClose();

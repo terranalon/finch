@@ -209,7 +209,7 @@ export function ApiCredentialsModal({ isOpen, onClose, account, onCredentialsSav
 
       if (!saveRes.ok) {
         const data = await saveRes.json();
-        throw new Error(data.detail || 'Failed to save credentials');
+        throw new Error(data.message || 'Failed to save credentials');
       }
 
       // Then test them
@@ -220,7 +220,7 @@ export function ApiCredentialsModal({ isOpen, onClose, account, onCredentialsSav
       const testData = await testRes.json();
 
       if (!testRes.ok) {
-        throw new Error(testData.detail || 'Credentials test failed');
+        throw new Error(testData.message || 'Credentials test failed');
       }
 
       setTestResult(testData);
@@ -251,7 +251,7 @@ export function ApiCredentialsModal({ isOpen, onClose, account, onCredentialsSav
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Import failed');
+        throw new Error(data.message || 'Import failed');
       }
 
       const result = await res.json();
