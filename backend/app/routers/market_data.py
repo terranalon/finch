@@ -71,7 +71,7 @@ def refresh_stock_prices(
     resolved_date = _get_target_date(target_date)
 
     logger.info("Refreshing stock prices for %s", resolved_date)
-    result = DailyPriceService.refresh_stock_prices(db, resolved_date)
+    result = DailyPriceService().refresh_stock_prices(db, resolved_date)
 
     return PriceRefreshResponse.model_validate(result)
 
