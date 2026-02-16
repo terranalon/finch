@@ -100,11 +100,12 @@ def _create_inflated_deposits(
     for cash in cash_data:
         if cash.balance == 0 and cash.currency not in cost_basis_by_currency:
             continue
-        currencies_with_cash.add(cash.currency)
 
         cash_asset = asset_repo.find_by_symbol(cash.symbol)
         if not cash_asset:
             continue
+
+        currencies_with_cash.add(cash.currency)
         cash_holding, _ = holding_repo.find_or_create(account_id, cash_asset.id)
 
         position_cost = cost_basis_by_currency.get(cash.currency, Decimal("0"))
