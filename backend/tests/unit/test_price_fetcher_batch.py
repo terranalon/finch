@@ -9,16 +9,9 @@ from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.market_data.yfinance_client import OHLCVRow
 
 
-def _make_ohlcv(close: float, row_date: str = "2024-01-15") -> OHLCVRow:
+def _make_ohlcv(close: float, row_date: date = date(2024, 1, 15)) -> OHLCVRow:
     d = Decimal(str(close))
-    return OHLCVRow(
-        date=date.fromisoformat(row_date),
-        open=d,
-        high=d,
-        low=d,
-        close=d,
-        volume=Decimal("1000000"),
-    )
+    return OHLCVRow(date=row_date, open=d, high=d, low=d, close=d, volume=Decimal("1000000"))
 
 
 def _make_asset(symbol: str | None, asset_class: str = "Stock", currency: str = "USD") -> Asset:

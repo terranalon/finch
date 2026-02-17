@@ -234,8 +234,8 @@ class PriceFetcher:
             logger.info(f"Batch fetching prices for {len(symbols)} non-crypto assets")
 
             try:
-                client = YFinanceClient()
-                batch_results = client.get_batch_prices_threaded(symbols)
+                yf_client = YFinanceClient()
+                batch_results = yf_client.get_batch_prices_threaded(symbols)
 
                 for asset in other_assets:
                     row = batch_results.get(asset.symbol)
