@@ -484,6 +484,24 @@ class TestTokenBucket:
         elapsed = time.monotonic() - start
         assert elapsed < 0.05  # Should not need to wait
 
+    def test_jitter_calls_random_sleep(self):
+        """acquire() should call random.uniform when jitter is non-zero."""
+        bucket = _TokenBucket(rate=10.0, capacity=10, jitter=0.05)
+        with patch("app.services.market_data.yfinance_client.random.uniform") as mock_uniform:
+            mock_uniform.return_value = 0.0
+            for _ in range(3):
+                bucket.acquire()
+        assert mock_uniform.call_count == 3
+        mock_uniform.assert_called_with(0, 0.05)
+
+    def test_zero_jitter_skips_random_sleep(self):
+        """acquire() should not call random.uniform when jitter is zero."""
+        bucket = _TokenBucket(rate=10.0, capacity=10, jitter=0.0)
+        with patch("app.services.market_data.yfinance_client.random.uniform") as mock_uniform:
+            for _ in range(5):
+                bucket.acquire()
+        mock_uniform.assert_not_called()
+
 
 class TestGetBatchPricesThreaded:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")

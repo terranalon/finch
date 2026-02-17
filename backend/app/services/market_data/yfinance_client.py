@@ -7,6 +7,7 @@ but follows similar patterns for error handling and caching.
 
 import logging
 import math
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -72,15 +73,16 @@ class OHLCVRow:
 class _TokenBucket:
     """Thread-safe token bucket rate limiter."""
 
-    def __init__(self, rate: float, capacity: int) -> None:
+    def __init__(self, rate: float, capacity: int, jitter: float = 0.0) -> None:
         self._rate = rate  # tokens per second
         self._capacity = capacity
         self._tokens = float(capacity)
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
+        self._jitter = jitter
 
     def acquire(self) -> None:
-        """Block until a token is available."""
+        """Block until a token is available, then optionally sleep for jitter."""
         while True:
             with self._lock:
                 now = time.monotonic()
@@ -91,8 +93,10 @@ class _TokenBucket:
                 self._last_refill = now
                 if self._tokens >= 1.0:
                     self._tokens -= 1.0
-                    return
+                    break
             time.sleep(1.0 / self._rate)
+        if self._jitter > 0:
+            time.sleep(random.uniform(0, self._jitter))
 
 
 class YFinanceClient:
@@ -415,7 +419,7 @@ class YFinanceClient:
         if not symbols:
             return {}
 
-        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1))
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1), jitter=1.0 / rate)
 
         def fetch_one(symbol: str) -> tuple[str, OHLCVRow | None]:
             try:
