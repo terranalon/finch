@@ -7,6 +7,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
@@ -15,6 +16,18 @@ from app.services.market_data.yfinance_client import (
     YFinanceClient,
     _TokenBucket,
 )
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limiting():
+    """Disable rate limiting for all tests, restoring defaults after each test."""
+    saved_interval = YFinanceClient._min_request_interval
+    saved_time = YFinanceClient._last_request_time
+    YFinanceClient._min_request_interval = 0.0
+    YFinanceClient._last_request_time = 0.0
+    yield
+    YFinanceClient._min_request_interval = saved_interval
+    YFinanceClient._last_request_time = saved_time
 
 
 def _make_ticker_info(**overrides: object) -> TickerInfo:
@@ -78,7 +91,6 @@ class TestRateLimiting:
             "longName": "Test Corp",
         }
         client = YFinanceClient()
-        # Override interval for fast testing
         YFinanceClient._min_request_interval = 0.1
 
         start = time.time()
@@ -87,8 +99,6 @@ class TestRateLimiting:
         elapsed = time.time() - start
 
         assert elapsed >= 0.1, f"Expected >= 0.1s, got {elapsed:.3f}s"
-        # Restore default
-        YFinanceClient._min_request_interval = 0.5
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_first_call_not_delayed(self, mock_ticker):
@@ -97,15 +107,12 @@ class TestRateLimiting:
             "quoteType": "EQUITY",
             "longName": "Test Corp",
         }
-        # Reset class-level state
-        YFinanceClient._last_request_time = 0.0
         client = YFinanceClient()
 
         start = time.time()
         client.get_ticker_info("AAPL")
         elapsed = time.time() - start
 
-        # First call should not be delayed (< 0.1s unless yf is slow)
         assert elapsed < 0.5
 
 
@@ -118,7 +125,6 @@ class TestResolveSymbols:
             "longName": "Test Corp",
         }
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0  # skip delay in tests
 
         results = client.resolve_symbols(["AAPL", "MSFT", "AAPL"])
 
@@ -132,7 +138,6 @@ class TestResolveSymbols:
     def test_returns_none_for_failed_lookups(self, mock_ticker):
         mock_ticker.side_effect = Exception("API error")
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         results = client.resolve_symbols(["BAD"])
 
@@ -161,7 +166,6 @@ class TestResolveSymbols:
 
         mock_ticker.side_effect = side_effect
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         results = client.resolve_symbols(["MSFT", "AAPL", "GOOG"])
 
@@ -198,7 +202,6 @@ class TestGetHistoryForRange:
         )
         mock_ticker.return_value.history.return_value = mock_history
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_history_for_range("AAPL", date(2024, 1, 2), date(2024, 1, 3))
 
@@ -212,7 +215,6 @@ class TestGetHistoryForRange:
     def test_returns_empty_on_no_data(self, mock_ticker):
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_history_for_range("BAD", date(2024, 1, 2), date(2024, 1, 3))
         assert rows == []
@@ -221,7 +223,6 @@ class TestGetHistoryForRange:
     def test_returns_empty_on_exception(self, mock_ticker):
         mock_ticker.side_effect = Exception("API error")
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_history_for_range("ERR", date(2024, 1, 2), date(2024, 1, 3))
         assert rows == []
@@ -236,7 +237,6 @@ class TestGetForexRate:
         )
         mock_ticker.return_value.history.return_value = mock_history
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rate = client.get_forex_rate("USD", "ILS")
 
@@ -251,7 +251,6 @@ class TestGetForexRate:
         )
         mock_ticker.return_value.history.return_value = mock_history
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rate = client.get_forex_rate("USD", "ILS", target_date=date(2024, 1, 10))
 
@@ -261,7 +260,6 @@ class TestGetForexRate:
     def test_returns_none_on_empty(self, mock_ticker):
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rate = client.get_forex_rate("USD", "XYZ")
         assert rate is None
@@ -270,7 +268,6 @@ class TestGetForexRate:
     def test_returns_none_on_exception(self, mock_ticker):
         mock_ticker.side_effect = Exception("API error")
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rate = client.get_forex_rate("USD", "ILS")
         assert rate is None
@@ -291,7 +288,6 @@ class TestGetForexHistory:
         )
         mock_ticker.return_value.history.return_value = mock_history
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_forex_history("USD", "ILS", start=date(2024, 1, 2), end=date(2024, 1, 3))
 
@@ -303,7 +299,6 @@ class TestGetForexHistory:
     def test_returns_empty_on_no_data(self, mock_ticker):
         mock_ticker.return_value.history.return_value = pd.DataFrame()
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_forex_history("USD", "XYZ", start=date(2024, 1, 2), end=date(2024, 1, 3))
         assert rows == []
@@ -326,7 +321,6 @@ class TestGetHistoricalDataOHLCV:
         )
         mock_ticker.return_value.history.return_value = mock_history
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         rows = client.get_historical_data("AAPL", period="1mo")
 
@@ -346,7 +340,6 @@ class TestGetCurrentPriceFallbacks:
             "previousClose": 173.00,
         }
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         result = client.get_current_price("AAPL")
         assert result is not None
@@ -359,7 +352,6 @@ class TestGetCurrentPriceFallbacks:
             "previousClose": 173.00,
         }
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         result = client.get_current_price("AAPL")
         assert result is not None
@@ -369,7 +361,6 @@ class TestGetCurrentPriceFallbacks:
     def test_falls_back_to_previous_close(self, mock_ticker):
         mock_ticker.return_value.info = {"previousClose": 173.00}
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         result = client.get_current_price("AAPL")
         assert result is not None
@@ -379,7 +370,6 @@ class TestGetCurrentPriceFallbacks:
     def test_returns_none_when_no_price(self, mock_ticker):
         mock_ticker.return_value.info = {}
         client = YFinanceClient()
-        YFinanceClient._min_request_interval = 0.0
 
         result = client.get_current_price("BAD")
         assert result is None

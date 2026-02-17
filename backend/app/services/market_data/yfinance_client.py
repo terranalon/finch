@@ -124,21 +124,31 @@ class YFinanceClient:
         YFinanceClient._last_request_time = time.time()
 
     @staticmethod
+    def _safe_volume(value: object) -> Decimal:
+        """Convert a volume value to Decimal, treating NaN as zero."""
+        if isinstance(value, float) and math.isnan(value):
+            return Decimal(0)
+        return Decimal(str(int(value)))
+
+    @staticmethod
     def _dataframe_to_ohlcv_rows(df: "pd.DataFrame") -> list[OHLCVRow]:
         """Convert a pandas DataFrame of historical data to OHLCVRow list."""
-        return [
-            OHLCVRow(
-                date=idx.date(),
-                open=Decimal(str(row.get("Open", 0))),
-                high=Decimal(str(row.get("High", 0))),
-                low=Decimal(str(row.get("Low", 0))),
-                close=Decimal(str(close)),
-                volume=Decimal(str(int(0 if math.isnan(v := row.get("Volume", 0)) else v))),
+        rows: list[OHLCVRow] = []
+        for idx, row in df.iterrows():
+            close = row.get("Close")
+            if close is None or (isinstance(close, float) and math.isnan(close)):
+                continue
+            rows.append(
+                OHLCVRow(
+                    date=idx.date(),
+                    open=Decimal(str(row.get("Open", 0))),
+                    high=Decimal(str(row.get("High", 0))),
+                    low=Decimal(str(row.get("Low", 0))),
+                    close=Decimal(str(close)),
+                    volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
+                )
             )
-            for idx, row in df.iterrows()
-            if (close := row.get("Close")) is not None
-            and not (isinstance(close, float) and math.isnan(close))
-        ]
+        return rows
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
@@ -160,14 +170,12 @@ class YFinanceClient:
                 return None
 
             # Extract name from various fields (first non-empty, non-symbol match)
-            name = next(
-                (
-                    stripped
-                    for field in self.NAME_FIELDS
-                    if (val := info.get(field)) and (stripped := val.strip()) and stripped != symbol
-                ),
-                None,
-            )
+            name = None
+            for field in self.NAME_FIELDS:
+                val = info.get(field)
+                if val and (stripped := val.strip()) and stripped != symbol:
+                    name = stripped
+                    break
 
             # Determine quote type
             quote_type = info.get("quoteType")
@@ -203,6 +211,9 @@ class YFinanceClient:
             logger.error(f"Error fetching ticker info for {symbol}: {e}")
             return None
 
+    # Price fields to try, in order of preference
+    PRICE_FIELDS = ["currentPrice", "regularMarketPrice", "previousClose"]
+
     def get_current_price(self, symbol: str) -> tuple[Decimal, datetime] | None:
         """Get current price for a symbol, trying multiple price fields.
 
@@ -219,10 +230,9 @@ class YFinanceClient:
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
-            price = (
-                info.get("currentPrice")
-                or info.get("regularMarketPrice")
-                or info.get("previousClose")
+            price = next(
+                (info[f] for f in self.PRICE_FIELDS if info.get(f) is not None),
+                None,
             )
             if price is None or price <= 0:
                 logger.warning(f"No price found for {symbol}")
