@@ -238,14 +238,13 @@ class MarketDataService:
         else:
             period = "5y"
 
-        history = self._yfinance.get_historical_data(symbol, period)
+        rows = self._yfinance.get_historical_data(symbol, period)
 
         # Filter to requested date range
         results = []
-        for dt, price in history:
-            d = dt.date() if isinstance(dt, datetime) else dt
-            if start_date <= d <= end_date:
-                results.append(PricePoint(date=d, price=price, source="yfinance"))
+        for row in rows:
+            if start_date <= row.date <= end_date:
+                results.append(PricePoint(date=row.date, price=row.close, source="yfinance"))
 
         return results
 

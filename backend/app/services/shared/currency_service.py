@@ -1,12 +1,12 @@
 """Currency exchange rate service."""
 
 import logging
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
-import yfinance as yf
 from sqlalchemy.orm import Session
 
+from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.repositories.exchange_rate_repository import ExchangeRateRepository
 
 logger = logging.getLogger(__name__)
@@ -16,15 +16,15 @@ class CurrencyService:
     """Service for managing currency exchange rates.
 
     Instance-based: accepts a db session in __init__ so callers don't
-    pass it to every method.  ``fetch_exchange_rate`` remains a
-    @staticmethod because it is pure I/O with no database access.
+    pass it to every method.
     """
 
     SUPPORTED_CURRENCIES = ["USD", "ILS", "CAD", "EUR", "GBP"]
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, yf_client: YFinanceClient | None = None) -> None:
         self._db = db
         self._rate_repo = ExchangeRateRepository(db)
+        self._yf_client = yf_client or YFinanceClient()
 
     def get_exchange_rate(
         self, from_currency: str, to_currency: str, target_date: date | None = None
@@ -48,29 +48,26 @@ class CurrencyService:
         # Try to find cached rate
         rate = self._rate_repo.find_by_pair_and_date(from_currency, to_currency, target_date)
 
-        if rate:
+        if rate is not None:
             return rate.rate
 
         # Not cached, fetch from Yahoo Finance
-        fetched_rate = CurrencyService.fetch_exchange_rate(from_currency, to_currency)
+        fetched_rate = self.fetch_exchange_rate(from_currency, to_currency)
 
-        if fetched_rate:
+        if fetched_rate is not None:
             self._rate_repo.create(from_currency, to_currency, fetched_rate, target_date)
             try:
                 self._db.commit()
             except Exception as e:
-                logger.error(f"Error saving exchange rate: {str(e)}")
+                logger.error(f"Error saving exchange rate: {e}")
                 self._db.rollback()
 
             return fetched_rate
 
         return None
 
-    @staticmethod
-    def fetch_exchange_rate(from_currency: str, to_currency: str) -> Decimal | None:
-        """Fetch current exchange rate from Yahoo Finance.
-
-        Pure I/O -- no database access, so this stays as a @staticmethod.
+    def fetch_exchange_rate(self, from_currency: str, to_currency: str) -> Decimal | None:
+        """Fetch current exchange rate from Yahoo Finance via YFinanceClient.
 
         Args:
             from_currency: Source currency code
@@ -79,22 +76,7 @@ class CurrencyService:
         Returns:
             Exchange rate as Decimal, or None if fetch fails
         """
-        try:
-            symbol = f"{from_currency}{to_currency}=X"
-
-            ticker = yf.Ticker(symbol)
-            data = ticker.history(period="1d")
-
-            if data.empty:
-                logger.warning(f"No data for forex pair {symbol}")
-                return None
-
-            rate = data["Close"].iloc[-1]
-            return Decimal(str(round(rate, 6)))
-
-        except Exception as e:
-            logger.error(f"Error fetching exchange rate {from_currency}/{to_currency}: {str(e)}")
-            return None
+        return self._yf_client.get_forex_rate(from_currency, to_currency)
 
     def convert_amount(
         self,
@@ -119,7 +101,7 @@ class CurrencyService:
 
         rate = self.get_exchange_rate(from_currency, to_currency, target_date)
 
-        if rate:
+        if rate is not None:
             return amount * rate
 
         return None
@@ -130,8 +112,10 @@ class CurrencyService:
         Returns:
             Statistics dict with success/failure counts
         """
-        stats = {"total": 0, "updated": 0, "failed": 0, "pairs": []}
-
+        total = 0
+        updated = 0
+        failed = 0
+        pairs: list[str] = []
         target_date = date.today()
 
         for from_curr in self.SUPPORTED_CURRENCIES:
@@ -139,35 +123,34 @@ class CurrencyService:
                 if from_curr == to_curr:
                     continue
 
-                stats["total"] += 1
+                total += 1
 
                 existing = self._rate_repo.find_by_pair_and_date(from_curr, to_curr, target_date)
 
-                if existing:
+                if existing is not None:
                     logger.debug(f"Rate {from_curr}/{to_curr} already exists for {target_date}")
-                    stats["updated"] += 1
+                    updated += 1
                     continue
 
-                rate = CurrencyService.fetch_exchange_rate(from_curr, to_curr)
+                rate = self.fetch_exchange_rate(from_curr, to_curr)
 
-                if rate:
+                if rate is not None:
                     self._rate_repo.create(from_curr, to_curr, rate, target_date)
-                    stats["updated"] += 1
-                    stats["pairs"].append(f"{from_curr}/{to_curr}")
+                    updated += 1
+                    pairs = [*pairs, f"{from_curr}/{to_curr}"]
                     logger.info(f"Updated rate {from_curr}/{to_curr} = {rate}")
                 else:
-                    stats["failed"] += 1
+                    failed += 1
                     logger.warning(f"Failed to fetch rate {from_curr}/{to_curr}")
 
         try:
             self._db.commit()
         except Exception as e:
-            logger.error(f"Error committing exchange rates: {str(e)}")
+            logger.error(f"Error committing exchange rates: {e}")
             self._db.rollback()
-            stats["failed"] = stats["total"]
-            stats["updated"] = 0
+            return {"total": total, "updated": 0, "failed": total, "pairs": []}
 
-        return stats
+        return {"total": total, "updated": updated, "failed": failed, "pairs": pairs}
 
     def fetch_and_store_historical_rates(
         self,
@@ -197,37 +180,25 @@ class CurrencyService:
             from_currency, to_currency, start_date, end_date
         )
 
-        symbol = f"{from_currency}{to_currency}=X"
-        try:
-            ticker = yf.Ticker(symbol)
-            history = ticker.history(
-                start=start_date.isoformat(),
-                end=(end_date + timedelta(days=1)).isoformat(),
-            )
-        except Exception as e:
-            logger.error(f"Failed to fetch exchange rate history for {symbol}: {e}")
-            return 0
+        rows = self._yf_client.get_forex_history(
+            from_currency, to_currency, start=start_date, end=end_date
+        )
 
-        if history.empty:
-            logger.warning(f"No exchange rate data for {symbol}")
+        if not rows:
+            logger.warning(f"No exchange rate data for {from_currency}/{to_currency}")
             return 0
 
         count = 0
-        for idx, row in history.iterrows():
-            rate_date = idx.date()
-
-            if rate_date in existing_dates:
+        for row in rows:
+            if row.date in existing_dates:
                 continue
-
-            close_rate = row.get("Close")
-            if close_rate is None or close_rate <= 0:
+            if row.close is None or row.close <= 0:
                 continue
-
-            self._rate_repo.create(from_currency, to_currency, Decimal(str(close_rate)), rate_date)
+            self._rate_repo.create(from_currency, to_currency, row.close, row.date)
             count += 1
 
         if count > 0:
             self._db.commit()
-            logger.info(f"Inserted {count} historical rates for {symbol}")
+            logger.info(f"Inserted {count} historical rates for {from_currency}/{to_currency}")
 
         return count

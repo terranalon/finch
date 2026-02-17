@@ -1,12 +1,14 @@
 """Integration tests for market data refresh endpoints."""
 
 from datetime import date, timedelta
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models import User
 from app.services.auth.auth_service import AuthService
+from app.services.market_data.yfinance_client import OHLCVRow
 
 
 @pytest.fixture
@@ -72,16 +74,11 @@ class TestMarketDataAuthRequirements:
 class TestExchangeRateRefresh:
     """Test exchange rate refresh endpoint with service account."""
 
-    @patch("app.services.market_data.exchange_rate_service.yf.Ticker")
-    def test_refresh_success(self, mock_ticker, service_client):
+    @patch("app.services.market_data.exchange_rate_service.YFinanceClient")
+    def test_refresh_success(self, mock_client_cls, service_client):
         """Service account can refresh exchange rates."""
-        mock_hist = MagicMock()
-        mock_hist.empty = False
-        mock_hist.columns = ["Close"]
-        mock_hist.__getitem__ = lambda self, key: MagicMock(
-            iloc=MagicMock(__getitem__=lambda s, i: 3.65)
-        )
-        mock_ticker.return_value.history.return_value = mock_hist
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_rate.return_value = Decimal("3.65")
 
         yesterday = date.today() - timedelta(days=1)
         response = service_client.post(
@@ -96,12 +93,11 @@ class TestExchangeRateRefresh:
         assert "skipped" in data
         assert "pairs" in data
 
-    @patch("app.services.market_data.exchange_rate_service.yf.Ticker")
-    def test_defaults_to_yesterday(self, mock_ticker, service_client):
+    @patch("app.services.market_data.exchange_rate_service.YFinanceClient")
+    def test_defaults_to_yesterday(self, mock_client_cls, service_client):
         """Date defaults to yesterday when not provided."""
-        mock_hist = MagicMock()
-        mock_hist.empty = True
-        mock_ticker.return_value.history.return_value = mock_hist
+        mock_client = mock_client_cls.return_value
+        mock_client.get_forex_rate.return_value = None
 
         response = service_client.post("/api/market-data/exchange-rates/refresh")
 
@@ -113,18 +109,22 @@ class TestExchangeRateRefresh:
 class TestStockPriceRefresh:
     """Test stock price refresh endpoint with service account."""
 
-    @patch("app.services.market_data.daily_price_service.yf.Ticker")
-    def test_refresh_success(self, mock_ticker, service_client):
+    @patch("app.services.market_data.daily_price_service.YFinanceClient")
+    def test_refresh_success(self, mock_client_cls, service_client):
         """Service account can refresh stock prices."""
-        mock_hist = MagicMock()
-        mock_hist.empty = False
-        mock_hist.columns = ["Close"]
-        mock_hist.__getitem__ = lambda self, key: MagicMock(
-            iloc=MagicMock(__getitem__=lambda s, i: 150.0)
-        )
-        mock_ticker.return_value.history.return_value = mock_hist
-
         yesterday = date.today() - timedelta(days=1)
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = [
+            OHLCVRow(
+                date=yesterday,
+                open=Decimal("150.0"),
+                high=Decimal("155.0"),
+                low=Decimal("149.0"),
+                close=Decimal("153.0"),
+                volume=Decimal("1000000"),
+            )
+        ]
+
         response = service_client.post(
             "/api/market-data/stock-prices/refresh",
             params={"target_date": str(yesterday)},

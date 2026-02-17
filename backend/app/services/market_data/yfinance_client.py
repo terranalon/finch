@@ -6,13 +6,19 @@ but follows similar patterns for error handling and caching.
 """
 
 import logging
+import math
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yfinance as yf
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,44 @@ class TickerInfo:
         return QUOTE_TYPE_MAP.get(self.quote_type)
 
 
+@dataclass
+class OHLCVRow:
+    """Single row of OHLCV historical data."""
+
+    date: date
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+
+
+class _TokenBucket:
+    """Thread-safe token bucket rate limiter."""
+
+    def __init__(self, rate: float, capacity: int) -> None:
+        self._rate = rate  # tokens per second
+        self._capacity = capacity
+        self._tokens = float(capacity)
+        self._last_refill = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        """Block until a token is available."""
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                self._tokens = min(
+                    self._capacity,
+                    self._tokens + (now - self._last_refill) * self._rate,
+                )
+                self._last_refill = now
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return
+            time.sleep(1.0 / self._rate)
+
+
 class YFinanceClient:
     """Wrapper around yfinance with caching and error handling.
 
@@ -79,6 +123,33 @@ class YFinanceClient:
             time.sleep(YFinanceClient._min_request_interval - elapsed)
         YFinanceClient._last_request_time = time.time()
 
+    @staticmethod
+    def _safe_volume(value: int | float) -> Decimal:
+        """Convert a volume value to Decimal, treating NaN as zero."""
+        if isinstance(value, float) and math.isnan(value):
+            return Decimal(0)
+        return Decimal(str(int(value)))
+
+    @staticmethod
+    def _dataframe_to_ohlcv_rows(df: "pd.DataFrame") -> list[OHLCVRow]:
+        """Convert a pandas DataFrame of historical data to OHLCVRow list."""
+        rows: list[OHLCVRow] = []
+        for idx, row in df.iterrows():
+            close = row.get("Close")
+            if close is None or (isinstance(close, float) and math.isnan(close)):
+                continue
+            rows.append(
+                OHLCVRow(
+                    date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
+                    open=Decimal(str(row.get("Open", 0))),
+                    high=Decimal(str(row.get("High", 0))),
+                    low=Decimal(str(row.get("Low", 0))),
+                    close=Decimal(str(close)),
+                    volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
+                )
+            )
+        return rows
+
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
 
@@ -98,14 +169,13 @@ class YFinanceClient:
                 logger.warning(f"No data found for symbol {symbol}")
                 return None
 
-            # Extract name from various fields
+            # Extract name from various fields (first non-empty, non-symbol match)
             name = None
             for field in self.NAME_FIELDS:
-                if field in info and info[field]:
-                    name = info[field].strip()
-                    if name and name != symbol:
-                        break
-                    name = None
+                val = info.get(field)
+                if val and (stripped := val.strip()) and stripped != symbol:
+                    name = stripped
+                    break
 
             # Determine quote type
             quote_type = info.get("quoteType")
@@ -141,8 +211,13 @@ class YFinanceClient:
             logger.error(f"Error fetching ticker info for {symbol}: {e}")
             return None
 
+    # Price fields to try, in order of preference
+    PRICE_FIELDS = ["currentPrice", "regularMarketPrice", "previousClose"]
+
     def get_current_price(self, symbol: str) -> tuple[Decimal, datetime] | None:
-        """Get current price for a symbol.
+        """Get current price for a symbol, trying multiple price fields.
+
+        Tries: currentPrice -> regularMarketPrice -> previousClose
 
         Args:
             symbol: Ticker symbol
@@ -155,8 +230,11 @@ class YFinanceClient:
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
-            price = info.get("regularMarketPrice")
-            if price is None:
+            price = next(
+                (info[f] for f in self.PRICE_FIELDS if info.get(f) is not None),
+                None,
+            )
+            if price is None or price <= 0:
                 logger.warning(f"No price found for {symbol}")
                 return None
 
@@ -166,17 +244,15 @@ class YFinanceClient:
             logger.error(f"Error fetching price for {symbol}: {e}")
             return None
 
-    def get_historical_data(
-        self, symbol: str, period: str = "1y"
-    ) -> list[tuple[datetime, Decimal]]:
-        """Get historical OHLCV data.
+    def get_historical_data(self, symbol: str, period: str = "1y") -> list[OHLCVRow]:
+        """Get historical OHLCV data by period.
 
         Args:
             symbol: Ticker symbol
             period: Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
 
         Returns:
-            List of (date, close_price) tuples
+            List of OHLCVRow
         """
         try:
             self._rate_limit()
@@ -187,18 +263,98 @@ class YFinanceClient:
                 logger.warning(f"No historical data for {symbol}")
                 return []
 
-            results = []
-            for idx, row in history.iterrows():
-                close_price = row.get("Close")
-                if close_price is not None:
-                    results.append((idx.to_pydatetime(), Decimal(str(close_price))))
-
-            logger.info(f"Fetched {len(results)} historical prices for {symbol}")
-            return results
+            rows = self._dataframe_to_ohlcv_rows(history)
+            logger.info(f"Fetched {len(rows)} historical prices for {symbol}")
+            return rows
 
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
             return []
+
+    def get_history_for_range(self, symbol: str, start: date, end: date) -> list[OHLCVRow]:
+        """Get historical OHLCV data for a date range.
+
+        Args:
+            symbol: Ticker symbol
+            start: Start date (inclusive)
+            end: End date (inclusive)
+
+        Returns:
+            List of OHLCVRow, one per trading day
+        """
+        try:
+            self._rate_limit()
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(
+                start=start.isoformat(),
+                end=(end + timedelta(days=1)).isoformat(),
+            )
+
+            if history.empty:
+                logger.warning(f"No historical data for {symbol}")
+                return []
+
+            rows = self._dataframe_to_ohlcv_rows(history)
+            logger.info(f"Fetched {len(rows)} rows for {symbol}")
+            return rows
+
+        except Exception as e:
+            logger.error(f"Error fetching history for {symbol}: {e}")
+            return []
+
+    def get_forex_rate(
+        self, from_currency: str, to_currency: str, *, target_date: date | None = None
+    ) -> Decimal | None:
+        """Get forex exchange rate.
+
+        Args:
+            from_currency: Source currency code (e.g., "USD")
+            to_currency: Target currency code (e.g., "ILS")
+            target_date: Specific date for the rate (defaults to current)
+
+        Returns:
+            Exchange rate as Decimal, or None if unavailable
+        """
+        try:
+            symbol = f"{from_currency}{to_currency}=X"
+            self._rate_limit()
+            ticker = yf.Ticker(symbol)
+
+            if target_date is not None:
+                hist = ticker.history(
+                    start=target_date.isoformat(),
+                    end=(target_date + timedelta(days=1)).isoformat(),
+                )
+            else:
+                hist = ticker.history(period="1d")
+
+            if hist.empty:
+                logger.warning(f"No forex data for {symbol}")
+                return None
+
+            rate = hist["Close"].iloc[-1]
+            return Decimal(str(rate))
+
+        except Exception as e:
+            logger.error(f"Error fetching forex rate for {from_currency}/{to_currency}: {e}")
+            return None
+
+    def get_forex_history(
+        self, from_currency: str, to_currency: str, *, start: date, end: date
+    ) -> list[OHLCVRow]:
+        """Get historical forex rates for a date range.
+
+        Args:
+            from_currency: Source currency code (e.g., "USD")
+            to_currency: Target currency code (e.g., "ILS")
+            start: Start date (inclusive)
+            end: End date (inclusive)
+
+        Returns:
+            List of OHLCVRow, one per trading day
+        """
+        symbol = f"{from_currency}{to_currency}=X"
+        return self.get_history_for_range(symbol, start, end)
 
     def is_valid_symbol(self, symbol: str) -> bool:
         """Check if a symbol exists in Yahoo Finance.
@@ -237,6 +393,47 @@ class YFinanceClient:
             logger.error(f"Error fetching raw info for {symbol}: {e}")
             return {}
 
+    def get_batch_prices_threaded(
+        self,
+        symbols: list[str],
+        *,
+        period: str = "1d",
+        max_workers: int = 16,
+        rate: float = 15.0,
+    ) -> dict[str, OHLCVRow | None]:
+        """Batch fetch OHLCV data using ThreadPoolExecutor with token bucket.
+
+        Args:
+            symbols: List of ticker symbols
+            period: yfinance period string (default "1d")
+            max_workers: Thread pool size
+            rate: Max requests per second
+
+        Returns:
+            Dict mapping symbol to OHLCVRow (last row) or None if failed
+        """
+        if not symbols:
+            return {}
+
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1))
+
+        def fetch_one(symbol: str) -> tuple[str, OHLCVRow | None]:
+            try:
+                bucket.acquire()
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period=period)
+                if history.empty:
+                    return symbol, None
+                rows = self._dataframe_to_ohlcv_rows(history)
+                return symbol, rows[-1] if rows else None
+            except Exception:
+                logger.debug("Failed to fetch %s", symbol, exc_info=True)
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
+            return dict(f.result() for f in as_completed(futures))
+
     def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
         """Fetch ticker info for multiple symbols with dedup and rate limiting.
 
@@ -247,10 +444,7 @@ class YFinanceClient:
             Dict mapping each unique symbol to its TickerInfo or None
         """
         unique_symbols = list(dict.fromkeys(symbols))
-        results: dict[str, TickerInfo | None] = {}
-
-        for symbol in unique_symbols:
-            results[symbol] = self.get_ticker_info(symbol)
+        results = {symbol: self.get_ticker_info(symbol) for symbol in unique_symbols}
 
         resolved_count = sum(1 for v in results.values() if v is not None)
         logger.info("Resolved %d/%d symbols", resolved_count, len(unique_symbols))

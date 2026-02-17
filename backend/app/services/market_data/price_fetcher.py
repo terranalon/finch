@@ -4,7 +4,6 @@ import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-import yfinance as yf
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,6 +11,7 @@ from app.models import Asset
 from app.models.asset_price import AssetPrice
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
+from app.services.market_data.yfinance_client import YFinanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -62,31 +62,22 @@ class PriceFetcher:
             Tuple of (price, timestamp) or None if fetch failed
         """
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            result = YFinanceClient().get_current_price(symbol)
+            if result is None:
+                logger.warning(f"No valid price found for {symbol}")
+                return None
 
-            # Try to get current price from different fields (in order of preference)
-            price = (
-                info.get("currentPrice")
-                or info.get("regularMarketPrice")
-                or info.get("previousClose")
-            )
+            price, timestamp = result
 
-            if price and price > 0:
-                price_decimal = Decimal(str(price))
+            # Convert Israeli stocks from Agorot to ILS
+            if symbol.endswith(".TA"):
+                price = price / _AGOROT_DIVISOR
+                logger.debug(f"Converted {symbol} price from Agorot to ILS: {price}")
 
-                # Convert Israeli stocks from Agorot to ILS
-                if symbol.endswith(".TA"):
-                    price_decimal = price_decimal / _AGOROT_DIVISOR
-                    logger.debug(f"Converted {symbol} price from Agorot to ILS: {price_decimal}")
-
-                return price_decimal, datetime.now()
-
-            logger.warning(f"No valid price found for {symbol}")
-            return None
+            return price, timestamp
 
         except Exception as e:
-            logger.error(f"Error fetching price for {symbol}: {str(e)}")
+            logger.error(f"Error fetching price for {symbol}: {e}")
             return None
 
     @staticmethod
@@ -198,17 +189,14 @@ class PriceFetcher:
         other_assets = []
 
         for asset in assets:
-            if not asset.symbol:
-                stats["skipped"] += 1
-                continue
-            if asset.asset_class == "Cash":
+            if not asset.symbol or asset.asset_class == "Cash":
                 stats["skipped"] += 1
                 continue
 
             if asset.asset_class == "Crypto":
-                crypto_assets.append(asset)
+                crypto_assets = [*crypto_assets, asset]
             else:
-                other_assets.append(asset)
+                other_assets = [*other_assets, asset]
 
         # Batch fetch crypto prices in a single API call
         if crypto_assets:
@@ -259,31 +247,32 @@ class PriceFetcher:
             Dictionary with historical data or None if fetch failed
         """
         try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period=period)
+            rows = YFinanceClient().get_historical_data(symbol, period=period)
 
-            if hist.empty:
+            if not rows:
                 logger.warning(f"No historical data found for {symbol}")
                 return None
 
-            # Convert to dictionary format
-            data = {"symbol": symbol, "period": period, "data": []}
-
-            # Convert Israeli stocks from Agorot to ILS
             is_israeli_stock = symbol.endswith(".TA")
-            divisor = float(_AGOROT_DIVISOR) if is_israeli_stock else 1.0
+            divisor = _AGOROT_DIVISOR if is_israeli_stock else Decimal("1")
 
-            for hist_date, row in hist.iterrows():
-                data["data"].append(
+            data = {
+                "symbol": symbol,
+                "period": period,
+                "data": [
                     {
-                        "date": hist_date.strftime("%Y-%m-%d"),
-                        "open": float(row["Open"]) / divisor,
-                        "high": float(row["High"]) / divisor,
-                        "low": float(row["Low"]) / divisor,
-                        "close": float(row["Close"]) / divisor,
-                        "volume": int(row["Volume"]) if "Volume" in row else 0,
+                        "date": row.date.strftime("%Y-%m-%d")
+                        if isinstance(row.date, date)
+                        else str(row.date),
+                        "open": float(row.open / divisor),
+                        "high": float(row.high / divisor),
+                        "low": float(row.low / divisor),
+                        "close": float(row.close / divisor),
+                        "volume": int(row.volume),
                     }
-                )
+                    for row in rows
+                ],
+            }
 
             if is_israeli_stock:
                 logger.debug(f"Converted {symbol} historical prices from Agorot to ILS")
@@ -291,7 +280,7 @@ class PriceFetcher:
             return data
 
         except Exception as e:
-            logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
+            logger.error(f"Error fetching historical data for {symbol}: {e}")
             return None
 
     @staticmethod
@@ -322,7 +311,7 @@ class PriceFetcher:
             try:
                 cc_client = CryptoCompareClient()
                 cc_prices = cc_client.get_price_history(symbol, start_date, cc_end, "USD")
-                prices.extend(cc_prices)
+                prices = [*prices, *cc_prices]
             except Exception as e:
                 logger.error(f"CryptoCompare failed for {symbol}: {e}")
 
@@ -332,7 +321,7 @@ class PriceFetcher:
             try:
                 cg_client = CoinGeckoClient()
                 cg_prices = cg_client.get_price_history(symbol, cg_start, end_date, "usd")
-                prices.extend(cg_prices)
+                prices = [*prices, *cg_prices]
             except Exception as e:
                 logger.error(f"CoinGecko failed for {symbol}: {e}")
 
@@ -391,21 +380,16 @@ class PriceFetcher:
         else:
             # Stocks: use yfinance
             try:
-                ticker = yf.Ticker(asset.symbol)
-                history = ticker.history(
-                    start=start_date.isoformat(),
-                    end=(end_date + timedelta(days=1)).isoformat(),
-                )
-
+                client = YFinanceClient()
+                rows = client.get_history_for_range(asset.symbol, start_date, end_date)
                 is_israeli = asset.symbol.endswith(".TA")
+                divisor = Decimal("100") if is_israeli else Decimal("1")
 
-                for idx, row in history.iterrows():
-                    price_date = idx.date()
-                    close_price = row.get("Close")
-                    if close_price is not None and close_price > 0:
-                        if is_israeli:
-                            close_price = close_price / 100
-                        prices_to_insert.append((price_date, Decimal(str(close_price))))
+                prices_to_insert = [
+                    (row.date, Decimal(str(row.close / divisor)))
+                    for row in rows
+                    if row.close is not None and row.close > 0
+                ]
 
             except Exception as e:
                 logger.error(f"yfinance failed for {asset.symbol}: {e}")

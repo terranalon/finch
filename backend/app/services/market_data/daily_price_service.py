@@ -4,7 +4,6 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-import yfinance as yf
 from sqlalchemy.orm import Session
 
 from app.models.asset import Asset
@@ -12,6 +11,7 @@ from app.models.asset_price import AssetPrice
 from app.models.holding import Holding
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
+from app.services.market_data.yfinance_client import YFinanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +69,10 @@ def _store_price(
 class DailyPriceService:
     """Service for refreshing daily asset prices."""
 
-    @staticmethod
-    def refresh_stock_prices(db: Session, target_date: date | None = None) -> dict:
+    def __init__(self, yf_client: YFinanceClient | None = None) -> None:
+        self._yf_client = yf_client or YFinanceClient()
+
+    def refresh_stock_prices(self, db: Session, target_date: date | None = None) -> dict:
         """Fetch and store closing prices for non-crypto assets.
 
         Args:
@@ -97,19 +99,15 @@ class DailyPriceService:
                     skipped += 1
                     continue
 
-                ticker = yf.Ticker(asset.symbol)
-                hist = ticker.history(
-                    start=target_date,
-                    end=target_date + timedelta(days=1),
-                )
+                rows = self._yf_client.get_history_for_range(asset.symbol, target_date, target_date)
 
-                if hist.empty or "Close" not in hist.columns:
+                if not rows:
                     logger.warning("No data for %s on %s", asset.symbol, target_date)
                     failed += 1
                     errors = [*errors, {"symbol": asset.symbol, "error": "No data available"}]
                     continue
 
-                price = Decimal(str(hist["Close"].iloc[0]))
+                price = rows[0].close
 
                 # Convert Israeli stocks from Agorot to ILS
                 if asset.symbol.endswith(".TA"):
@@ -203,21 +201,13 @@ class DailyPriceService:
 
         # Fetch historical prices from the appropriate provider
         symbols = [asset.symbol for asset in assets_needing_prices]
+        crypto_client = CoinGeckoClient() if use_coingecko else CryptoCompareClient()
 
-        if use_coingecko:
-            client = CoinGeckoClient()
-            prices = {
-                symbol: price
-                for symbol in symbols
-                if (price := client.get_historical_price(symbol, target_date)) is not None
-            }
-        else:
-            client = CryptoCompareClient()
-            prices = {
-                symbol: price
-                for symbol in symbols
-                if (price := client.get_historical_price(symbol, target_date)) is not None
-            }
+        prices = {
+            symbol: price
+            for symbol in symbols
+            if (price := crypto_client.get_historical_price(symbol, target_date)) is not None
+        }
 
         if not prices and assets_needing_prices:
             raise RuntimeError(f"{source} API returned no prices - possible API outage")
