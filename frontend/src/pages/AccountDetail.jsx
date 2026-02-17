@@ -768,7 +768,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Failed to unlink account');
+        throw new Error(data.message || 'Failed to unlink account');
       }
 
       // Refresh the page to show updated data
@@ -795,7 +795,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Failed to delete account');
+        throw new Error(data.message || 'Failed to delete account');
       }
 
       // Navigate back to accounts page
@@ -859,7 +859,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
         alert('API credentials removed successfully');
       } else {
         const error = await res.json();
-        alert(`Failed to remove credentials: ${error.detail || 'Unknown error'}`);
+        alert(`Failed to remove credentials: ${error.message || 'Unknown error'}`);
       }
     } catch (err) {
       alert(`Failed to remove credentials: ${err.message}`);
@@ -914,7 +914,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
         alert('Credentials updated successfully');
       } else {
         const error = await res.json();
-        setCredentialsError(error.detail || 'Failed to update credentials');
+        setCredentialsError(error.message || 'Failed to update credentials');
       }
     } catch (err) {
       setCredentialsError(err.message);
@@ -936,7 +936,7 @@ function SettingsSection({ account, brokerConfig, onOpenApiModal, apiCredentials
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.detail || 'Connection test failed');
+        throw new Error(data.message || 'Connection test failed');
       }
 
       setTestResult(data);
@@ -1606,13 +1606,7 @@ export default function AccountDetail() {
         window.location.reload();
       } else {
         const errorData = await res.json();
-        // Handle both string and object error details
-        const detail = errorData.detail;
-        const errorMessage =
-          typeof detail === 'string'
-            ? detail
-            : detail?.message || detail?.error || JSON.stringify(detail);
-        alert(`Import failed: ${errorMessage}`);
+        alert(`Import failed: ${errorData.message || 'Unknown error'}`);
       }
     } catch (err) {
       alert(`Upload failed: ${err.message}`);
@@ -1667,11 +1661,11 @@ export default function AccountDetail() {
       } else {
         const error = await res.json();
         // If no credentials, prompt to connect API
-        if (error.detail?.includes('credentials') || error.detail?.includes('No credentials')) {
+        if (error.message?.includes('credentials') || error.message?.includes('No credentials')) {
           alert('No API credentials found. Please connect your API first.');
           setIsApiModalOpen(true);
         } else {
-          alert(`Sync failed: ${error.detail || 'Unknown error'}`);
+          alert(`Sync failed: ${error.message || 'Unknown error'}`);
         }
       }
     } catch (err) {

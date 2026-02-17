@@ -1,7 +1,7 @@
 """Common response schemas used across the API."""
 
 from datetime import UTC, datetime
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -69,8 +69,19 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error code (e.g., 'NotFound', 'ValidationError')")
     message: str = Field(..., description="Human-readable error message")
     details: list[ErrorDetail] | None = Field(None, description="Additional error details")
+    extra: dict[str, Any] | None = Field(None, description="Structured error-specific data")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     path: str | None = Field(None, description="Request path that caused the error")
+
+
+error_responses: dict[int | str, dict[str, Any]] = {
+    400: {"model": ErrorResponse, "description": "Bad request"},
+    401: {"model": ErrorResponse, "description": "Not authenticated"},
+    403: {"model": ErrorResponse, "description": "Forbidden"},
+    404: {"model": ErrorResponse, "description": "Resource not found"},
+    409: {"model": ErrorResponse, "description": "Conflict"},
+    422: {"model": ErrorResponse, "description": "Validation error"},
+}
 
 
 class MessageResponse(BaseModel):

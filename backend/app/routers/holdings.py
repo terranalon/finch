@@ -2,12 +2,13 @@
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import BadRequestError, NotFoundError
 from app.models import Account, Asset, Holding
 from app.models.user import User
 from app.schemas import Holding as HoldingSchema
@@ -36,7 +37,7 @@ async def list_holdings(
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
     if account_id is not None and account_id not in allowed_account_ids:
-        raise HTTPException(status_code=404, detail="Account not found")
+        raise NotFoundError("Account", account_id)
 
     svc = HoldingService(db)
     items, total = svc.list_holdings(
@@ -62,15 +63,11 @@ async def get_holding(
     """Get a specific holding by ID (must belong to user's accounts)."""
     holding = db.query(Holding).filter(Holding.id == holding_id).first()
     if not holding:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     allowed_account_ids = get_user_account_ids(current_user, db)
     if holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     return holding
 
@@ -84,28 +81,17 @@ async def create_holding(
     """Create a new holding (account must belong to user)."""
     allowed_account_ids = get_user_account_ids(current_user, db)
     if holding_data.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {holding_data.account_id} not found",
-        )
+        raise NotFoundError("Account", holding_data.account_id)
 
     account = db.query(Account).filter(Account.id == holding_data.account_id).first()
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {holding_data.account_id} not found",
-        )
+        raise NotFoundError("Account", holding_data.account_id)
     if not account.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Account {account.name} is not active"
-        )
+        raise BadRequestError(f"Account {account.name} is not active")
 
     asset = db.query(Asset).filter(Asset.id == holding_data.asset_id).first()
     if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Asset with id {holding_data.asset_id} not found",
-        )
+        raise NotFoundError("Asset", holding_data.asset_id)
 
     existing_holding = (
         db.query(Holding)
@@ -115,9 +101,8 @@ async def create_holding(
         .first()
     )
     if existing_holding:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Holding already exists for {asset.symbol} in {account.name}",
+        raise BadRequestError(
+            f"Holding already exists for {asset.symbol} in {account.name}",
         )
 
     new_holding = Holding(**holding_data.model_dump())
@@ -138,15 +123,11 @@ async def update_holding(
     """Update an existing holding (must belong to user's accounts)."""
     holding = db.query(Holding).filter(Holding.id == holding_id).first()
     if not holding:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     allowed_account_ids = get_user_account_ids(current_user, db)
     if holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     update_data = holding_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -170,15 +151,11 @@ async def delete_holding(
     """
     holding = db.query(Holding).filter(Holding.id == holding_id).first()
     if not holding:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     allowed_account_ids = get_user_account_ids(current_user, db)
     if holding.account_id not in allowed_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Holding with id {holding_id} not found"
-        )
+        raise NotFoundError("Holding", holding_id)
 
     db.delete(holding)
     db.commit()

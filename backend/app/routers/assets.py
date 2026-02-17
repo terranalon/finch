@@ -3,11 +3,12 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.exceptions import AppError, BadRequestError, NotFoundError
 from app.models import Asset, AssetPrice, ExchangeRate
 from app.schemas.asset import Asset as AssetSchema
 from app.schemas.asset import AssetCreate, AssetMarketResponse, AssetUpdate
@@ -264,9 +265,7 @@ async def get_asset(asset_id: int, db: Session = Depends(get_db)):
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
-        )
+        raise NotFoundError("Asset", asset_id)
 
     return asset
 
@@ -281,10 +280,7 @@ async def create_asset(asset: AssetCreate, db: Session = Depends(get_db)):
     # Check if asset with same symbol already exists
     existing = db.query(Asset).filter(Asset.symbol == asset.symbol).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Asset with symbol '{asset.symbol}' already exists",
-        )
+        raise BadRequestError(f"Asset with symbol '{asset.symbol}' already exists")
 
     asset_data = asset.model_dump()
 
@@ -329,9 +325,7 @@ async def update_asset(asset_id: int, asset_update: AssetUpdate, db: Session = D
     db_asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not db_asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
-        )
+        raise NotFoundError("Asset", asset_id)
 
     # Update only provided fields
     update_data = asset_update.model_dump(exclude_unset=True)
@@ -349,9 +343,7 @@ async def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     db_asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not db_asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
-        )
+        raise NotFoundError("Asset", asset_id)
 
     db.delete(db_asset)
     db.commit()
@@ -364,9 +356,7 @@ async def toggle_favorite(asset_id: int, db: Session = Depends(get_db)):
     db_asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not db_asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
-        )
+        raise NotFoundError("Asset", asset_id)
 
     db_asset.is_favorite = not db_asset.is_favorite
     db.commit()
@@ -380,20 +370,13 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not asset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset with id {asset_id} not found"
-        )
+        raise NotFoundError("Asset", asset_id)
 
     if not asset.symbol:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset {asset.name} has no symbol"
-        )
+        raise BadRequestError(f"Asset {asset.name} has no symbol")
 
     if not PriceFetcher.update_asset_price(db, asset):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch price for {asset.symbol}",
-        )
+        raise AppError(f"Failed to fetch price for {asset.symbol}")
 
     return {
         "status": "success",

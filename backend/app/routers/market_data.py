@@ -3,11 +3,12 @@
 import logging
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.exceptions import ForbiddenError
 from app.models.user import User
 from app.schemas.market_data import (
     ExchangeRateRefreshResponse,
@@ -31,10 +32,7 @@ def _require_service_account(
 ) -> User:
     """FastAPI dependency that verifies the current user is a service account."""
     if not current_user.is_service_account:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This endpoint requires service account access",
-        )
+        raise ForbiddenError("This endpoint requires service account access")
     return current_user
 
 

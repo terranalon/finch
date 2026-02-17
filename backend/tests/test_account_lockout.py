@@ -50,7 +50,7 @@ class TestAccountLockout:
             json={"identifier": "test@example.com", "password": "WrongPassword"},
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid credentials"
+        assert response.json()["message"] == "Invalid credentials"
 
     @patch("app.routers.auth.EmailService.send_verification_email")
     def test_correct_password_blocked_when_locked(self, mock_send, auth_client):
@@ -221,6 +221,6 @@ class TestTimingAttackPrevention:
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid credentials"
+        assert response.json()["message"] == "Invalid credentials"
         mock_get_dummy.assert_called_once()
         mock_verify.assert_called_once_with("AnyPassword123", "dummy_hash")

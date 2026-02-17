@@ -460,7 +460,7 @@ function PortfolioManagement() {
         await refetchPortfolios();
       } else {
         const result = await response.json();
-        setError(result.detail || `Failed to ${isEditing ? 'update' : 'create'} portfolio`);
+        setError(result.message || `Failed to ${isEditing ? 'update' : 'create'} portfolio`);
       }
     } catch (err) {
       setError(err.message);
@@ -482,7 +482,7 @@ function PortfolioManagement() {
         await refetchPortfolios();
       } else {
         const data = await response.json();
-        setError(data.detail || 'Failed to set default portfolio');
+        setError(data.message || 'Failed to set default portfolio');
       }
     } catch (err) {
       setError(err.message);
@@ -505,7 +505,7 @@ function PortfolioManagement() {
         await refetchPortfolios();
       } else {
         const data = await response.json();
-        setError(data.detail || 'Failed to delete portfolio');
+        setError(data.message || 'Failed to delete portfolio');
       }
     } catch (err) {
       setError(err.message);

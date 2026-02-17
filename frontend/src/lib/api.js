@@ -148,7 +148,7 @@ export async function api(endpoint, options = {}) {
 async function handleResponse(response, defaultError) {
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || defaultError);
+    throw new Error(error.message || defaultError);
   }
   return response.json();
 }
@@ -306,7 +306,7 @@ export async function verifyMfa(tempToken, code, method) {
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'MFA verification failed');
+    throw new Error(error.message || 'MFA verification failed');
   }
 
   const data = await response.json();

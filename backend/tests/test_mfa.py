@@ -104,7 +104,7 @@ class TestTotpConfirm:
         )
 
         assert response.status_code == 400
-        assert "invalid" in response.json()["detail"].lower()
+        assert "invalid" in response.json()["message"].lower()
 
 
 class TestEmailOtpSetup:
@@ -591,7 +591,7 @@ class TestSetPrimaryMethod:
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert response.status_code == 400
-        assert "not enabled" in response.json()["detail"].lower()
+        assert "not enabled" in response.json()["message"].lower()
 
     def test_set_primary_method_no_mfa_fails(self, auth_client):
         """Cannot set primary when no MFA is enabled."""
@@ -691,7 +691,7 @@ class TestSecondMethodVerification:
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert response.status_code == 400
-        assert "verification" in response.json()["detail"].lower()
+        assert "verification" in response.json()["message"].lower()
 
     @patch("app.routers.mfa._verify_totp_code")
     def test_adding_email_with_valid_totp_succeeds(self, mock_verify, auth_client):

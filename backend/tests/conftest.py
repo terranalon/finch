@@ -99,3 +99,35 @@ def auth_client():
         yield test_client, testing_session_local
 
     app.dependency_overrides.clear()
+
+
+def assert_error_response(
+    response,
+    status_code: int,
+    *,
+    error: str | None = None,
+    message_contains: str | None = None,
+) -> dict:
+    """Assert response matches ErrorResponse format and return the body.
+
+    Args:
+        response: TestClient response
+        status_code: Expected HTTP status code
+        error: Expected error code (e.g., "NotFound")
+        message_contains: Substring to find in the message (case-insensitive)
+
+    Returns:
+        The parsed response body for further assertions.
+    """
+    assert response.status_code == status_code
+    body = response.json()
+    assert "error" in body, f"Missing 'error' field in response: {body}"
+    assert "message" in body, f"Missing 'message' field in response: {body}"
+    assert "timestamp" in body, f"Missing 'timestamp' field in response: {body}"
+    if error is not None:
+        assert body["error"] == error, f"Expected error={error}, got {body['error']}"
+    if message_contains is not None:
+        assert message_contains.lower() in body["message"].lower(), (
+            f"Expected '{message_contains}' in message, got: {body['message']}"
+        )
+    return body

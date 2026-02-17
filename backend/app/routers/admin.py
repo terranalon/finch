@@ -2,11 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.admin import get_admin_user
+from app.exceptions import BadRequestError, NotFoundError
 from app.models.email_otp_code import EmailOtpCode
 from app.models.user import User
 from app.models.user_mfa import UserMfa
@@ -39,18 +40,12 @@ def admin_disable_mfa(
     # Find target user
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise NotFoundError("User", user_id)
 
     # Check if user has MFA
     mfa = db.query(UserMfa).filter(UserMfa.user_id == user_id).first()
     if not mfa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User does not have MFA enabled",
-        )
+        raise BadRequestError("User does not have MFA enabled")
 
     # Delete MFA record and related data
     db.delete(mfa)

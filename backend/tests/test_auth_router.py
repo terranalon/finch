@@ -73,7 +73,7 @@ def test_register_duplicate_username(mock_send, auth_client):
         json={"email": "user2@example.com", "username": "taken", "password": "Secure123"},
     )
     assert response.status_code == 400
-    assert "username" in response.json()["detail"].lower()
+    assert "username" in response.json()["message"].lower()
 
 
 @patch("app.routers.auth.EmailService.send_verification_email")

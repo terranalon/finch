@@ -4,12 +4,13 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.exceptions import BadRequestError, ForbiddenError, UnauthorizedError
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.portfolio import Portfolio
@@ -78,19 +79,13 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     # Check if email already exists
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
+        raise BadRequestError("Email already registered")
 
     # Check if username already taken (case-insensitive)
     user_repo = UserRepository(db)
     existing_username = user_repo.find_by_username(data.username)
     if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken",
-        )
+        raise BadRequestError("Username already taken")
 
     # Create user with email_verified=False
     user = User(
@@ -148,10 +143,7 @@ def _check_account_lockout(user: User, db: Session, ip_address: str | None, user
             )
             db.commit()
             # Return same error as invalid credentials to prevent email enumeration
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-            )
+            raise UnauthorizedError("Invalid credentials")
 
 
 def _record_failed_login(
@@ -211,10 +203,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
             details={"identifier": data.identifier, "reason": "user_not_found"},
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        raise UnauthorizedError("Invalid credentials")
 
     # Check if account is locked
     _check_account_lockout(user, db, ip_address, user_agent)
@@ -222,10 +211,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     # Verify password
     if not user.password_hash or not AuthService.verify_password(data.password, user.password_hash):
         _record_failed_login(user, db, ip_address, user_agent, "invalid_password")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        raise UnauthorizedError("Invalid credentials")
 
     # Password correct - clear any failed login attempts
     _clear_failed_attempts(user)
@@ -240,10 +226,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
             user_agent=user_agent,
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled",
-        )
+        raise ForbiddenError("Account is disabled")
 
     # Check if email is verified (service accounts bypass this check)
     if not user.email_verified and not user.is_service_account:
@@ -255,10 +238,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
             user_agent=user_agent,
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="email_not_verified",
-        )
+        raise ForbiddenError("email_not_verified")
 
     # Check if MFA is enabled
     mfa = db.query(UserMfa).filter(UserMfa.user_id == user.id).first()
@@ -315,28 +295,19 @@ def refresh_tokens(data: TokenRefresh, db: Session = Depends(get_db)) -> dict:
     # Decode refresh token
     payload = AuthService.decode_access_token(data.refresh_token)
     if not payload or payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        )
+        raise UnauthorizedError("Invalid refresh token")
 
     user_id = payload["sub"]
 
     # Find user
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-        )
+        raise UnauthorizedError("User not found or inactive")
 
     # Verify refresh token exists in sessions (not revoked)
     valid_session = _find_valid_session(db, user_id, data.refresh_token)
     if not valid_session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found or revoked",
-        )
+        raise UnauthorizedError("Refresh token not found or revoked")
 
     # Revoke old session
     valid_session.is_revoked = True
@@ -390,10 +361,7 @@ def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)) -> dic
         .first()
     )
     if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
-        )
+        raise BadRequestError("Invalid or expired verification token")
 
     # Mark token as used and verify user
     verification.used_at = datetime.now(UTC)
@@ -455,10 +423,7 @@ def change_password(
     if not current_user.password_hash or not AuthService.verify_password(
         data.current_password, current_user.password_hash
     ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Current password is incorrect",
-        )
+        raise UnauthorizedError("Current password is incorrect")
 
     # Update password
     current_user.password_hash = AuthService.hash_password(data.new_password)
@@ -536,10 +501,7 @@ def reset_password(
     )
 
     if not reset_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
-        )
+        raise BadRequestError("Invalid or expired reset token")
 
     # Update password
     reset_token.user.password_hash = AuthService.hash_password(data.new_password)
@@ -585,10 +547,7 @@ def update_me(
         user_repo = UserRepository(db)
         existing = user_repo.find_by_username(update_data["username"])
         if existing and existing.id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken",
-            )
+            raise BadRequestError("Username already taken")
 
     for field, value in update_data.items():
         setattr(current_user, field, value)

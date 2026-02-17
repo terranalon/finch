@@ -84,7 +84,7 @@ class TestLoginEmailVerification:
             json={"identifier": "unverified@example.com", "password": "Secure123"},
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "email_not_verified"
+        assert response.json()["message"] == "email_not_verified"
 
     @patch("app.routers.auth.EmailService.send_verification_email")
     def test_login_success_after_verification(self, mock_send, auth_client):

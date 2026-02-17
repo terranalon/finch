@@ -4,18 +4,19 @@ from dataclasses import asdict
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
+from app.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.models import Account
 from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.account import Account as AccountSchema
 from app.schemas.account import AccountCreate, AccountUpdate
-from app.schemas.common import PaginatedResponse
+from app.schemas.common import PaginatedResponse, error_responses
 from app.schemas.holding import ReconstructionStatsResponse
 from app.services.portfolio.holding_service import HoldingService
 from app.services.portfolio.portfolio_reconstruction_service import PortfolioReconstructionService
@@ -26,25 +27,19 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
 def raise_duplicate_account_name(account_name: str, portfolio_name: str) -> None:
-    """Raise HTTP 409 when an account name already exists in a portfolio."""
-    raise HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail=(
-            f"An account named '{account_name}' already exists in portfolio "
-            f"'{portfolio_name}'. Rename one of the accounts if you want both "
-            f"in the same portfolio."
-        ),
+    """Raise ConflictError when an account name already exists in a portfolio."""
+    raise ConflictError(
+        f"An account named '{account_name}' already exists in portfolio "
+        f"'{portfolio_name}'. Rename one of the accounts if you want both "
+        f"in the same portfolio."
     )
 
 
 def verify_account_ownership(account_id: int, current_user: User, db: Session) -> None:
-    """Raise HTTP 404 if account_id does not belong to the current user."""
+    """Raise NotFoundError if account_id does not belong to the current user."""
     allowed_ids = get_user_account_ids(current_user, db)
     if account_id not in allowed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
 
 
 @router.get("", response_model=PaginatedResponse[AccountSchema])
@@ -81,7 +76,7 @@ async def list_accounts(
     )
 
 
-@router.get("/{account_id}", response_model=AccountSchema)
+@router.get("/{account_id}", response_model=AccountSchema, responses={404: error_responses[404]})
 async def get_account(
     account_id: int,
     db: Session = Depends(get_db),
@@ -94,7 +89,12 @@ async def get_account(
     return account
 
 
-@router.post("", response_model=AccountSchema, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AccountSchema,
+    status_code=201,
+    responses={409: error_responses[409]},
+)
 async def create_account(
     account: AccountCreate,
     db: Session = Depends(get_db),
@@ -105,9 +105,8 @@ async def create_account(
     user_portfolio_ids = {p.id for p in current_user.portfolios}
     invalid_ids = set(account.portfolio_ids) - user_portfolio_ids
     if invalid_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Portfolio {next(iter(invalid_ids))} not found or doesn't belong to you",
+        raise ForbiddenError(
+            f"Portfolio {next(iter(invalid_ids))} not found or doesn't belong to you"
         )
 
     # Fetch target portfolios (reused for both duplicate check and linking)
@@ -131,7 +130,11 @@ async def create_account(
     return db_account
 
 
-@router.put("/{account_id}", response_model=AccountSchema)
+@router.put(
+    "/{account_id}",
+    response_model=AccountSchema,
+    responses={404: error_responses[404], 409: error_responses[409]},
+)
 async def update_account(
     account_id: int,
     account_update: AccountUpdate,
@@ -143,10 +146,7 @@ async def update_account(
 
     db_account = db.query(Account).filter(Account.id == account_id).first()
     if not db_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account with id {account_id} not found",
-        )
+        raise NotFoundError("Account", account_id)
 
     update_data = account_update.model_dump(exclude_unset=True)
     if "name" in update_data:
@@ -165,7 +165,7 @@ async def update_account(
     return db_account
 
 
-@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{account_id}", status_code=204)
 async def delete_account(
     account_id: int,
     db: Session = Depends(get_db),
@@ -234,21 +234,18 @@ async def backfill_historical_snapshots(
         end_date = date.today()
 
     if start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="start_date must be before end_date"
-        )
+        raise BadRequestError("start_date must be before end_date")
 
     total_days = (end_date - start_date).days + 1
 
     if total_days > 730:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Date range too large ({total_days} days). Maximum is 730 days (2 years).",
+        raise BadRequestError(
+            f"Date range too large ({total_days} days). Maximum is 730 days (2 years)."
         )
 
     try:
         stats = SnapshotService(db).backfill_historical_snapshots(account_id, start_date, end_date)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError:
+        raise NotFoundError("Account", account_id)
 
     return {"status": "completed", "message": "Backfill completed successfully", **stats}

@@ -4,12 +4,13 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import get_current_user
+from app.exceptions import BadRequestError, UnauthorizedError
 from app.models.email_otp_code import EmailOtpCode
 from app.models.mfa_temp_session import MfaTempSession
 from app.models.session import Session as UserSession
@@ -84,10 +85,7 @@ def _get_mfa_or_raise(db: Session, user_id: str) -> UserMfa:
     """Get MFA record or raise 400 if not enabled."""
     mfa = db.query(UserMfa).filter(UserMfa.user_id == user_id).first()
     if not mfa:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled",
-        )
+        raise BadRequestError("MFA is not enabled")
     return mfa
 
 
@@ -167,15 +165,9 @@ def set_primary_method(
     mfa = _get_mfa_or_raise(db, current_user.id)
 
     if data.method == "totp" and not mfa.totp_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="TOTP is not enabled",
-        )
+        raise BadRequestError("TOTP is not enabled")
     if data.method == "email" and not mfa.email_otp_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email OTP is not enabled",
-        )
+        raise BadRequestError("Email OTP is not enabled")
 
     mfa.primary_method = data.method
     db.commit()
@@ -193,10 +185,7 @@ def disable_mfa_method(
 ) -> dict:
     """Disable a specific MFA method (totp or email)."""
     if method not in ("totp", "email"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid method. Must be 'totp' or 'email'",
-        )
+        raise BadRequestError("Invalid method. Must be 'totp' or 'email'")
 
     mfa = _get_mfa_or_raise(db, current_user.id)
 
@@ -209,26 +198,17 @@ def disable_mfa_method(
             details={"action": "disable_method", "method": method},
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid MFA code or recovery code",
-        )
+        raise UnauthorizedError("Invalid MFA code or recovery code")
 
     # Disable the specific method
     if method == "totp":
         if not mfa.totp_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="TOTP is not enabled",
-            )
+            raise BadRequestError("TOTP is not enabled")
         mfa.totp_enabled = False
         mfa.totp_secret_encrypted = None
     else:  # email
         if not mfa.email_otp_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email OTP is not enabled",
-            )
+            raise BadRequestError("Email OTP is not enabled")
         mfa.email_otp_enabled = False
         # Clean up any pending email OTP codes
         db.query(EmailOtpCode).filter(EmailOtpCode.user_id == current_user.id).delete()
@@ -294,23 +274,14 @@ def confirm_totp(
     # If email OTP is already enabled, require verification
     if mfa and mfa.email_otp_enabled:
         if not data.verification_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Verification code required. Check your email for the code.",
-            )
+            raise BadRequestError("Verification code required. Check your email for the code.")
         # Verify the email OTP code
         if not _verify_email_otp_code(db, current_user.id, mfa, data.verification_code):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email verification code",
-            )
+            raise UnauthorizedError("Invalid email verification code")
 
     # Verify the TOTP code against the provided secret
     if not MfaService.verify_totp(data.secret, data.code):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid TOTP code",
-        )
+        raise BadRequestError("Invalid TOTP code")
 
     # Get or create MFA record
     if not mfa:
@@ -355,24 +326,15 @@ def setup_email_otp(
 
     # Check if email OTP is already enabled
     if mfa and mfa.email_otp_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email OTP is already enabled",
-        )
+        raise BadRequestError("Email OTP is already enabled")
 
     # If TOTP is already enabled, require verification
     if mfa and mfa.totp_enabled:
         if not data or not data.verification_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Verification code required. Enter your authenticator code.",
-            )
+            raise BadRequestError("Verification code required. Enter your authenticator code.")
         # Verify the TOTP code
         if not _verify_totp_code(mfa, data.verification_code):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid verification code",
-            )
+            raise UnauthorizedError("Invalid verification code")
 
     # Get or create MFA record
     if not mfa:
@@ -416,10 +378,7 @@ def send_verification_code(
     mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
 
     if not mfa or not mfa.email_otp_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email OTP is not enabled",
-        )
+        raise BadRequestError("Email OTP is not enabled")
 
     # Invalidate existing email OTP codes
     db.query(EmailOtpCode).filter(
@@ -466,10 +425,7 @@ def disable_mfa(
             details={"action": "disable_all"},
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid MFA code or recovery code",
-        )
+        raise UnauthorizedError("Invalid MFA code or recovery code")
 
     # Delete MFA record, recovery codes, and pending email OTP codes
     _cleanup_all_mfa(db, current_user.id, mfa)
@@ -494,16 +450,10 @@ def regenerate_recovery_codes(
     """Regenerate recovery codes. Requires TOTP verification."""
     mfa = db.query(UserMfa).filter(UserMfa.user_id == current_user.id).first()
     if not mfa or not (mfa.totp_enabled or mfa.email_otp_enabled):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="MFA is not enabled",
-        )
+        raise BadRequestError("MFA is not enabled")
 
     if not _verify_totp_code(mfa, data.mfa_code):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid MFA code",
-        )
+        raise UnauthorizedError("Invalid MFA code")
 
     recovery_codes = _generate_and_store_recovery_codes(db, current_user.id)
     db.commit()
@@ -525,10 +475,7 @@ def send_email_otp_code(
     mfa = db.query(UserMfa).filter(UserMfa.user_id == user.id).first()
 
     if not mfa or not mfa.email_otp_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email OTP is not enabled for this user",
-        )
+        raise BadRequestError("Email OTP is not enabled for this user")
 
     # Invalidate existing email OTP codes
     db.query(EmailOtpCode).filter(
@@ -567,10 +514,7 @@ def _validate_temp_session(db: Session, temp_token: str) -> MfaTempSession:
     )
 
     if not temp_session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired temporary session",
-        )
+        raise UnauthorizedError("Invalid or expired temporary session")
 
     return temp_session
 
@@ -628,10 +572,7 @@ def verify_mfa(
             db, SecurityEventType.MFA_FAILED, user_id=user.id, details={"method": data.method}
         )
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid MFA code",
-        )
+        raise UnauthorizedError("Invalid MFA code")
 
     # Mark temp session as used
     temp_session.used_at = datetime.now(UTC)

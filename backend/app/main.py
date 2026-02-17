@@ -3,11 +3,19 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi import HTTPException as FastAPIHTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.dependencies.error_handlers import (
+    app_error_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+from app.exceptions import AppError
 from app.rate_limiter import limiter
 
 # Configure logging
@@ -30,6 +38,9 @@ app = FastAPI(
 # Add rate limiter to app state and exception handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty: ignore[invalid-argument-type] — FastAPI exception handler signature
+app.add_exception_handler(AppError, app_error_handler)  # ty: ignore[invalid-argument-type]
+app.add_exception_handler(FastAPIHTTPException, http_exception_handler)  # ty: ignore[invalid-argument-type]
+app.add_exception_handler(RequestValidationError, validation_exception_handler)  # ty: ignore[invalid-argument-type]
 
 # Configure CORS
 app.add_middleware(
