@@ -124,7 +124,7 @@ class YFinanceClient:
         YFinanceClient._last_request_time = time.time()
 
     @staticmethod
-    def _safe_volume(value: object) -> Decimal:
+    def _safe_volume(value: int | float) -> Decimal:
         """Convert a volume value to Decimal, treating NaN as zero."""
         if isinstance(value, float) and math.isnan(value):
             return Decimal(0)
@@ -140,7 +140,7 @@ class YFinanceClient:
                 continue
             rows.append(
                 OHLCVRow(
-                    date=idx.date(),
+                    date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
                     open=Decimal(str(row.get("Open", 0))),
                     high=Decimal(str(row.get("High", 0))),
                     low=Decimal(str(row.get("Low", 0))),

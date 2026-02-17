@@ -496,8 +496,10 @@ class TestGetBatchPricesThreaded:
 
         assert len(result) == 2
         assert all(isinstance(v, OHLCVRow) for v in result.values())
-        assert result["AAPL"].close == Decimal("153.0")
-        assert result["MSFT"].close == Decimal("153.0")
+        aapl = result["AAPL"]
+        msft = result["MSFT"]
+        assert aapl is not None and aapl.close == Decimal("153.0")
+        assert msft is not None and msft.close == Decimal("153.0")
 
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_returns_none_for_failed_tickers(self, mock_ticker_cls):
