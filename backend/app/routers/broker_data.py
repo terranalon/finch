@@ -137,15 +137,6 @@ class UploadResponse(StatusResponse):
     stats: dict  # transactions, etc.
 
 
-class ConflictResponse(BaseModel):
-    """Response model for overlap conflict."""
-
-    error: str
-    broker_type: str
-    message: str
-    conflicting_source: dict
-
-
 class OverlapWarning(BaseModel):
     """Response model for overlap warning details."""
 
