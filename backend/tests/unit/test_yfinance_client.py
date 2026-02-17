@@ -385,6 +385,42 @@ class TestGetCurrentPriceFallbacks:
         assert result is None
 
 
+class TestDataframeToOhlcvRows:
+    def test_skips_rows_with_nan_close(self):
+        """Rows where Close is NaN should be filtered out entirely."""
+
+        df = pd.DataFrame(
+            {
+                "Open": [150.0, float("nan")],
+                "High": [155.0, float("nan")],
+                "Low": [149.0, float("nan")],
+                "Close": [153.0, float("nan")],
+                "Volume": [1000000, float("nan")],
+            },
+            index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
+        )
+        rows = YFinanceClient._dataframe_to_ohlcv_rows(df)
+        assert len(rows) == 1
+        assert rows[0].close == Decimal("153.0")
+
+    def test_handles_nan_volume_with_valid_close(self):
+        """NaN volume should become 0 when close is valid."""
+        df = pd.DataFrame(
+            {
+                "Open": [150.0],
+                "High": [155.0],
+                "Low": [149.0],
+                "Close": [153.0],
+                "Volume": [float("nan")],
+            },
+            index=pd.to_datetime(["2024-01-02"]),
+        )
+        rows = YFinanceClient._dataframe_to_ohlcv_rows(df)
+        assert len(rows) == 1
+        assert rows[0].volume == Decimal("0")
+        assert rows[0].close == Decimal("153.0")
+
+
 def _single_ticker_df(
     close: float = 153.0,
     dt: str = "2024-01-02",
@@ -517,6 +553,32 @@ class TestGetBatchPricesDownload:
         assert result["BAD"] is None
 
     @patch("app.services.market_data.yfinance_client.yf.download")
+    def test_handles_nan_columns_for_failed_ticker(self, mock_download):
+        """Should return None for tickers with NaN data in MultiIndex DataFrame."""
+        # Simulate yf.download() output: valid AAPL + NaN-filled BAD
+        valid_df = _multi_ticker_df({"AAPL": 153.0})
+        idx = pd.to_datetime(["2024-01-02"])
+        nan_df = pd.DataFrame(
+            {
+                "Open": [float("nan")],
+                "High": [float("nan")],
+                "Low": [float("nan")],
+                "Close": [float("nan")],
+                "Volume": [float("nan")],
+            },
+            index=idx,
+        )
+        combined = pd.concat({"AAPL": valid_df["AAPL"], "BAD": nan_df}, axis=1)
+        mock_download.return_value = combined
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_download(["AAPL", "BAD"])
+
+        assert isinstance(result["AAPL"], OHLCVRow)
+        assert result["AAPL"].close == Decimal("153.0")
+        assert result["BAD"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.download")
     def test_chunks_large_symbol_lists(self, mock_download):
         """Should call yf.download multiple times for lists > chunk_size."""
         mock_download.return_value = pd.DataFrame()
@@ -600,6 +662,7 @@ class TestGetBatchPricesThreaded:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
     def test_concurrent_execution(self, mock_ticker_cls):
         """Should execute faster than sequential for many tickers."""
+
         # Each call takes ~10ms
         def slow_history(**kwargs):
             time.sleep(0.01)

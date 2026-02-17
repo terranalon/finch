@@ -6,6 +6,7 @@ but follows similar patterns for error handling and caching.
 """
 
 import logging
+import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -132,10 +133,11 @@ class YFinanceClient:
                 high=Decimal(str(row.get("High", 0))),
                 low=Decimal(str(row.get("Low", 0))),
                 close=Decimal(str(close)),
-                volume=Decimal(str(int(row.get("Volume", 0)))),
+                volume=Decimal(str(int(0 if math.isnan(v := row.get("Volume", 0)) else v))),
             )
             for idx, row in df.iterrows()
             if (close := row.get("Close")) is not None
+            and not (isinstance(close, float) and math.isnan(close))
         ]
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
@@ -431,7 +433,7 @@ class YFinanceClient:
 
                         rows = self._dataframe_to_ohlcv_rows(sym_df)
                         result[sym] = rows[-1] if rows else None
-                    except (KeyError, TypeError):
+                    except (KeyError, TypeError, ValueError):
                         result[sym] = None
 
             except Exception:
