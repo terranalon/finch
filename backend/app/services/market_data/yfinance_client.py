@@ -402,6 +402,7 @@ class YFinanceClient:
         symbols: list[str],
         *,
         period: str = "1d",
+        target_date: date | None = None,
         max_workers: int = 16,
         rate: float = 15.0,
     ) -> dict[str, OHLCVRow | None]:
@@ -409,7 +410,8 @@ class YFinanceClient:
 
         Args:
             symbols: List of ticker symbols
-            period: yfinance period string (default "1d")
+            period: yfinance period string (default "1d"), ignored if target_date set
+            target_date: Fetch data for a specific date instead of using period
             max_workers: Thread pool size
             rate: Max requests per second
 
@@ -425,7 +427,13 @@ class YFinanceClient:
             try:
                 bucket.acquire()
                 ticker = yf.Ticker(symbol)
-                history = ticker.history(period=period)
+                if target_date is not None:
+                    history = ticker.history(
+                        start=target_date.isoformat(),
+                        end=(target_date + timedelta(days=1)).isoformat(),
+                    )
+                else:
+                    history = ticker.history(period=period)
                 if history.empty:
                     return symbol, None
                 rows = self._dataframe_to_ohlcv_rows(history)
