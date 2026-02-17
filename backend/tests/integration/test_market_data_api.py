@@ -8,6 +8,7 @@ import pytest
 
 from app.models import User
 from app.services.auth.auth_service import AuthService
+from app.services.market_data.yfinance_client import OHLCVRow
 
 
 @pytest.fixture
@@ -111,10 +112,19 @@ class TestStockPriceRefresh:
     @patch("app.services.market_data.daily_price_service.YFinanceClient")
     def test_refresh_success(self, mock_client_cls, service_client):
         """Service account can refresh stock prices."""
-        mock_client = mock_client_cls.return_value
-        mock_client.get_history_for_range.return_value = []
-
         yesterday = date.today() - timedelta(days=1)
+        mock_client = mock_client_cls.return_value
+        mock_client.get_history_for_range.return_value = [
+            OHLCVRow(
+                date=yesterday,
+                open=Decimal("150.0"),
+                high=Decimal("155.0"),
+                low=Decimal("149.0"),
+                close=Decimal("153.0"),
+                volume=Decimal("1000000"),
+            )
+        ]
+
         response = service_client.post(
             "/api/market-data/stock-prices/refresh",
             params={"target_date": str(yesterday)},
