@@ -92,24 +92,39 @@ class DailyPriceService:
 
         assets = _get_active_assets(db, is_crypto=False)
 
+        # Pre-filter: separate assets that already have prices
+        assets_needing_prices: list[Asset] = []
         for asset in assets:
+            if _price_exists(db, asset.id, target_date):
+                logger.info("Price for %s already exists for %s", asset.symbol, target_date)
+                skipped += 1
+            else:
+                assets_needing_prices.append(asset)
+
+        if not assets_needing_prices:
+            return {
+                "date": target_date,
+                "updated": 0,
+                "skipped": skipped,
+                "failed": 0,
+                "source": "yfinance",
+                "errors": [],
+            }
+
+        # Batch fetch all needed prices in one threaded call
+        symbols = [a.symbol for a in assets_needing_prices]
+        batch_results = self._yf_client.get_batch_prices_threaded(symbols, target_date=target_date)
+
+        for asset in assets_needing_prices:
             try:
-                if _price_exists(db, asset.id, target_date):
-                    logger.info("Price for %s already exists for %s", asset.symbol, target_date)
-                    skipped += 1
-                    continue
-
-                rows = self._yf_client.get_history_for_range(asset.symbol, target_date, target_date)
-
-                if not rows:
+                row = batch_results.get(asset.symbol)
+                if row is None:
                     logger.warning("No data for %s on %s", asset.symbol, target_date)
                     failed += 1
                     errors = [*errors, {"symbol": asset.symbol, "error": "No data available"}]
                     continue
 
-                price = rows[0].close
-
-                # Convert Israeli stocks from Agorot to ILS
+                price = row.close
                 if asset.symbol.endswith(".TA"):
                     price = price / AGOROT_DIVISOR
 
@@ -122,14 +137,13 @@ class DailyPriceService:
                     source="Yahoo Finance",
                 )
                 db.commit()
-
                 logger.info("Updated %s: %s", asset.symbol, price)
                 updated += 1
 
             except Exception:
-                logger.exception("Failed to fetch %s", asset.symbol)
+                logger.exception("Failed to store %s", asset.symbol)
                 failed += 1
-                errors = [*errors, {"symbol": asset.symbol, "error": "Fetch failed"}]
+                errors = [*errors, {"symbol": asset.symbol, "error": "Store failed"}]
                 db.rollback()
 
         return {
@@ -186,7 +200,7 @@ class DailyPriceService:
                 logger.info("Price for %s already exists for %s", asset.symbol, target_date)
                 skipped += 1
             else:
-                assets_needing_prices = [*assets_needing_prices, asset]
+                assets_needing_prices.append(asset)
 
         if not assets_needing_prices:
             logger.info("All crypto prices already up to date")
