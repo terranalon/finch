@@ -35,8 +35,13 @@ class AssetDetailService:
             else None
         )
 
-        # Extract column data only (skip ORM relationships to avoid
-        # Pydantic validating InstrumentedList as DailyMetricsResponse)
-        asset_data = {col.key: getattr(asset, col.key) for col in Asset.__table__.columns}
+        # Fetch only the fields AssetDetailResponse declares, using Python attribute
+        # names (avoids __table__.columns col.key returning DB column names for
+        # aliased columns like meta_data -> "metadata")
+        asset_data = {
+            field: getattr(asset, field)
+            for field in AssetDetailResponse.model_fields
+            if field != "daily_metrics"
+        }
         asset_data["daily_metrics"] = metrics_response
         return AssetDetailResponse(**asset_data)

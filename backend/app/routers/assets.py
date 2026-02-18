@@ -267,7 +267,7 @@ async def list_favorites(db: Session = Depends(get_db)):
 async def get_asset_detail(
     asset_id: int,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> AssetDetailResponse:
     """Get comprehensive asset detail including latest daily metrics."""
     return AssetDetailService.get_asset_detail(db, asset_id=asset_id)
