@@ -70,6 +70,46 @@ class OHLCVRow:
     volume: Decimal
 
 
+@dataclass
+class TickerMarketData:
+    """Rich ticker data from ticker.info for intraday enrichment."""
+
+    symbol: str
+    price: Decimal | None
+    # OHLCV
+    open: Decimal | None
+    high: Decimal | None
+    low: Decimal | None
+    close: Decimal | None
+    volume: int | None
+    # Daily fundamentals
+    market_cap: Decimal | None
+    pe_ratio: Decimal | None
+    forward_pe: Decimal | None
+    eps: Decimal | None
+    dividend_rate: Decimal | None
+    dividend_yield: Decimal | None
+    payout_ratio: Decimal | None
+    # Slow-changing (stocks)
+    description: str | None
+    exchange: str | None
+    website: str | None
+    ceo: str | None
+    employees: int | None
+    beta: Decimal | None
+    avg_volume: int | None
+    earnings_date: date | None
+    ex_dividend_date: date | None
+    target_est: Decimal | None
+    week_52_high: Decimal | None
+    week_52_low: Decimal | None
+    peg_ratio: Decimal | None
+    # ETF-specific
+    expense_ratio: Decimal | None
+    fund_family: str | None
+    nav: Decimal | None
+
+
 class _TokenBucket:
     """Thread-safe token bucket rate limiter."""
 
@@ -445,6 +485,88 @@ class YFinanceClient:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
             return dict(f.result() for f in as_completed(futures))
+
+    @staticmethod
+    def _safe_decimal(info: dict[str, Any], key: str) -> Decimal | None:
+        """Extract a Decimal from info dict, handling None and NaN."""
+        val = info.get(key)
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return None
+        return Decimal(str(val))
+
+    @staticmethod
+    def _safe_int(info: dict[str, Any], key: str) -> int | None:
+        """Extract an int from info dict, handling None."""
+        val = info.get(key)
+        if val is None:
+            return None
+        return int(val)
+
+    @staticmethod
+    def _extract_ceo(info: dict[str, Any]) -> str | None:
+        """Extract CEO name from companyOfficers list."""
+        for officer in info.get("companyOfficers", []):
+            title = (officer.get("title") or "").lower()
+            if "chief executive" in title or title == "ceo":
+                return officer.get("name")
+        return None
+
+    @staticmethod
+    def _parse_epoch_date(info: dict[str, Any], key: str) -> date | None:
+        """Parse a Unix epoch timestamp to date, returning None on failure."""
+        val = info.get(key)
+        if val is None or val == 0:
+            return None
+        try:
+            return datetime.fromtimestamp(val).date()
+        except (OSError, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_ticker_info(symbol: str, info: dict[str, Any]) -> TickerMarketData | None:
+        """Parse raw ticker.info dict into TickerMarketData.
+
+        Returns None if no valid price found (symbol invalid/delisted).
+        """
+        price = YFinanceClient._safe_decimal(info, "regularMarketPrice")
+        if price is None:
+            return None
+
+        _dec = YFinanceClient._safe_decimal
+        _int = YFinanceClient._safe_int
+
+        return TickerMarketData(
+            symbol=symbol,
+            price=price,
+            open=_dec(info, "regularMarketOpen"),
+            high=_dec(info, "regularMarketDayHigh"),
+            low=_dec(info, "regularMarketDayLow"),
+            close=price,
+            volume=_int(info, "regularMarketVolume"),
+            market_cap=_dec(info, "marketCap"),
+            pe_ratio=_dec(info, "trailingPE"),
+            forward_pe=_dec(info, "forwardPE"),
+            eps=_dec(info, "trailingEps"),
+            dividend_rate=_dec(info, "dividendRate"),
+            dividend_yield=_dec(info, "dividendYield"),
+            payout_ratio=_dec(info, "payoutRatio"),
+            description=info.get("longBusinessSummary"),
+            exchange=info.get("exchange"),
+            website=info.get("website"),
+            ceo=YFinanceClient._extract_ceo(info),
+            employees=_int(info, "fullTimeEmployees"),
+            beta=_dec(info, "beta"),
+            avg_volume=_int(info, "averageVolume"),
+            earnings_date=YFinanceClient._parse_epoch_date(info, "earningsDate"),
+            ex_dividend_date=YFinanceClient._parse_epoch_date(info, "exDividendDate"),
+            target_est=_dec(info, "targetMeanPrice"),
+            week_52_high=_dec(info, "fiftyTwoWeekHigh"),
+            week_52_low=_dec(info, "fiftyTwoWeekLow"),
+            peg_ratio=_dec(info, "pegRatio"),
+            expense_ratio=_dec(info, "annualReportExpenseRatio"),
+            fund_family=info.get("fundFamily"),
+            nav=_dec(info, "navPrice"),
+        )
 
     def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
         """Fetch ticker info for multiple symbols with dedup and rate limiting.
