@@ -259,6 +259,7 @@ class PriceFetcher:
         """Fetch market data from CoinGecko and update prices + metrics + slow fields."""
         crypto_symbols = [a.symbol for a in assets]
         logger.info("Batch fetching market data for %d crypto assets", len(crypto_symbols))
+        processed_before = stats["updated"] + stats["failed"]
 
         try:
             client = _get_coingecko_client()
@@ -309,7 +310,8 @@ class PriceFetcher:
             db.commit()
         except Exception as e:
             logger.error("Error batch fetching crypto market data: %s", e)
-            stats["failed"] += len(assets)
+            already_counted = (stats["updated"] + stats["failed"]) - processed_before
+            stats["failed"] += len(assets) - already_counted
 
     @staticmethod
     def update_all_asset_prices(db: Session, asset_class: str | None = None) -> dict[str, int]:

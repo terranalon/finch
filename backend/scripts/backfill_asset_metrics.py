@@ -14,6 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sqlalchemy.orm import Session  # noqa: E402
+
 from app.database import SessionLocal  # noqa: E402
 from app.models import Asset  # noqa: E402
 from app.services.asset_metrics_service import AssetMetricsService  # noqa: E402
@@ -26,7 +28,7 @@ logger = logging.getLogger(__name__)
 _AGOROT_DIVISOR = Decimal("100")
 
 
-def backfill_stocks(db, assets: list[Asset]) -> dict[str, int]:
+def backfill_stocks(db: Session, assets: list[Asset]) -> dict[str, int]:
     """Backfill stock/ETF assets using ticker.info."""
     stats: dict[str, int] = {"updated": 0, "failed": 0}
     if not assets:
@@ -97,7 +99,7 @@ def backfill_stocks(db, assets: list[Asset]) -> dict[str, int]:
     return stats
 
 
-def backfill_crypto(db, assets: list[Asset]) -> dict[str, int]:
+def backfill_crypto(db: Session, assets: list[Asset]) -> dict[str, int]:
     """Backfill crypto assets using CoinGecko /coins/markets."""
     stats: dict[str, int] = {"updated": 0, "failed": 0}
     if not assets:
