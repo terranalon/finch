@@ -7,6 +7,7 @@ but follows similar patterns for error handling and caching.
 
 import logging
 import math
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -72,15 +73,16 @@ class OHLCVRow:
 class _TokenBucket:
     """Thread-safe token bucket rate limiter."""
 
-    def __init__(self, rate: float, capacity: int) -> None:
+    def __init__(self, rate: float, capacity: int, jitter: float = 0.0) -> None:
         self._rate = rate  # tokens per second
         self._capacity = capacity
         self._tokens = float(capacity)
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
+        self._jitter = jitter
 
     def acquire(self) -> None:
-        """Block until a token is available."""
+        """Block until a token is available, then optionally sleep for jitter."""
         while True:
             with self._lock:
                 now = time.monotonic()
@@ -91,8 +93,10 @@ class _TokenBucket:
                 self._last_refill = now
                 if self._tokens >= 1.0:
                     self._tokens -= 1.0
-                    return
+                    break
             time.sleep(1.0 / self._rate)
+        if self._jitter > 0:
+            time.sleep(random.uniform(0, self._jitter))
 
 
 class YFinanceClient:
@@ -398,6 +402,7 @@ class YFinanceClient:
         symbols: list[str],
         *,
         period: str = "1d",
+        target_date: date | None = None,
         max_workers: int = 16,
         rate: float = 15.0,
     ) -> dict[str, OHLCVRow | None]:
@@ -405,7 +410,8 @@ class YFinanceClient:
 
         Args:
             symbols: List of ticker symbols
-            period: yfinance period string (default "1d")
+            period: yfinance period string (default "1d"), ignored if target_date set
+            target_date: Fetch data for a specific date instead of using period
             max_workers: Thread pool size
             rate: Max requests per second
 
@@ -415,13 +421,19 @@ class YFinanceClient:
         if not symbols:
             return {}
 
-        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1))
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1), jitter=1.0 / rate)
 
         def fetch_one(symbol: str) -> tuple[str, OHLCVRow | None]:
             try:
                 bucket.acquire()
                 ticker = yf.Ticker(symbol)
-                history = ticker.history(period=period)
+                if target_date is not None:
+                    history = ticker.history(
+                        start=target_date.isoformat(),
+                        end=(target_date + timedelta(days=1)).isoformat(),
+                    )
+                else:
+                    history = ticker.history(period=period)
                 if history.empty:
                     return symbol, None
                 rows = self._dataframe_to_ohlcv_rows(history)

@@ -82,8 +82,7 @@ class PriceFetcher:
 
     @staticmethod
     def fetch_prices_batch(symbols: list[str]) -> dict[str, tuple[Decimal, datetime]]:
-        """
-        Fetch prices for multiple symbols.
+        """Fetch prices for multiple symbols using batch API.
 
         Args:
             symbols: List of ticker symbols
@@ -91,13 +90,19 @@ class PriceFetcher:
         Returns:
             Dictionary mapping symbol to (price, timestamp) tuples
         """
-        results = {}
-
-        for symbol in symbols:
-            result = PriceFetcher.fetch_price(symbol)
-            if result:
-                results[symbol] = result
-
+        if not symbols:
+            return {}
+        client = YFinanceClient()
+        batch_results = client.get_batch_prices_threaded(symbols)
+        results: dict[str, tuple[Decimal, datetime]] = {}
+        now = datetime.now()
+        for symbol, row in batch_results.items():
+            if row is None:
+                continue
+            price = row.close
+            if symbol.endswith(".TA"):
+                price = price / _AGOROT_DIVISOR
+            results[symbol] = (price, now)
         return results
 
     @staticmethod
@@ -223,13 +228,37 @@ class PriceFetcher:
                 logger.error(f"Error batch fetching crypto prices: {e}")
                 stats["failed"] += len(crypto_assets)
 
-        # Fetch non-crypto prices one by one (Yahoo Finance)
-        for asset in other_assets:
-            success = PriceFetcher.update_asset_price(db, asset)
-            if success:
-                stats["updated"] += 1
-            else:
-                stats["failed"] += 1
+        # Batch fetch non-crypto prices via Yahoo Finance
+        if other_assets:
+            symbols = [a.symbol for a in other_assets]
+            logger.info(f"Batch fetching prices for {len(symbols)} non-crypto assets")
+            processed_before = stats["updated"] + stats["failed"]
+
+            try:
+                yf_client = YFinanceClient()
+                batch_results = yf_client.get_batch_prices_threaded(symbols)
+
+                for asset in other_assets:
+                    row = batch_results.get(asset.symbol)
+                    if row is None:
+                        stats["failed"] += 1
+                        logger.warning("No batch price for %s", asset.symbol)
+                        continue
+
+                    price = row.close
+                    if asset.symbol.endswith(".TA"):
+                        price = price / _AGOROT_DIVISOR
+
+                    asset.last_fetched_price = price
+                    asset.last_fetched_at = datetime.now()
+                    stats["updated"] += 1
+                    logger.debug("Updated price for %s: %s", asset.symbol, price)
+
+                db.commit()
+            except Exception as e:
+                logger.error(f"Error batch fetching non-crypto prices: {e}")
+                already_counted = (stats["updated"] + stats["failed"]) - processed_before
+                stats["failed"] += len(other_assets) - already_counted
 
         logger.info(f"Price update complete: {stats}")
         return stats

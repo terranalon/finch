@@ -484,6 +484,24 @@ class TestTokenBucket:
         elapsed = time.monotonic() - start
         assert elapsed < 0.05  # Should not need to wait
 
+    def test_jitter_calls_random_sleep(self):
+        """acquire() should call random.uniform when jitter is non-zero."""
+        bucket = _TokenBucket(rate=10.0, capacity=10, jitter=0.05)
+        with patch("app.services.market_data.yfinance_client.random.uniform") as mock_uniform:
+            mock_uniform.return_value = 0.0
+            for _ in range(3):
+                bucket.acquire()
+        assert mock_uniform.call_count == 3
+        mock_uniform.assert_called_with(0, 0.05)
+
+    def test_zero_jitter_skips_random_sleep(self):
+        """acquire() should not call random.uniform when jitter is zero."""
+        bucket = _TokenBucket(rate=10.0, capacity=10, jitter=0.0)
+        with patch("app.services.market_data.yfinance_client.random.uniform") as mock_uniform:
+            for _ in range(5):
+                bucket.acquire()
+        mock_uniform.assert_not_called()
+
 
 class TestGetBatchPricesThreaded:
     @patch("app.services.market_data.yfinance_client.yf.Ticker")
@@ -549,3 +567,53 @@ class TestGetBatchPricesThreaded:
         # Sequential would take 20 * 0.01 = 0.2s minimum
         # Concurrent with 16 workers should be much faster
         assert elapsed < 0.15
+
+
+class TestGetBatchPricesThreadedTargetDate:
+    """Tests for get_batch_prices_threaded with target_date parameter."""
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_ohlcv_for_target_date(self, mock_ticker_cls):
+        """Should fetch history for specific date range when target_date is set."""
+        mock_ticker_cls.return_value.history.return_value = _single_ticker_df(
+            close=153.0, dt="2024-01-15"
+        )
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(
+            ["AAPL"], target_date=date(2024, 1, 15), rate=100.0
+        )
+
+        assert result["AAPL"] is not None
+        assert result["AAPL"].close == Decimal("153.0")
+        assert result["AAPL"].date == date(2024, 1, 15)
+        # Verify start/end params were used (not period)
+        call_kwargs = mock_ticker_cls.return_value.history.call_args.kwargs
+        assert "start" in call_kwargs
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_returns_none_when_no_data_for_date(self, mock_ticker_cls):
+        """Should return None when no history available for target date."""
+        mock_ticker_cls.return_value.history.return_value = pd.DataFrame()
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(
+            ["AAPL"], target_date=date(2024, 1, 15), rate=100.0
+        )
+
+        assert result["AAPL"] is None
+
+    @patch("app.services.market_data.yfinance_client.yf.Ticker")
+    def test_target_date_with_multiple_symbols(self, mock_ticker_cls):
+        """Should batch-fetch specific date for multiple symbols."""
+        mock_ticker_cls.return_value.history.return_value = _single_ticker_df(
+            close=100.0, dt="2024-06-01"
+        )
+        client = YFinanceClient()
+
+        result = client.get_batch_prices_threaded(
+            ["AAPL", "MSFT", "GOOG"], target_date=date(2024, 6, 1), rate=100.0
+        )
+
+        assert len(result) == 3
+        assert all(v is not None for v in result.values())
