@@ -199,9 +199,9 @@ class PriceFetcher:
                 continue
 
             if asset.asset_class == "Crypto":
-                crypto_assets.append(asset)
+                crypto_assets = [*crypto_assets, asset]
             else:
-                other_assets.append(asset)
+                other_assets = [*other_assets, asset]
 
         # Batch fetch crypto prices in a single API call
         if crypto_assets:
@@ -232,6 +232,7 @@ class PriceFetcher:
         if other_assets:
             symbols = [a.symbol for a in other_assets]
             logger.info(f"Batch fetching prices for {len(symbols)} non-crypto assets")
+            processed_before = stats["updated"] + stats["failed"]
 
             try:
                 yf_client = YFinanceClient()
@@ -256,7 +257,8 @@ class PriceFetcher:
                 db.commit()
             except Exception as e:
                 logger.error(f"Error batch fetching non-crypto prices: {e}")
-                stats["failed"] += len(other_assets)
+                already_counted = (stats["updated"] + stats["failed"]) - processed_before
+                stats["failed"] += len(other_assets) - already_counted
 
         logger.info(f"Price update complete: {stats}")
         return stats

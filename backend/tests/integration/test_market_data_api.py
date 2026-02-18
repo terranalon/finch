@@ -114,16 +114,16 @@ class TestStockPriceRefresh:
         """Service account can refresh stock prices."""
         yesterday = date.today() - timedelta(days=1)
         mock_client = mock_client_cls.return_value
-        mock_client.get_history_for_range.return_value = [
-            OHLCVRow(
+        mock_client.get_batch_prices_threaded.return_value = {
+            "AAPL": OHLCVRow(
                 date=yesterday,
                 open=Decimal("150.0"),
                 high=Decimal("155.0"),
                 low=Decimal("149.0"),
                 close=Decimal("153.0"),
                 volume=Decimal("1000000"),
-            )
-        ]
+            ),
+        }
 
         response = service_client.post(
             "/api/market-data/stock-prices/refresh",

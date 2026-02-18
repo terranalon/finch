@@ -108,6 +108,31 @@ class TestUpdateAllAssetPricesBatch:
 
     @patch("app.services.market_data.price_fetcher.YFinanceClient")
     @patch("app.services.market_data.price_fetcher._get_coingecko_client")
+    def test_exception_does_not_double_count_failed(self, mock_cg, mock_yf_cls):
+        """Exception after partial loop should not double-count already-tallied assets."""
+        db = MagicMock()
+        aapl = _make_asset("AAPL")
+        bad = _make_asset("BADSTOCK")
+        msft = _make_asset("MSFT")
+        db.execute.return_value.scalars.return_value.all.return_value = [aapl, bad, msft]
+
+        mock_client = mock_yf_cls.return_value
+        mock_client.get_batch_prices_threaded.return_value = {
+            "AAPL": _make_ohlcv(175.50),
+            "BADSTOCK": None,
+            "MSFT": _make_ohlcv(380.00),
+        }
+        # commit() raises after the loop finishes
+        db.commit.side_effect = Exception("DB error")
+
+        stats = PriceFetcher.update_all_asset_prices(db)
+
+        # 2 updated + 1 failed (None) in the loop, then exception adds 0 more
+        # Total: updated=2, failed=1 from loop + 0 uncounted = still 3 total
+        assert stats["updated"] + stats["failed"] == 3
+
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    @patch("app.services.market_data.price_fetcher._get_coingecko_client")
     def test_skips_cash_and_empty_symbols(self, mock_cg, mock_yf_cls):
         """Cash assets and assets without symbols should be skipped."""
         db = MagicMock()

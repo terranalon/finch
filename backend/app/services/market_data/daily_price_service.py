@@ -99,7 +99,7 @@ class DailyPriceService:
                 logger.info("Price for %s already exists for %s", asset.symbol, target_date)
                 skipped += 1
             else:
-                assets_needing_prices.append(asset)
+                assets_needing_prices = [*assets_needing_prices, asset]
 
         if not assets_needing_prices:
             return {
@@ -113,7 +113,20 @@ class DailyPriceService:
 
         # Batch fetch all needed prices in one threaded call
         symbols = [a.symbol for a in assets_needing_prices]
-        batch_results = self._yf_client.get_batch_prices_threaded(symbols, target_date=target_date)
+        try:
+            batch_results = self._yf_client.get_batch_prices_threaded(
+                symbols, target_date=target_date
+            )
+        except Exception:
+            logger.exception("Batch fetch failed for %d symbols", len(symbols))
+            return {
+                "date": target_date,
+                "updated": 0,
+                "skipped": skipped,
+                "failed": len(assets_needing_prices),
+                "source": "yfinance",
+                "errors": [{"symbol": s, "error": "Batch fetch failed"} for s in symbols],
+            }
 
         for asset in assets_needing_prices:
             try:
@@ -200,7 +213,7 @@ class DailyPriceService:
                 logger.info("Price for %s already exists for %s", asset.symbol, target_date)
                 skipped += 1
             else:
-                assets_needing_prices.append(asset)
+                assets_needing_prices = [*assets_needing_prices, asset]
 
         if not assets_needing_prices:
             logger.info("All crypto prices already up to date")

@@ -142,3 +142,24 @@ class TestRefreshStockPricesBatch:
 
         mock_yf.get_batch_prices_threaded.assert_not_called()
         assert result["skipped"] == 1
+
+    @patch("app.services.market_data.daily_price_service._price_exists")
+    @patch("app.services.market_data.daily_price_service._get_active_assets")
+    def test_batch_fetch_exception_returns_stats(self, mock_get_assets, mock_exists):
+        """Batch fetch failure should return error stats, not propagate exception."""
+        target = date(2024, 6, 15)
+        aapl = _make_asset(1, "AAPL")
+        msft = _make_asset(2, "MSFT")
+        mock_get_assets.return_value = [aapl, msft]
+        mock_exists.return_value = False
+
+        mock_yf = MagicMock()
+        mock_yf.get_batch_prices_threaded.side_effect = OSError("Network down")
+
+        db = MagicMock()
+        service = DailyPriceService(yf_client=mock_yf)
+        result = service.refresh_stock_prices(db, target_date=target)
+
+        assert result["failed"] == 2
+        assert result["updated"] == 0
+        assert len(result["errors"]) == 2
