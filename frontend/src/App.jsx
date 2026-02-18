@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'sonner'
 import { ThemeProvider, CurrencyProvider, AuthProvider, PortfolioProvider, useAuth } from './contexts'
 import { Navbar } from './components/layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -13,6 +14,7 @@ import AccountDetail from './pages/AccountDetail'
 import Insights from './pages/Insights'
 import Assets from './pages/Assets'
 import Settings from './pages/Settings'
+import Portfolios from './pages/Portfolios'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import VerificationPending from './pages/VerificationPending'
@@ -141,6 +143,13 @@ function App() {
                     </AppLayout>
                   </ProtectedRoute>
                 } />
+                <Route path="/portfolios" element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Portfolios />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/settings" element={
                   <ProtectedRoute>
                     <AppLayout>
@@ -153,6 +162,7 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Router>
+            <Toaster position="bottom-right" richColors theme="system" />
             </PortfolioProvider>
           </AuthProvider>
         </CurrencyProvider>

@@ -71,6 +71,17 @@ function CheckIcon({ className }) {
   );
 }
 
+/**
+ * Adjustments (sliders) icon for Manage Portfolios link
+ */
+function AdjustmentsIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+    </svg>
+  );
+}
+
 const navLinks = [
   { to: '/', label: 'Overview' },
   { to: '/holdings', label: 'Holdings' },
@@ -198,8 +209,8 @@ function SettingsDropdown() {
               onClick={handleLogout}
               className={cn(
                 'w-full px-4 py-2 flex items-center gap-3',
-                'text-sm text-[var(--text-secondary)] hover:text-red-600',
-                'hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer'
+                'text-sm text-[var(--text-secondary)] hover:text-negative',
+                'hover:bg-negative-bg dark:hover:bg-negative-bg-dark/20 transition-colors cursor-pointer'
               )}
             >
               <ArrowRightStartOnRectangleIcon className="w-4 h-4" />
@@ -302,8 +313,8 @@ function PortfolioSelector() {
             </>
           )}
 
-          {/* Individual portfolios */}
-          {portfolios.map((portfolio) => {
+          {/* Individual portfolios - default first */}
+          {[...portfolios].sort((a, b) => Number(b.is_default) - Number(a.is_default)).map((portfolio) => {
             // Format total value in portfolio's default currency
             const formattedValue = portfolio.total_value != null
               ? new Intl.NumberFormat('en-US', {
@@ -338,6 +349,19 @@ function PortfolioSelector() {
               </button>
             );
           })}
+
+          {/* Manage Portfolios link */}
+          <div className="border-t border-[var(--border-primary)] my-1" />
+          <button
+            onClick={() => { setIsOpen(false); navigate('/portfolios'); }}
+            className={cn(
+              'w-full px-4 py-2 flex items-center gap-2',
+              'text-sm font-medium text-accent hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
+            )}
+          >
+            <AdjustmentsIcon className="w-4 h-4" />
+            Manage Portfolios
+          </button>
         </div>
       )}
     </div>
