@@ -19,6 +19,7 @@ from app.routers.accounts import raise_duplicate_account_name
 from app.schemas.account import Account as AccountSchema
 from app.schemas.common import error_responses
 from app.schemas.portfolio import (
+    AccountInPortfolio,
     DeletionPreview,
     PortfolioCreate,
     PortfolioPatch,
@@ -37,16 +38,21 @@ router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
 @router.get("", response_model=list[PortfolioWithAccountCount])
 async def list_portfolios(
     include_values: bool = Query(False, description="Include total portfolio values"),
+    include_accounts: bool = Query(False, description="Include account details per portfolio"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Get list of portfolios for the current user with account counts and optional values.
+
+    Use include_accounts=true to embed account details in each portfolio.
+    Use include_values=true to include portfolio total and per-account values.
     """
     portfolios = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
 
     return [
-        _to_portfolio_with_account_count(portfolio, db, include_values) for portfolio in portfolios
+        _to_portfolio_with_account_count(portfolio, db, include_values, include_accounts)
+        for portfolio in portfolios
     ]
 
 
@@ -54,6 +60,7 @@ def _to_portfolio_with_account_count(
     portfolio: Portfolio,
     db: Session,
     include_values: bool = False,
+    include_accounts: bool = False,
 ) -> PortfolioWithAccountCount:
     """Convert a Portfolio model to PortfolioWithAccountCount schema."""
     valuation = (
@@ -61,11 +68,28 @@ def _to_portfolio_with_account_count(
         if include_values
         else None
     )
+
+    accounts_list = None
+    if include_accounts:
+        accounts_list = [
+            AccountInPortfolio(
+                id=account.id,
+                name=account.name,
+                institution=account.institution,
+                account_type=account.account_type,
+                currency=account.currency,
+                broker_type=account.broker_type,
+                value=valuation.per_account.get(account.id) if valuation else None,
+            )
+            for account in portfolio.accounts
+        ]
+
     base = PortfolioSchema.model_validate(portfolio)
     return PortfolioWithAccountCount(
         **base.model_dump(),
         account_count=len(portfolio.accounts),
         total_value=valuation.total if valuation else None,
+        accounts=accounts_list,
     )
 
 
