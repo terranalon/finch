@@ -28,43 +28,9 @@ class PortfolioManagementService:
         self._currency = CurrencyService(db)
 
     def calculate_portfolio_value(self, portfolio: Portfolio) -> PortfolioValuation:
-        account_values_usd: dict[int, Decimal] = {}
-
-        for account in portfolio.accounts:
-            account_value_usd = Decimal("0")
-            holdings = (
-                self._db.query(Holding)
-                .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
-                .all()
-            )
-
-            for holding in holdings:
-                asset = self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
-                if not asset:
-                    continue
-
-                asset_currency = asset.currency or "USD"
-
-                if asset.asset_class == AssetClass.CASH:
-                    if holding.quantity <= 0:
-                        continue
-                    market_value_native = holding.quantity
-                else:
-                    if not asset.last_fetched_price:
-                        continue
-                    market_value_native = holding.quantity * asset.last_fetched_price
-
-                if asset_currency != "USD":
-                    rate_to_usd = self._currency.get_exchange_rate(asset_currency, "USD")
-                    market_value_usd = (
-                        market_value_native * rate_to_usd if rate_to_usd else market_value_native
-                    )
-                else:
-                    market_value_usd = market_value_native
-
-                account_value_usd += market_value_usd
-
-            account_values_usd[account.id] = account_value_usd
+        account_values_usd = {
+            account.id: self._calculate_account_value_usd(account) for account in portfolio.accounts
+        }
 
         total_value_usd = sum(account_values_usd.values(), Decimal("0"))
 
@@ -77,10 +43,45 @@ class PortfolioManagementService:
         return PortfolioValuation(
             total=convert(total_value_usd),
             per_account={
-                account_id: convert(value)
-                for account_id, value in account_values_usd.items()
+                account_id: convert(value) for account_id, value in account_values_usd.items()
             },
         )
+
+    def _calculate_account_value_usd(self, account: Account) -> Decimal:
+        holdings = (
+            self._db.query(Holding)
+            .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
+            .all()
+        )
+
+        total = Decimal("0")
+        for holding in holdings:
+            asset = self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
+            if not asset:
+                continue
+
+            asset_currency = asset.currency or "USD"
+
+            if asset.asset_class == AssetClass.CASH:
+                if holding.quantity <= 0:
+                    continue
+                market_value_native = holding.quantity
+            else:
+                if not asset.last_fetched_price:
+                    continue
+                market_value_native = holding.quantity * asset.last_fetched_price
+
+            if asset_currency != "USD":
+                rate_to_usd = self._currency.get_exchange_rate(asset_currency, "USD")
+                market_value_usd = (
+                    market_value_native * rate_to_usd if rate_to_usd else market_value_native
+                )
+            else:
+                market_value_usd = market_value_native
+
+            total += market_value_usd
+
+        return total
 
     def categorize_accounts_for_deletion(
         self, portfolio: Portfolio

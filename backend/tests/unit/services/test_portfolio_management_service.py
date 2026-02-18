@@ -47,9 +47,7 @@ class TestCalculatePortfolioValue:
         assert result.total == pytest.approx(1500.0)
         assert result.per_account[test_account.id] == pytest.approx(1500.0)
 
-    def test_per_account_values_multiple_accounts(
-        self, db, test_user, test_portfolio, test_asset
-    ):
+    def test_per_account_values_multiple_accounts(self, db, test_user, test_portfolio, test_asset):
         account1 = Account(
             name="Account 1",
             account_type="brokerage",

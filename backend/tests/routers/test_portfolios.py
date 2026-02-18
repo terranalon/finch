@@ -1,6 +1,7 @@
 """Tests for portfolios router with many-to-many relationships."""
 
 import os
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
+from app.models import Asset, Holding
 from app.models.account import Account
 from app.models.portfolio import Portfolio
 from app.models.user import User
@@ -30,8 +32,10 @@ def test_db():
     yield engine
 
     with engine.connect() as conn:
+        conn.execute(text("DELETE FROM holdings"))
         conn.execute(text("DELETE FROM portfolio_accounts"))
         conn.execute(text("DELETE FROM accounts"))
+        conn.execute(text("DELETE FROM assets"))
         conn.execute(text("DELETE FROM portfolios"))
         conn.execute(text("DELETE FROM sessions"))
         conn.execute(text("DELETE FROM users WHERE email LIKE 'test_%'"))
@@ -147,10 +151,6 @@ def test_list_portfolios_with_include_accounts(client, auth_headers, test_user, 
 
 def test_list_portfolios_with_accounts_and_values(client, auth_headers, test_user, db_session):
     """GET /portfolios?include_accounts=true&include_values=true includes per-account values."""
-    from decimal import Decimal
-
-    from app.models import Asset, Holding
-
     portfolio = Portfolio(name="Test", user_id=test_user.id, default_currency="USD")
     db_session.add(portfolio)
     db_session.flush()
