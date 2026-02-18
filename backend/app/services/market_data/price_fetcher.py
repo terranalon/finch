@@ -191,11 +191,11 @@ class PriceFetcher:
                     continue
 
                 divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
-                price = data.price / divisor if divisor and data.price else data.price
-                open_ = data.open / divisor if divisor and data.open else data.open
-                high_ = data.high / divisor if divisor and data.high else data.high
-                low_ = data.low / divisor if divisor and data.low else data.low
 
+                def _agorot(v: Decimal | None) -> Decimal | None:
+                    return v / divisor if divisor is not None and v is not None else v
+
+                price = _agorot(data.price)
                 asset.last_fetched_price = price
                 asset.last_fetched_at = datetime.now()
                 stats["updated"] += 1
@@ -205,16 +205,16 @@ class PriceFetcher:
                         db,
                         asset_id=asset.id,
                         target_date=today,
-                        open=open_,
-                        high=high_,
-                        low=low_,
+                        open=_agorot(data.open),
+                        high=_agorot(data.high),
+                        low=_agorot(data.low),
                         close=price,
                         volume=data.volume,
                         market_cap=data.market_cap,
                         pe_ratio=data.pe_ratio,
                         forward_pe=data.forward_pe,
                         eps=data.eps,
-                        dividend_rate=data.dividend_rate,
+                        dividend_rate=_agorot(data.dividend_rate),
                         dividend_yield=data.dividend_yield,
                         payout_ratio=data.payout_ratio,
                         source="Yahoo Finance",
@@ -235,13 +235,13 @@ class PriceFetcher:
                         avg_volume=data.avg_volume,
                         earnings_date=data.earnings_date,
                         ex_dividend_date=data.ex_dividend_date,
-                        target_est=data.target_est,
-                        week_52_high=data.week_52_high,
-                        week_52_low=data.week_52_low,
+                        target_est=_agorot(data.target_est),
+                        week_52_high=_agorot(data.week_52_high),
+                        week_52_low=_agorot(data.week_52_low),
                         peg_ratio=data.peg_ratio,
                         expense_ratio=data.expense_ratio,
                         fund_family=data.fund_family,
-                        nav=data.nav,
+                        nav=_agorot(data.nav),
                     )
                 except Exception:
                     logger.exception("Failed to update slow fields for %s", asset.symbol)
