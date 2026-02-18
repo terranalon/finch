@@ -1,9 +1,9 @@
 """Asset model - represents investment assets."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Index, Numeric, String
+from sqlalchemy import BigInteger, Boolean, Date, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -46,6 +46,36 @@ class Asset(Base):
     last_fetched_price: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))
     last_fetched_at: Mapped[datetime | None]
     meta_data: Mapped[dict | None] = mapped_column("metadata", JSONB)
+
+    # About / static
+    description: Mapped[str | None] = mapped_column(Text)
+    exchange: Mapped[str | None] = mapped_column(String(50))
+    website: Mapped[str | None] = mapped_column(String(255))
+    ceo: Mapped[str | None] = mapped_column(String(100))
+    employees: Mapped[int | None] = mapped_column(Integer)
+
+    # Slow-changing stats
+    beta: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    avg_volume: Mapped[int | None] = mapped_column(BigInteger)
+    earnings_date: Mapped[date | None] = mapped_column(Date)
+    ex_dividend_date: Mapped[date | None] = mapped_column(Date)
+    target_est: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))
+    week_52_high: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))
+    week_52_low: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))
+    peg_ratio: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+
+    # ETF-specific
+    expense_ratio: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    fund_family: Mapped[str | None] = mapped_column(String(100))
+    nav: Mapped[Decimal | None] = mapped_column(Numeric(15, 4))
+
+    # Crypto slow-changing
+    max_supply: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    ath: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    ath_date: Mapped[date | None] = mapped_column(Date)
+    atl: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
+    atl_date: Mapped[date | None] = mapped_column(Date)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
@@ -54,6 +84,9 @@ class Asset(Base):
         back_populates="asset", cascade="all, delete-orphan"
     )
     price_history: Mapped[list["AssetPrice"]] = relationship(
+        back_populates="asset", cascade="all, delete-orphan"
+    )
+    daily_metrics: Mapped[list["AssetDailyMetrics"]] = relationship(
         back_populates="asset", cascade="all, delete-orphan"
     )
 

@@ -8,12 +8,16 @@ from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
 from app.exceptions import AppError, BadRequestError, NotFoundError
 from app.models import Asset, AssetPrice, ExchangeRate
+from app.models.user import User
 from app.schemas.asset import Asset as AssetSchema
 from app.schemas.asset import AssetCreate, AssetMarketResponse, AssetUpdate
+from app.schemas.asset_detail import AssetDetailResponse
 from app.schemas.common import PaginatedResponse
 from app.schemas.price import SingleAssetPriceResponse
+from app.services.asset_detail_service import AssetDetailService
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.shared.asset_metadata_service import AssetMetadataService
 from app.services.shared.currency_service import CurrencyService
@@ -257,6 +261,16 @@ async def list_favorites(db: Session = Depends(get_db)):
     """Get all favorite assets."""
     favorites = db.query(Asset).filter(Asset.is_favorite.is_(True)).order_by(Asset.symbol).all()
     return favorites
+
+
+@router.get("/{asset_id}/detail", response_model=AssetDetailResponse)
+async def get_asset_detail(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AssetDetailResponse:
+    """Get comprehensive asset detail including latest daily metrics."""
+    return AssetDetailService.get_asset_detail(db, asset_id=asset_id)
 
 
 @router.get("/{asset_id}", response_model=AssetSchema)

@@ -2,6 +2,7 @@
 
 from app.models.account import Account
 from app.models.asset import Asset
+from app.models.asset_daily_metrics import AssetDailyMetrics
 from app.models.asset_price import AssetPrice
 from app.models.broker_data_source import BrokerDataSource
 from app.models.corporate_action import CorporateAction
@@ -27,6 +28,7 @@ from app.models.user_recovery_code import UserRecoveryCode
 __all__ = [
     "Account",
     "Asset",
+    "AssetDailyMetrics",
     "AssetPrice",
     "BrokerDataSource",
     "CorporateAction",
