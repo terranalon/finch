@@ -17,7 +17,7 @@ export function AccountRow({ account, portfolioId }) {
     <>
       <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[var(--bg-tertiary)] mb-1.5 last:mb-0">
         <button
-          onClick={() => navigate(`/accounts/${account.id}`)}
+          onClick={() => navigate(`/accounts/${account.id}`, { state: { backTo: '/portfolios', backLabel: 'Back to Portfolios' } })}
           className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer hover:opacity-80 transition-opacity"
         >
           <BrokerLogo type={account.broker_type} className="size-8 rounded-lg object-contain flex-shrink-0" />

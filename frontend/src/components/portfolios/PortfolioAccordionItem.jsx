@@ -79,7 +79,7 @@ export function PortfolioAccordionItem({ portfolio }) {
 
           <div className="flex items-center gap-3.5">
             <span className="text-xs text-[var(--text-tertiary)] hidden sm:inline">
-              {accountCount} account{accountCount !== 1 ? 's' : ''} · {portfolio.default_currency}
+              {accountCount} account{accountCount !== 1 ? 's' : ''}
             </span>
             <span className="text-base font-semibold text-[var(--text-primary)] tabular-nums">
               {formatCurrency(portfolio.total_value, portfolio.default_currency, { compact: true })}

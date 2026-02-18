@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { cn, formatCurrency, api, deleteDataSource, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
 import { usePortfolio } from '../contexts';
@@ -1449,6 +1449,9 @@ function LoadingSkeleton() {
 
 export default function AccountDetail() {
   const { id } = useParams();
+  const { state: routerState } = useLocation();
+  const backTo = routerState?.backTo ?? '/accounts';
+  const backLabel = routerState?.backLabel ?? 'Back to Accounts';
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
   const apiCredentialsRef = useRef(null);
@@ -1922,11 +1925,11 @@ export default function AccountDetail() {
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Account not found</h2>
           <p className="text-[var(--text-secondary)] mt-2">The account you're looking for doesn't exist.</p>
           <Link
-            to="/accounts"
+            to={backTo}
             className="inline-flex items-center gap-2 mt-4 text-accent hover:underline"
           >
             <ArrowLeftIcon className="w-4 h-4" />
-            Back to Accounts
+            {backLabel}
           </Link>
         </div>
       </PageContainer>
@@ -1946,11 +1949,11 @@ export default function AccountDetail() {
     <PageContainer>
       {/* Back Link */}
       <Link
-        to="/accounts"
+        to={backTo}
         className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-6"
       >
         <ArrowLeftIcon className="w-4 h-4" />
-        Back to Accounts
+        {backLabel}
       </Link>
 
       {/* Header */}

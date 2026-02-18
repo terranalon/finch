@@ -47,8 +47,8 @@ export default function Portfolios() {
 
   return (
     <PortfolioPageProvider value={hookData}>
-      <PageContainer width="wide">
-        <div className="flex items-start justify-between mb-5 max-w-[1100px] mx-auto">
+      <PageContainer>
+        <div className="flex items-start justify-between mb-5">
           <div className="flex flex-col gap-3">
             <div>
               <h1 className="text-[22px] font-semibold text-[var(--text-primary)]">
