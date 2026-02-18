@@ -53,8 +53,8 @@ export function WizardNotification({ message, type = 'error', onDismiss, autoDis
         className={cn(
           'flex-1 text-sm font-medium',
           isError
-            ? 'text-negative dark:text-red-200'
-            : 'text-positive dark:text-emerald-200'
+            ? 'text-negative dark:text-negative-dark'
+            : 'text-positive dark:text-positive-dark'
         )}
       >
         {message}
