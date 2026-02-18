@@ -18,12 +18,12 @@ class TestCalculatePortfolioValue:
         svc = PortfolioManagementService(db)
         value = svc.calculate_portfolio_value(test_portfolio)
         # test_holding: qty=10, test_asset: last_fetched_price=150, currency=USD
-        assert value == pytest.approx(1500.0)
+        assert value.total == pytest.approx(1500.0)
 
     def test_empty_portfolio(self, db, test_portfolio):
         svc = PortfolioManagementService(db)
         value = svc.calculate_portfolio_value(test_portfolio)
-        assert value == 0.0
+        assert value.total == 0.0
 
     def test_skips_inactive_holdings(self, db, test_portfolio, test_account, test_asset):
         holding = Holding(
@@ -38,7 +38,67 @@ class TestCalculatePortfolioValue:
 
         svc = PortfolioManagementService(db)
         value = svc.calculate_portfolio_value(test_portfolio)
-        assert value == 0.0
+        assert value.total == 0.0
+
+    def test_returns_per_account_values(
+        self, db, test_portfolio, test_account, test_asset, test_holding
+    ):
+        result = PortfolioManagementService(db).calculate_portfolio_value(test_portfolio)
+        assert result.total == pytest.approx(1500.0)
+        assert result.per_account[test_account.id] == pytest.approx(1500.0)
+
+    def test_per_account_values_multiple_accounts(
+        self, db, test_user, test_portfolio, test_asset
+    ):
+        account1 = Account(
+            name="Account 1",
+            account_type="brokerage",
+            institution="Broker A",
+            currency="USD",
+            is_active=True,
+        )
+        account1.portfolios.append(test_portfolio)
+        db.add(account1)
+        db.flush()
+
+        account2 = Account(
+            name="Account 2",
+            account_type="brokerage",
+            institution="Broker B",
+            currency="USD",
+            is_active=True,
+        )
+        account2.portfolios.append(test_portfolio)
+        db.add(account2)
+        db.flush()
+
+        holding1 = Holding(
+            account_id=account1.id,
+            asset_id=test_asset.id,
+            quantity=Decimal("10"),
+            cost_basis=Decimal("1000"),
+            is_active=True,
+        )
+        holding2 = Holding(
+            account_id=account2.id,
+            asset_id=test_asset.id,
+            quantity=Decimal("20"),
+            cost_basis=Decimal("2000"),
+            is_active=True,
+        )
+        db.add_all([holding1, holding2])
+        db.commit()
+
+        result = PortfolioManagementService(db).calculate_portfolio_value(test_portfolio)
+        # test_asset price = 150
+        assert result.per_account[account1.id] == pytest.approx(1500.0)
+        assert result.per_account[account2.id] == pytest.approx(3000.0)
+        assert result.total == pytest.approx(4500.0)
+
+    def test_empty_portfolio_returns_empty_per_account(self, db, test_portfolio):
+        result = PortfolioManagementService(db).calculate_portfolio_value(test_portfolio)
+        assert result.total == 0.0
+        assert result.per_account == {}
 
     def test_cash_uses_quantity_as_value(self, db, test_portfolio, test_account):
         cash_asset = Asset(
@@ -62,7 +122,7 @@ class TestCalculatePortfolioValue:
 
         svc = PortfolioManagementService(db)
         value = svc.calculate_portfolio_value(test_portfolio)
-        assert value == pytest.approx(5000.0)
+        assert value.total == pytest.approx(5000.0)
 
 
 class TestCategorizeAccounts:

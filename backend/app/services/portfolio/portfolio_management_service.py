@@ -1,5 +1,6 @@
 """Portfolio lifecycle management - valuation and deletion."""
 
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -11,6 +12,14 @@ from app.schemas.portfolio import SharedAccountInfo
 from app.services.shared.currency_service import CurrencyService
 
 
+@dataclass(frozen=True)
+class PortfolioValuation:
+    """Result of portfolio value calculation with per-account breakdown."""
+
+    total: float
+    per_account: dict[int, float] = field(default_factory=dict)
+
+
 class PortfolioManagementService:
     """Handles portfolio valuation and lifecycle operations."""
 
@@ -18,10 +27,11 @@ class PortfolioManagementService:
         self._db = db
         self._currency = CurrencyService(db)
 
-    def calculate_portfolio_value(self, portfolio: Portfolio) -> float:
-        total_value_usd = Decimal("0")
+    def calculate_portfolio_value(self, portfolio: Portfolio) -> PortfolioValuation:
+        account_values_usd: dict[int, Decimal] = {}
 
         for account in portfolio.accounts:
+            account_value_usd = Decimal("0")
             holdings = (
                 self._db.query(Holding)
                 .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
@@ -52,15 +62,25 @@ class PortfolioManagementService:
                 else:
                     market_value_usd = market_value_native
 
-                total_value_usd += market_value_usd
+                account_value_usd += market_value_usd
+
+            account_values_usd[account.id] = account_value_usd
+
+        total_value_usd = sum(account_values_usd.values(), Decimal("0"))
 
         if portfolio.default_currency != "USD":
             rate = self._currency.get_exchange_rate("USD", portfolio.default_currency)
-            total_value = total_value_usd * rate if rate else total_value_usd
+            convert = (lambda v: float(v * rate)) if rate else (lambda v: float(v))
         else:
-            total_value = total_value_usd
+            convert = float
 
-        return float(total_value)
+        return PortfolioValuation(
+            total=convert(total_value_usd),
+            per_account={
+                account_id: convert(value)
+                for account_id, value in account_values_usd.items()
+            },
+        )
 
     def categorize_accounts_for_deletion(
         self, portfolio: Portfolio

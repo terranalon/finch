@@ -56,7 +56,7 @@ def _to_portfolio_with_account_count(
     include_values: bool = False,
 ) -> PortfolioWithAccountCount:
     """Convert a Portfolio model to PortfolioWithAccountCount schema."""
-    total_value = (
+    valuation = (
         PortfolioManagementService(db).calculate_portfolio_value(portfolio)
         if include_values
         else None
@@ -65,7 +65,7 @@ def _to_portfolio_with_account_count(
     return PortfolioWithAccountCount(
         **base.model_dump(),
         account_count=len(portfolio.accounts),
-        total_value=total_value,
+        total_value=valuation.total if valuation else None,
     )
 
 
