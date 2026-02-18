@@ -45,11 +45,26 @@ class Portfolio(PortfolioBase):
     updated_at: datetime
 
 
+class AccountInPortfolio(BaseModel):
+    """Lightweight account representation for embedding in portfolio responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    institution: str | None = None
+    account_type: str
+    currency: str
+    broker_type: str | None = None
+    value: float | None = None
+
+
 class PortfolioWithAccountCount(Portfolio):
     """Portfolio with account count for list endpoint."""
 
     account_count: int = 0
-    total_value: float | None = None  # Total portfolio value in default_currency
+    total_value: float | None = None
+    accounts: list[AccountInPortfolio] | None = None
 
 
 class AccountSummary(BaseModel):
