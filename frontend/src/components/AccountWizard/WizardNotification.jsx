@@ -31,30 +31,30 @@ export function WizardNotification({ message, type = 'error', onDismiss, autoDis
         'max-w-md w-[calc(100%-2rem)]',
         'animate-in slide-in-from-bottom-4 fade-in duration-300',
         isError
-          ? 'bg-red-50 dark:bg-red-950/90 border border-red-200 dark:border-red-800'
-          : 'bg-emerald-50 dark:bg-emerald-950/90 border border-emerald-200 dark:border-emerald-800'
+          ? 'bg-negative-bg dark:bg-negative-bg-dark/90 border border-negative-light dark:border-negative-dark/30'
+          : 'bg-positive-light dark:bg-positive-bg-dark/90 border border-positive-light dark:border-positive-dark/30'
       )}
     >
       <div
         className={cn(
           'p-1.5 rounded-full flex-shrink-0',
           isError
-            ? 'bg-red-100 dark:bg-red-900/50'
-            : 'bg-emerald-100 dark:bg-emerald-900/50'
+            ? 'bg-negative-light dark:bg-negative-bg-dark/50'
+            : 'bg-positive-light dark:bg-positive-bg-dark/50'
         )}
       >
         {isError ? (
-          <XIcon className="size-4 text-red-600 dark:text-red-400" />
+          <XIcon className="size-4 text-negative dark:text-negative-dark" />
         ) : (
-          <CheckIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+          <CheckIcon className="size-4 text-positive dark:text-positive-dark" />
         )}
       </div>
       <p
         className={cn(
           'flex-1 text-sm font-medium',
           isError
-            ? 'text-red-800 dark:text-red-200'
-            : 'text-emerald-800 dark:text-emerald-200'
+            ? 'text-negative dark:text-negative-dark'
+            : 'text-positive dark:text-positive-dark'
         )}
       >
         {message}
@@ -65,8 +65,8 @@ export function WizardNotification({ message, type = 'error', onDismiss, autoDis
         className={cn(
           'p-1 rounded-full transition-colors cursor-pointer flex-shrink-0',
           isError
-            ? 'hover:bg-red-200 dark:hover:bg-red-800'
-            : 'hover:bg-emerald-200 dark:hover:bg-emerald-800'
+            ? 'hover:bg-negative-light dark:hover:bg-negative-bg-dark'
+            : 'hover:bg-positive-light dark:hover:bg-positive-bg-dark'
         )}
         aria-label="Dismiss notification"
       >
@@ -74,8 +74,8 @@ export function WizardNotification({ message, type = 'error', onDismiss, autoDis
           className={cn(
             'size-4',
             isError
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-emerald-600 dark:text-emerald-400'
+              ? 'text-negative dark:text-negative-dark'
+              : 'text-positive dark:text-positive-dark'
           )}
         />
       </button>

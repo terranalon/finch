@@ -54,16 +54,16 @@ function ValidationBanner({ validation }) {
   let bgClass, textClass, message;
 
   if (is_valid && !hasCostBasisOnly) {
-    bgClass = 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800';
-    textClass = 'text-emerald-700 dark:text-emerald-400';
+    bgClass = 'bg-positive-light dark:bg-positive-bg-dark/30 border-positive-light dark:border-positive-dark/30';
+    textClass = 'text-positive dark:text-positive-dark';
     message = `${positions_matched}/${positions_checked} positions match your current holdings.`;
   } else if (is_valid && hasCostBasisOnly) {
     bgClass = 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800';
     textClass = 'text-amber-700 dark:text-amber-400';
     message = `${positions_matched}/${positions_checked} positions match. Cost basis differs slightly for ${discrepancies.length} position(s).`;
   } else {
-    bgClass = 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800';
-    textClass = 'text-red-700 dark:text-red-400';
+    bgClass = 'bg-negative-bg dark:bg-negative-bg-dark/30 border-negative-light dark:border-negative-dark/30';
+    textClass = 'text-negative dark:text-negative-dark';
     message = `${positions_matched}/${positions_checked} positions match. You may need additional historical files.`;
   }
 
@@ -222,20 +222,20 @@ export function BatchUploadModal({
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
         <div
-          className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-[var(--bg-primary)] rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <div className="flex items-center justify-between p-6 border-b border-[var(--border-primary)]">
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">
               {isFinalized ? 'Import Complete' : 'Upload Transaction History'}
             </h2>
             <button
               onClick={onClose}
               aria-label="Close"
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
             >
-              <XIcon className="size-5 text-gray-500" />
+              <XIcon className="size-5 text-[var(--text-tertiary)]" />
             </button>
           </div>
 
@@ -244,13 +244,13 @@ export function BatchUploadModal({
               /* --- Finalize Results --- */
               <>
                 <div className="text-center">
-                  <div className="size-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-                    <CheckIcon className="size-7 text-emerald-600 dark:text-emerald-400" />
+                  <div className="size-14 rounded-full bg-positive-light dark:bg-positive-bg-dark/30 flex items-center justify-center mx-auto mb-4">
+                    <CheckIcon className="size-7 text-positive dark:text-positive-dark" />
                   </div>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <p className="text-lg font-semibold text-[var(--text-primary)]">
                     Finalized {finalizeResult.sources_finalized} file{finalizeResult.sources_finalized !== 1 ? 's' : ''}
                   </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-[var(--text-tertiary)] mt-1">
                     {formatDateForDisplay(finalizeResult.date_range?.start_date)} to{' '}
                     {formatDateForDisplay(finalizeResult.date_range?.end_date)}
                   </p>
@@ -261,7 +261,7 @@ export function BatchUploadModal({
                 <button
                   type="button"
                   onClick={handleDone}
-                  className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+                  className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer"
                 >
                   Done
                 </button>
@@ -284,32 +284,32 @@ export function BatchUploadModal({
                     onKeyDown={handleKeyDown}
                     className={[
                       'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all',
-                      'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                      'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2',
                       selectedFile
-                        ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20'
-                        : 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20',
+                        ? 'border-positive dark:border-positive-dark bg-positive-light/50 dark:bg-positive-bg-dark/20'
+                        : 'border-[var(--border-primary)] hover:border-accent hover:bg-accent-50/50 dark:hover:bg-accent-900/20',
                     ].join(' ')}
                   >
                     {selectedFile ? (
                       <>
-                        <CheckIcon className="size-10 text-emerald-500 mx-auto mb-3" />
-                        <p className="text-base font-semibold text-gray-900 dark:text-white">
+                        <CheckIcon className="size-10 text-positive mx-auto mb-3" />
+                        <p className="text-base font-semibold text-[var(--text-primary)]">
                           {selectedFile.name}
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-sm text-[var(--text-tertiary)] mt-1">
                           Click to select a different file
                         </p>
                       </>
                     ) : (
                       <>
-                        <UploadIcon className="size-10 text-gray-400 mx-auto mb-3" />
-                        <p className="text-base font-semibold text-gray-900 dark:text-white">
+                        <UploadIcon className="size-10 text-[var(--text-tertiary)] mx-auto mb-3" />
+                        <p className="text-base font-semibold text-[var(--text-primary)]">
                           Drop your file here
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-sm text-[var(--text-tertiary)] mt-1">
                           or click to browse
                         </p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+                        <p className="text-xs text-[var(--text-tertiary)] mt-3">
                           Supported format: {formatDisplay}
                         </p>
                       </>
@@ -334,46 +334,46 @@ export function BatchUploadModal({
                   aria-label="Upload & Stage"
                   onClick={handleUpload}
                   disabled={!selectedFile || isUploading}
-                  className="w-full px-6 py-3 rounded-xl text-base font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full px-6 py-3 rounded-xl text-base font-semibold bg-accent text-white hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isUploading ? 'Uploading...' : 'Upload & Stage'}
                 </button>
 
                 {/* Error display */}
                 {error && (
-                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                  <div className="p-4 rounded-xl bg-negative-bg dark:bg-negative-bg-dark/30 border border-negative-light dark:border-negative-dark/30">
+                    <p className="text-sm text-negative dark:text-negative-dark">{error}</p>
                   </div>
                 )}
 
                 {/* Uploaded files list */}
                 {uploads.length > 0 && (
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <div className="rounded-xl border border-[var(--border-primary)] overflow-hidden">
+                    <div className="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)]">
+                      <p className="text-sm font-semibold text-[var(--text-secondary)]">
                         Staged Files ({uploads.length})
                       </p>
                     </div>
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    <div className="divide-y divide-[var(--border-primary)]">
                       {uploads.map((upload, idx) => (
                         <div
                           key={idx}
                           className="px-4 py-3 grid grid-cols-3 gap-4 items-center text-sm"
                         >
-                          <div className="text-gray-900 dark:text-white truncate" title={upload.fileName}>
+                          <div className="text-[var(--text-primary)] truncate" title={upload.fileName}>
                             {upload.fileName}
                           </div>
-                          <div className="text-center font-semibold text-gray-900 dark:text-white tabular-nums">
+                          <div className="text-center font-semibold text-[var(--text-primary)] tabular-nums">
                             {upload.transactions}
                           </div>
-                          <div className="text-right text-gray-500 dark:text-gray-400 text-xs">
+                          <div className="text-right text-[var(--text-tertiary)] text-xs">
                             {formatDateForDisplay(upload.startDate)} - {formatDateForDisplay(upload.endDate)}
                           </div>
                         </div>
                       ))}
                     </div>
                     {/* Combined stats */}
-                    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <div className="px-4 py-3 bg-[var(--bg-secondary)] border-t border-[var(--border-primary)] flex justify-between text-xs text-[var(--text-tertiary)]">
                       <span>{combinedStats.totalTransactions} total transactions</span>
                       <span>{combinedStats.totalAssets} unique assets</span>
                     </div>
@@ -383,7 +383,7 @@ export function BatchUploadModal({
                 {/* Coverage timeline */}
                 {uploads.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Coverage
                     </h4>
                     <CoverageTimeline files={uploads} />
@@ -396,7 +396,7 @@ export function BatchUploadModal({
                   aria-label="Finalize Import"
                   onClick={handleFinalize}
                   disabled={uploads.length === 0 || isFinalizing}
-                  className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-positive text-white hover:bg-positive-dark transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isFinalizing ? 'Finalizing...' : 'Finalize Import'}
                 </button>

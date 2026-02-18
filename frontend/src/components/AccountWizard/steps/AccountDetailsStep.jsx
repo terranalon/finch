@@ -45,10 +45,10 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-3">
           Account details
         </h2>
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
+        <p className="text-[var(--text-tertiary)] text-lg">
           {broker ? `Set up your ${broker.name} account.` : 'Set up your account.'}
         </p>
       </div>
@@ -56,7 +56,7 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Account Name */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
             Account Name
           </label>
           <input
@@ -65,9 +65,9 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
             onChange={(e) => setName(e.target.value)}
             required
             className={cn(
-              'w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700',
-              'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-              'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg',
+              'w-full px-4 py-3 rounded-xl border-2 border-[var(--border-primary)]',
+              'bg-[var(--bg-primary)] text-[var(--text-primary)]',
+              'focus:ring-2 focus:ring-accent focus:border-accent text-lg',
               'placeholder:text-gray-400'
             )}
             placeholder="e.g., Main Portfolio"
@@ -76,7 +76,7 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
 
         {/* Description (Optional) */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
             Description <span className="font-normal text-gray-400">(optional)</span>
           </label>
           <textarea
@@ -84,9 +84,9 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             className={cn(
-              'w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700',
-              'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-              'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none',
+              'w-full px-4 py-3 rounded-xl border-2 border-[var(--border-primary)]',
+              'bg-[var(--bg-primary)] text-[var(--text-primary)]',
+              'focus:ring-2 focus:ring-accent focus:border-accent resize-none',
               'placeholder:text-gray-400'
             )}
             placeholder="e.g., Long-term retirement savings"
@@ -95,16 +95,16 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
 
         {/* Currency */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
             Base Currency
           </label>
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
             className={cn(
-              'w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700',
-              'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-              'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer'
+              'w-full px-4 py-3 rounded-xl border-2 border-[var(--border-primary)]',
+              'bg-[var(--bg-primary)] text-[var(--text-primary)]',
+              'focus:ring-2 focus:ring-accent focus:border-accent cursor-pointer'
             )}
           >
             {CURRENCIES.map((c) => (
@@ -116,24 +116,24 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
         </div>
 
         {/* Account type - auto-filled with option to change */}
-        <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+        <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-primary)]">
           {!showAccountTypeSelect ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Account Type</p>
-                <p className="font-medium text-gray-900 dark:text-white">{accountType}</p>
+                <p className="text-sm text-[var(--text-tertiary)]">Account Type</p>
+                <p className="font-medium text-[var(--text-primary)]">{accountType}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAccountTypeSelect(true)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+                className="text-sm text-accent hover:text-accent-hover font-medium cursor-pointer"
               >
                 Change
               </button>
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                 Account Type
               </label>
               <select
@@ -143,9 +143,9 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
                   setShowAccountTypeSelect(false);
                 }}
                 className={cn(
-                  'w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700',
-                  'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-                  'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer'
+                  'w-full px-4 py-3 rounded-xl border-2 border-[var(--border-primary)]',
+                  'bg-[var(--bg-primary)] text-[var(--text-primary)]',
+                  'focus:ring-2 focus:ring-accent focus:border-accent cursor-pointer'
                 )}
               >
                 {ACCOUNT_TYPES.map((t) => (
@@ -163,14 +163,14 @@ export function AccountDetailsStep({ broker, category, existingAccountNames = []
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
           >
             <ArrowLeftIcon className="size-5" />
             <span className="font-medium">Back</span>
           </button>
           <button
             type="submit"
-            className="px-6 py-3 rounded-xl text-base font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+            className="px-6 py-3 rounded-xl text-base font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer"
           >
             Continue
           </button>
