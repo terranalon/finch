@@ -624,7 +624,6 @@ class TestParseTickerInfo:
         assert result.employees == 164000
         assert result.beta == Decimal("1.24")
         assert result.description == "Apple Inc. designs..."
-        assert isinstance(result, TickerMarketData)
 
     def test_returns_none_when_no_price(self):
         result = YFinanceClient._parse_ticker_info("BAD", {})

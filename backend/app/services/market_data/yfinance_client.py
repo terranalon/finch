@@ -540,9 +540,7 @@ class YFinanceClient:
     def _safe_int(info: dict[str, Any], key: str) -> int | None:
         """Extract an int from info dict, handling None."""
         val = info.get(key)
-        if val is None:
-            return None
-        return int(val)
+        return None if val is None else int(val)
 
     @staticmethod
     def _extract_ceo(info: dict[str, Any]) -> str | None:
@@ -570,12 +568,13 @@ class YFinanceClient:
 
         Returns None if no valid price found (symbol invalid/delisted).
         """
-        price = YFinanceClient._safe_decimal(info, "regularMarketPrice")
-        if price is None:
-            return None
-
         _dec = YFinanceClient._safe_decimal
         _int = YFinanceClient._safe_int
+        _epoch = YFinanceClient._parse_epoch_date
+
+        price = _dec(info, "regularMarketPrice")
+        if price is None:
+            return None
 
         return TickerMarketData(
             symbol=symbol,
@@ -599,8 +598,8 @@ class YFinanceClient:
             employees=_int(info, "fullTimeEmployees"),
             beta=_dec(info, "beta"),
             avg_volume=_int(info, "averageVolume"),
-            earnings_date=YFinanceClient._parse_epoch_date(info, "earningsDate"),
-            ex_dividend_date=YFinanceClient._parse_epoch_date(info, "exDividendDate"),
+            earnings_date=_epoch(info, "earningsDate"),
+            ex_dividend_date=_epoch(info, "exDividendDate"),
             target_est=_dec(info, "targetMeanPrice"),
             week_52_high=_dec(info, "fiftyTwoWeekHigh"),
             week_52_low=_dec(info, "fiftyTwoWeekLow"),

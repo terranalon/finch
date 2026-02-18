@@ -417,12 +417,12 @@ class CoinGeckoClient:
 
         symbol_to_id_map = {s: self._symbol_to_id(s) for s in symbols}
         id_to_symbol = {v: k for k, v in symbol_to_id_map.items()}
-        all_ids = list(symbol_to_id_map.values())
+        ids = list(symbol_to_id_map.values())
 
         results: dict[str, CryptoMarketData] = {}
 
-        for i in range(0, len(all_ids), 250):
-            chunk = all_ids[i : i + 250]
+        for i in range(0, len(ids), 250):
+            chunk = ids[i : i + 250]
             params = {
                 "ids": ",".join(chunk),
                 "vs_currency": vs_currency,
