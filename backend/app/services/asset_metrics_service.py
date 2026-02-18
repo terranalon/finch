@@ -12,13 +12,31 @@ from app.models.asset_daily_metrics import AssetDailyMetrics
 
 logger = logging.getLogger(__name__)
 
-_SLOW_CHANGING_FIELDS = frozenset({
-    "description", "exchange", "website", "ceo", "employees",
-    "beta", "avg_volume", "earnings_date", "ex_dividend_date",
-    "target_est", "week_52_high", "week_52_low", "peg_ratio",
-    "expense_ratio", "fund_family", "nav",
-    "max_supply", "ath", "ath_date", "atl", "atl_date",
-})
+_SLOW_CHANGING_FIELDS = frozenset(
+    {
+        "description",
+        "exchange",
+        "website",
+        "ceo",
+        "employees",
+        "beta",
+        "avg_volume",
+        "earnings_date",
+        "ex_dividend_date",
+        "target_est",
+        "week_52_high",
+        "week_52_low",
+        "peg_ratio",
+        "expense_ratio",
+        "fund_family",
+        "nav",
+        "max_supply",
+        "ath",
+        "ath_date",
+        "atl",
+        "atl_date",
+    }
+)
 
 
 class AssetMetricsService:

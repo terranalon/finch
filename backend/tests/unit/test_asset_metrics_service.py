@@ -66,11 +66,27 @@ class TestUpdateSlowChangingFields:
         asset = MagicMock(spec=Asset)
         asset.symbol = "AAPL"
         for field in (
-            "description", "exchange", "website", "ceo", "employees",
-            "beta", "avg_volume", "earnings_date", "ex_dividend_date",
-            "target_est", "week_52_high", "week_52_low", "peg_ratio",
-            "expense_ratio", "fund_family", "nav",
-            "max_supply", "ath", "ath_date", "atl", "atl_date",
+            "description",
+            "exchange",
+            "website",
+            "ceo",
+            "employees",
+            "beta",
+            "avg_volume",
+            "earnings_date",
+            "ex_dividend_date",
+            "target_est",
+            "week_52_high",
+            "week_52_low",
+            "peg_ratio",
+            "expense_ratio",
+            "fund_family",
+            "nav",
+            "max_supply",
+            "ath",
+            "ath_date",
+            "atl",
+            "atl_date",
         ):
             setattr(asset, field, None)
         for k, v in overrides.items():
@@ -90,9 +106,7 @@ class TestUpdateSlowChangingFields:
     def test_no_change_returns_false(self) -> None:
         asset = self._make_asset(beta=Decimal("1.24"))
         db = MagicMock()
-        changed = AssetMetricsService.update_slow_changing_fields(
-            db, asset, beta=Decimal("1.24")
-        )
+        changed = AssetMetricsService.update_slow_changing_fields(db, asset, beta=Decimal("1.24"))
         assert changed is False
         db.commit.assert_not_called()
 
@@ -100,27 +114,21 @@ class TestUpdateSlowChangingFields:
         """Should not overwrite existing values with None."""
         asset = self._make_asset(beta=Decimal("1.24"))
         db = MagicMock()
-        changed = AssetMetricsService.update_slow_changing_fields(
-            db, asset, beta=None
-        )
+        changed = AssetMetricsService.update_slow_changing_fields(db, asset, beta=None)
         assert changed is False
         assert asset.beta == Decimal("1.24")
 
     def test_commits_when_changed(self) -> None:
         asset = self._make_asset()
         db = MagicMock()
-        AssetMetricsService.update_slow_changing_fields(
-            db, asset, description="New description"
-        )
+        AssetMetricsService.update_slow_changing_fields(db, asset, description="New description")
         db.commit.assert_called_once()
 
     def test_sets_none_to_value(self) -> None:
         """Should set a field from None to a real value."""
         asset = self._make_asset(ceo=None)
         db = MagicMock()
-        changed = AssetMetricsService.update_slow_changing_fields(
-            db, asset, ceo="Tim Cook"
-        )
+        changed = AssetMetricsService.update_slow_changing_fields(db, asset, ceo="Tim Cook")
         assert changed is True
         assert asset.ceo == "Tim Cook"
 
@@ -128,7 +136,5 @@ class TestUpdateSlowChangingFields:
         """Should not crash on fields not in _SLOW_CHANGING_FIELDS."""
         asset = self._make_asset()
         db = MagicMock()
-        changed = AssetMetricsService.update_slow_changing_fields(
-            db, asset, unknown_field="value"
-        )
+        changed = AssetMetricsService.update_slow_changing_fields(db, asset, unknown_field="value")
         assert changed is False

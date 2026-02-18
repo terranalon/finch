@@ -330,7 +330,9 @@ class TestGetMarketData:
     """Tests for CoinGeckoClient.get_market_data."""
 
     @patch.object(CoinGeckoClient, "_request")
-    def test_returns_crypto_market_data(self, mock_request: object, client: CoinGeckoClient) -> None:
+    def test_returns_crypto_market_data(
+        self, mock_request: object, client: CoinGeckoClient
+    ) -> None:
         mock_request.return_value = SAMPLE_MARKETS_RESPONSE  # ty: ignore[unresolved-attribute]
         result = client.get_market_data(["BTC", "ETH"])
         assert "BTC" in result
@@ -349,7 +351,9 @@ class TestGetMarketData:
         assert result["BTC"].atl_date == date(2013, 7, 6)
 
     @patch.object(CoinGeckoClient, "_request")
-    def test_empty_symbols_returns_empty(self, mock_request: object, client: CoinGeckoClient) -> None:
+    def test_empty_symbols_returns_empty(
+        self, mock_request: object, client: CoinGeckoClient
+    ) -> None:
         result = client.get_market_data([])
         assert result == {}
         mock_request.assert_not_called()  # ty: ignore[unresolved-attribute]
