@@ -8,3 +8,4 @@ export { PortfolioModal } from './PortfolioModal';
 export { SetDefaultDialog } from './SetDefaultDialog';
 export { DeleteConfirmDialog } from './DeleteConfirmDialog';
 export { LinkAccountDropdown } from './LinkAccountDropdown';
+export { AccountActionDialog } from './AccountActionDialog';

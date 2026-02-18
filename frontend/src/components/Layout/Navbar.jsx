@@ -313,8 +313,8 @@ function PortfolioSelector() {
             </>
           )}
 
-          {/* Individual portfolios */}
-          {portfolios.map((portfolio) => {
+          {/* Individual portfolios - default first */}
+          {[...portfolios].sort((a, b) => Number(b.is_default) - Number(a.is_default)).map((portfolio) => {
             // Format total value in portfolio's default currency
             const formattedValue = portfolio.total_value != null
               ? new Intl.NumberFormat('en-US', {

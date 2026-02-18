@@ -9,8 +9,8 @@ import { LinkAccountDropdown } from './LinkAccountDropdown';
 import { PortfolioModal } from './PortfolioModal';
 
 export function PortfolioAccordionItem({ portfolio }) {
-  const { updatePortfolio, setDefault, unlinkAccount } = usePortfolioPage();
-  const [expanded, setExpanded] = useState(false);
+  const { updatePortfolio, setDefault } = usePortfolioPage();
+  const [expanded, setExpanded] = useState(portfolio.is_default);
   const [showDefaultDialog, setShowDefaultDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -100,6 +100,11 @@ export function PortfolioAccordionItem({ portfolio }) {
           )}
         >
           <div className="px-5 pb-[18px] border-t border-[var(--border-primary)]">
+            {portfolio.description && (
+              <p className="text-xs text-[var(--text-tertiary)] pt-3 pb-1 leading-snug">
+                {portfolio.description}
+              </p>
+            )}
             <div className="pt-3.5">
               {accounts.length === 0 ? (
                 <p className="text-xs text-[var(--text-tertiary)] py-2">No accounts linked yet.</p>
@@ -109,7 +114,6 @@ export function PortfolioAccordionItem({ portfolio }) {
                     key={account.id}
                     account={account}
                     portfolioId={portfolio.id}
-                    onUnlink={unlinkAccount}
                   />
                 ))
               )}

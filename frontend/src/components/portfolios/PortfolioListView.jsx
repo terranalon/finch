@@ -6,7 +6,7 @@ export function PortfolioListView({ onCreateNew }) {
   const { portfolios } = usePortfolioPage();
 
   return (
-    <div className="flex flex-col gap-3 max-w-[1100px] mx-auto">
+    <div className="flex flex-col gap-3">
       {portfolios.map((portfolio) => (
         <PortfolioAccordionItem key={portfolio.id} portfolio={portfolio} />
       ))}

@@ -9,7 +9,7 @@ import { LinkAccountDropdown } from './LinkAccountDropdown';
 import { PortfolioModal } from './PortfolioModal';
 
 export function PortfolioCard({ portfolio }) {
-  const { updatePortfolio, setDefault, unlinkAccount } = usePortfolioPage();
+  const { updatePortfolio, setDefault } = usePortfolioPage();
   const [showDefaultDialog, setShowDefaultDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -69,10 +69,12 @@ export function PortfolioCard({ portfolio }) {
               </div>
               <p className="text-[19px] font-bold text-[var(--text-primary)] mt-1 tabular-nums">
                 {formatCurrency(portfolio.total_value, portfolio.default_currency, { compact: true })}
-                <span className="text-[12px] font-normal text-[var(--text-tertiary)] ml-1">
-                  {portfolio.default_currency}
-                </span>
               </p>
+              {portfolio.description && (
+                <p className="text-[12px] text-[var(--text-tertiary)] mt-1 leading-snug line-clamp-2">
+                  {portfolio.description}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -89,7 +91,6 @@ export function PortfolioCard({ portfolio }) {
                 key={account.id}
                 account={account}
                 portfolioId={portfolio.id}
-                onUnlink={unlinkAccount}
               />
             ))
           )}

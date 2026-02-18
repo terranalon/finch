@@ -113,6 +113,15 @@ export function usePortfolioManagement() {
     );
   }, [mutate]);
 
+  const deleteAccount = useCallback(async (accountId) => {
+    return mutate(
+      `/accounts/${accountId}`,
+      { method: 'DELETE' },
+      'Account deleted',
+      'Failed to delete account'
+    );
+  }, [mutate]);
+
   const fetchDeletionPreview = useCallback(async (id) => {
     const response = await api(`/portfolios/${id}/deletion-preview`);
     if (response.ok) {
@@ -141,6 +150,7 @@ export function usePortfolioManagement() {
     setDefault,
     linkAccount,
     unlinkAccount,
+    deleteAccount,
     fetchDeletionPreview,
     fetchLinkableAccounts,
     refetch: fetchPortfolios,
