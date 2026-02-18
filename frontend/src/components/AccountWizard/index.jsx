@@ -556,18 +556,18 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
   const showStepIndicator = effectiveStep > 1 && category?.id !== CATEGORY_IDS.LINK && !isImporting;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-[var(--bg-primary)] flex flex-col">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <header className="flex-shrink-0 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <button
             onClick={handleClose}
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
           >
             <XIcon className="size-5" />
             <span className="font-medium hidden sm:inline">Cancel</span>
           </button>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
             Add Account
           </h1>
           <div className="w-20" />
@@ -576,7 +576,7 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
 
       {/* Step indicator */}
       {showStepIndicator && (
-        <div className="flex-shrink-0 py-6 px-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+        <div className="flex-shrink-0 py-6 px-4 border-b border-[var(--border-primary)] bg-[var(--bg-secondary)]/50">
           <WizardStepIndicator
             currentStep={effectiveStep}
             maxReachedStep={maxReachedStep}

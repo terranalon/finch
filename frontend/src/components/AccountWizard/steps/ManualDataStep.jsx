@@ -20,25 +20,25 @@ const TEMPLATE_DOWNLOADS = [
     href: '/templates/manual_import_example.csv',
     filename: 'manual_import_example.csv',
     label: 'Download CSV Template',
-    className: 'bg-indigo-600 text-white hover:bg-indigo-700',
+    className: 'bg-accent text-white hover:bg-accent-hover',
   },
   {
     href: '/templates/manual_import_example.xlsx',
     filename: 'manual_import_example.xlsx',
     label: 'Download Excel Template',
     className:
-      'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border-2 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30',
+      'bg-[var(--bg-primary)] text-accent dark:text-accent-400 border-2 border-accent-200 dark:border-accent-800 hover:bg-accent-50 dark:hover:bg-accent-900/30',
   },
 ];
 
 function getDropZoneStyle(selectedFile, fileError) {
   if (selectedFile) {
-    return 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20';
+    return 'border-positive dark:border-positive-dark bg-positive-light/50 dark:bg-positive-bg-dark/20';
   }
   if (fileError) {
-    return 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20';
+    return 'border-negative dark:border-negative-dark bg-negative-bg/50 dark:bg-negative-bg-dark/20';
   }
-  return 'border-gray-300 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20';
+  return 'border-[var(--border-primary)] hover:border-accent hover:bg-accent-50/50 dark:hover:bg-accent-900/20';
 }
 
 export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
@@ -73,25 +73,25 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-3">
           Import your transactions
         </h2>
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
+        <p className="text-[var(--text-tertiary)] text-lg">
           Upload a CSV or Excel file using our transaction template.
         </p>
       </div>
 
       {/* Template download section */}
-      <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-2 border-indigo-200 dark:border-indigo-800">
+      <div className="mb-8 p-6 rounded-2xl bg-accent-50 dark:bg-accent-900/20 border-2 border-accent-200 dark:border-accent-800">
         <div className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-900/50">
-            <TableIcon className="size-6 text-indigo-600 dark:text-indigo-400" />
+          <div className="p-3 rounded-xl bg-accent-100 dark:bg-accent-900/50">
+            <TableIcon className="size-6 text-accent dark:text-accent-400" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 dark:text-white">
+            <h3 className="font-semibold text-[var(--text-primary)]">
               Transaction Template
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-sm text-[var(--text-secondary)] mt-1">
               Download our template and fill in your transactions. The file must include the required columns.
             </p>
             <div className="flex flex-wrap gap-3 mt-4">
@@ -115,21 +115,21 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
       </div>
 
       {/* Required columns info */}
-      <div className="mb-8 p-5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-        <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Required Columns</h4>
+      <div className="mb-8 p-5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-primary)]">
+        <h4 className="font-semibold text-[var(--text-primary)] mb-3">Required Columns</h4>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           {REQUIRED_COLUMNS.map((col) => (
             <div key={col} className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-red-500" aria-hidden="true" />
-              <span className="text-gray-700 dark:text-gray-300">{col}</span>
+              <div className="size-2 rounded-full bg-negative" aria-hidden="true" />
+              <span className="text-[var(--text-secondary)]">{col}</span>
             </div>
           ))}
         </div>
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Optional Columns</h5>
-          <div className="flex flex-wrap gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <div className="mt-4 pt-4 border-t border-[var(--border-primary)]">
+          <h5 className="font-medium text-[var(--text-secondary)] mb-2">Optional Columns</h5>
+          <div className="flex flex-wrap gap-2 text-sm text-[var(--text-tertiary)]">
             {OPTIONAL_COLUMNS.map((col) => (
-              <span key={col} className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">
+              <span key={col} className="px-2 py-1 rounded bg-[var(--bg-tertiary)]">
                 {col}
               </span>
             ))}
@@ -148,17 +148,17 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
         onKeyDown={handleKeyDown}
         className={cn(
           'border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-6',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+          'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2',
           getDropZoneStyle(selectedFile, fileError),
         )}
       >
         {selectedFile ? (
           <>
-            <CheckIcon className="size-12 text-emerald-500 mx-auto mb-4" />
-            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+            <CheckIcon className="size-12 text-positive mx-auto mb-4" />
+            <p className="text-lg font-semibold text-[var(--text-primary)]">
               {selectedFile.name}
             </p>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">
+            <p className="text-[var(--text-tertiary)] mt-2">
               Click to select a different file
             </p>
           </>
@@ -166,17 +166,17 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
           <>
             <UploadIcon className={cn(
               'size-12 mx-auto mb-4',
-              fileError ? 'text-red-400' : 'text-gray-400'
+              fileError ? 'text-negative' : 'text-[var(--text-tertiary)]'
             )} />
-            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+            <p className="text-lg font-semibold text-[var(--text-primary)]">
               Drop your file here
             </p>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">
+            <p className="text-[var(--text-tertiary)] mt-2">
               or click to browse
             </p>
             <p className={cn(
               'text-sm mt-4',
-              fileError ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'
+              fileError ? 'text-negative dark:text-negative-dark' : 'text-[var(--text-tertiary)]'
             )}>
               {fileError || 'Supported formats: CSV, XLSX'}
             </p>
@@ -204,7 +204,7 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
         type="button"
         onClick={() => selectedFile && onComplete({ file: selectedFile })}
         disabled={!selectedFile}
-        className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+        className="w-full px-6 py-3.5 rounded-xl text-base font-semibold bg-accent text-white hover:bg-accent-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
       >
         Upload & Import
       </button>
@@ -214,7 +214,7 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+          className="flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
         >
           <ArrowLeftIcon className="size-5" />
           <span className="font-medium">Back</span>
@@ -222,7 +222,7 @@ export function ManualDataStep({ onComplete, onSkip, onBack, onError }) {
         <button
           type="button"
           onClick={onSkip}
-          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium cursor-pointer"
+          className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] font-medium cursor-pointer"
         >
           Skip for now
         </button>

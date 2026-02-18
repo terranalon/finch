@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useChartColors } from '../hooks/useChartColors'
 import {
   LineChart,
   Line,
@@ -29,6 +30,7 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
   const [error, setError] = useState(null)
   const [timeRange, setTimeRange] = useState('90D') // 7D, 30D, 90D, 1Y, ALL
   const [chartType, setChartType] = useState('area') // line, area
+  const chartColors = useChartColors()
 
   const currencies = {
     USD: { symbol: '$', name: 'US Dollar' },
@@ -149,15 +151,15 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
     if (active && payload && payload.length) {
       const value = payload[0].value
       return (
-        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-          <p className="text-sm font-semibold text-gray-700">
+        <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg shadow-lg p-3">
+          <p className="text-sm font-semibold text-[var(--text-secondary)]">
             {new Date(label).toLocaleDateString('en-US', {
               month: 'long',
               day: 'numeric',
               year: 'numeric'
             })}
           </p>
-          <p className="text-lg font-bold text-primary-600 mt-1">
+          <p className="text-lg font-bold text-accent mt-1 font-mono tabular-nums">
             {formatCurrency(value)}
           </p>
         </div>
@@ -170,7 +172,7 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
     return (
       <div className="card">
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading historical data...</div>
+          <div className="text-[var(--text-tertiary)]">Loading historical data...</div>
         </div>
       </div>
     )
@@ -179,9 +181,9 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
   if (error) {
     return (
       <div className="card">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800 font-medium">Error loading chart</p>
-          <p className="text-red-600 text-sm mt-1">{error}</p>
+        <div className="bg-negative-bg border border-negative rounded-lg p-4">
+          <p className="text-negative font-medium">Error loading chart</p>
+          <p className="text-negative text-sm mt-1">{error}</p>
         </div>
       </div>
     )
@@ -190,7 +192,7 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
   if (snapshots.length === 0) {
     return (
       <div className="card">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700">Portfolio Performance</h2>
+        <h2 className="text-xl font-semibold mb-4 text-[var(--text-secondary)]">Portfolio Performance</h2>
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">No historical data available for the selected time range.</p>
           <p className="text-yellow-700 text-sm mt-1">
@@ -206,21 +208,21 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
       {/* Header with controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-gray-700">Portfolio Performance</h2>
-          <p className="text-sm text-gray-500 mt-1">{snapshots.length} data points</p>
+          <h2 className="text-xl font-semibold text-[var(--text-secondary)]">Portfolio Performance</h2>
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">{snapshots.length} data points</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {/* Time Range Selector */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-[var(--bg-tertiary)] rounded-lg p-1">
             {['7D', '30D', '90D', '1Y', 'ALL'].map((range) => (
               <button
                 key={range}
                 onClick={() => setTimeRange(range)}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                   timeRange === range
-                    ? 'bg-white text-primary-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-[var(--bg-primary)] text-accent shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {range}
@@ -229,13 +231,13 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
           </div>
 
           {/* Chart Type Toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-[var(--bg-tertiary)] rounded-lg p-1">
             <button
               onClick={() => setChartType('line')}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 chartType === 'line'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-[var(--bg-primary)] text-accent shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               Line
@@ -244,8 +246,8 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
               onClick={() => setChartType('area')}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 chartType === 'area'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-[var(--bg-primary)] text-accent shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               Area
@@ -257,30 +259,30 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
       {/* Performance Metrics */}
       {metrics && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-600 mb-1">Starting Value</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-[var(--bg-secondary)] rounded-lg p-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-1">Starting Value</p>
+            <p className="text-lg font-semibold text-[var(--text-primary)] font-mono tabular-nums">
               {formatCurrency(metrics.initialValue)}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-600 mb-1">Current Value</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-[var(--bg-secondary)] rounded-lg p-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-1">Current Value</p>
+            <p className="text-lg font-semibold text-[var(--text-primary)] font-mono tabular-nums">
               {formatCurrency(metrics.currentValue)}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-600 mb-1">Total Change</p>
-            <p className={`text-lg font-semibold ${
-              metrics.absoluteChange >= 0 ? 'text-green-600' : 'text-red-600'
+          <div className="bg-[var(--bg-secondary)] rounded-lg p-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-1">Total Change</p>
+            <p className={`text-lg font-semibold font-mono tabular-nums ${
+              metrics.absoluteChange >= 0 ? 'text-positive' : 'text-negative'
             }`}>
               {metrics.absoluteChange >= 0 ? '+' : ''}{formatCurrency(metrics.absoluteChange)}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-600 mb-1">Percent Change</p>
-            <p className={`text-lg font-semibold ${
-              metrics.percentChange >= 0 ? 'text-green-600' : 'text-red-600'
+          <div className="bg-[var(--bg-secondary)] rounded-lg p-3">
+            <p className="text-xs text-[var(--text-secondary)] mb-1">Percent Change</p>
+            <p className={`text-lg font-semibold font-mono tabular-nums ${
+              metrics.percentChange >= 0 ? 'text-positive' : 'text-negative'
             }`}>
               {metrics.percentChange >= 0 ? '+' : ''}{metrics.percentChange.toFixed(2)}%
             </p>
@@ -294,20 +296,20 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
           <AreaChart data={snapshots} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                <stop offset="5%" stopColor={chartColors.accent} stopOpacity={0.3}/>
+                <stop offset="95%" stopColor={chartColors.accent} stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.borderPrimary} />
             <XAxis
               dataKey="date"
-              stroke="#6b7280"
+              stroke={chartColors.textTertiary}
               tick={{ fontSize: 12 }}
               tickFormatter={formatDate}
               minTickGap={30}
             />
             <YAxis
-              stroke="#6b7280"
+              stroke={chartColors.textTertiary}
               tick={{ fontSize: 12 }}
               domain={[
                 dataMin => dataMin * 0.995,
@@ -327,7 +329,7 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
             <Area
               type="monotone"
               dataKey="value"
-              stroke="#3b82f6"
+              stroke={chartColors.accent}
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorValue)"
@@ -335,16 +337,16 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
           </AreaChart>
         ) : (
           <LineChart data={snapshots} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.borderPrimary} />
             <XAxis
               dataKey="date"
-              stroke="#6b7280"
+              stroke={chartColors.textTertiary}
               tick={{ fontSize: 12 }}
               tickFormatter={formatDate}
               minTickGap={30}
             />
             <YAxis
-              stroke="#6b7280"
+              stroke={chartColors.textTertiary}
               tick={{ fontSize: 12 }}
               domain={[
                 dataMin => dataMin * 0.995,
@@ -364,7 +366,7 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
             <Line
               type="monotone"
               dataKey="value"
-              stroke="#3b82f6"
+              stroke={chartColors.accent}
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 6 }}
@@ -374,8 +376,8 @@ function HistoricalPerformanceChart({ accountId = null, displayCurrency = 'USD' 
       </ResponsiveContainer>
 
       {/* Data Info */}
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <div className="flex justify-between items-center text-sm text-gray-600">
+      <div className="mt-4 pt-4 border-t border-[var(--border-primary)]">
+        <div className="flex justify-between items-center text-sm text-[var(--text-secondary)]">
           <span>
             {new Date(snapshots[0].date).toLocaleDateString()} - {new Date(snapshots[snapshots.length - 1].date).toLocaleDateString()}
           </span>

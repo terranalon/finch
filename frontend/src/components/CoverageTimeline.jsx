@@ -58,13 +58,13 @@ export function CoverageTimeline({ files = [], gaps = [] }) {
   return (
     <div data-testid="coverage-timeline">
       {/* Date range labels */}
-      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+      <div className="flex justify-between text-xs text-[var(--text-tertiary)] mb-2">
         <span>{formatDateShort(minDate)}</span>
         <span>{formatDateShort(maxDate)}</span>
       </div>
 
       {/* Timeline bar */}
-      <div className="relative h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+      <div className="relative h-3 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
         {/* File coverage segments */}
         {fileSegments.map((seg, idx) => (
           <div
@@ -88,12 +88,12 @@ export function CoverageTimeline({ files = [], gaps = [] }) {
       {/* Legend */}
       <div className="mt-3 space-y-1">
         {fileSegments.map((seg, idx) => (
-          <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+          <div key={idx} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
             <span className={`inline-block w-2.5 h-2.5 rounded-full ${seg.dotClass}`} />
             <span className="truncate max-w-[140px]" title={seg.fileName}>
               {seg.fileName}
             </span>
-            <span className="text-gray-400 dark:text-gray-500">
+            <span className="text-[var(--text-tertiary)]">
               {seg.transactions} transactions
             </span>
           </div>

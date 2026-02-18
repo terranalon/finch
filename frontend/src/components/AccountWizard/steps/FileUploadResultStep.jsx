@@ -67,13 +67,13 @@ export function FileUploadResultStep({
     <div className="max-w-2xl mx-auto">
       {/* Success header */}
       <div className="text-center mb-8">
-        <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-          <CheckIcon className="size-8 text-emerald-600 dark:text-emerald-400" />
+        <div className="size-16 rounded-full bg-positive-light dark:bg-positive-bg-dark/30 flex items-center justify-center mx-auto mb-4">
+          <CheckIcon className="size-8 text-positive dark:text-positive-dark" />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-3">
           File imported successfully!
         </h2>
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
+        <p className="text-[var(--text-tertiary)] text-lg">
           {hasMultipleFiles
             ? `You've imported ${allUploads.length} files covering ${combinedStats.dateRange.start} to ${combinedStats.dateRange.end}.`
             : `We found data from ${currentUpload.summary?.dateRange?.start || 'N/A'} to ${currentUpload.summary?.dateRange?.end || 'N/A'}.`}
@@ -81,23 +81,23 @@ export function FileUploadResultStep({
       </div>
 
       {/* Import summary card */}
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+      <div className="rounded-2xl border border-[var(--border-primary)] overflow-hidden mb-6">
         {/* Card header */}
-        <div className="px-5 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-5 py-4 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)]">
           <div className="grid grid-cols-4 gap-4 text-center">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              <FolderIcon className="size-4 text-gray-500 dark:text-gray-400 mx-auto mb-1" />
+            <div className="text-sm font-semibold text-[var(--text-secondary)]">
+              <FolderIcon className="size-4 text-[var(--text-tertiary)] mx-auto mb-1" />
               File
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            <div className="text-sm font-semibold text-[var(--text-secondary)]">
               <DocumentIcon className="size-4 text-purple-600 dark:text-purple-400 mx-auto mb-1" />
               Transactions
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            <div className="text-sm font-semibold text-[var(--text-secondary)]">
               <ChartBarIcon className="size-4 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
               Assets
             </div>
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            <div className="text-sm font-semibold text-[var(--text-secondary)]">
               <CalendarIcon className="size-4 text-amber-600 dark:text-amber-400 mx-auto mb-1" />
               Date Range
             </div>
@@ -105,19 +105,19 @@ export function FileUploadResultStep({
         </div>
 
         {/* File rows */}
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        <div className="divide-y divide-[var(--border-primary)]">
           {allUploads.map((upload, idx) => (
             <div key={idx} className="px-5 py-4 grid grid-cols-4 gap-4 items-center text-center">
-              <div className="text-sm text-gray-900 dark:text-white truncate" title={upload.fileName}>
+              <div className="text-sm text-[var(--text-primary)] truncate" title={upload.fileName}>
                 {upload.fileName}
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+              <div className="text-lg font-bold text-[var(--text-primary)] tabular-nums">
                 {upload.summary?.totalTransactions || 0}
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+              <div className="text-lg font-bold text-[var(--text-primary)] tabular-nums">
                 {upload.summary?.totalAssets || 0}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-[var(--text-secondary)]">
                 <span className="block">{upload.summary?.dateRange?.start || 'N/A'}</span>
                 <span className="block">to {upload.summary?.dateRange?.end || 'N/A'}</span>
               </div>
@@ -127,17 +127,17 @@ export function FileUploadResultStep({
 
         {/* Totals row - only for multiple files */}
         {hasMultipleFiles && (
-          <div className="px-5 py-4 grid grid-cols-4 gap-4 items-center text-center bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-300 dark:border-emerald-700">
-            <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+          <div className="px-5 py-4 grid grid-cols-4 gap-4 items-center text-center bg-positive-light dark:bg-positive-bg-dark/30 border-t-2 border-positive-light dark:border-positive-dark/30">
+            <div className="text-sm font-semibold text-positive dark:text-positive-dark">
               Total ({allUploads.length} files)
             </div>
-            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+            <div className="text-lg font-bold text-positive dark:text-positive-dark tabular-nums">
               {combinedStats.totalTransactions}
             </div>
-            <div className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+            <div className="text-lg font-bold text-positive dark:text-positive-dark tabular-nums">
               {combinedStats.totalAssets}
             </div>
-            <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            <div className="text-sm font-semibold text-positive dark:text-positive-dark">
               <span className="block">{combinedStats.dateRange.start}</span>
               <span className="block">to {combinedStats.dateRange.end}</span>
             </div>
@@ -147,7 +147,7 @@ export function FileUploadResultStep({
 
       {/* Question prompt */}
       <div className="text-center mb-6">
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-[var(--text-secondary)]">
           Do you have more files to import?
         </p>
       </div>
@@ -157,7 +157,7 @@ export function FileUploadResultStep({
         <button
           type="button"
           onClick={onUploadAnother}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-semibold border-2 border-[var(--border-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
         >
           <PlusIcon className="size-5" />
           Upload Another File
@@ -165,7 +165,7 @@ export function FileUploadResultStep({
         <button
           type="button"
           onClick={onContinue}
-          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
+          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer"
         >
           That's All
           <ArrowRightIcon className="size-5" />

@@ -40,11 +40,11 @@ export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps 
               <div
                 className={cn(
                   'size-8 sm:size-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all',
-                  isCompleted && !isSkipped && 'bg-emerald-500 text-white',
-                  isCompleted && !isSkipped && isClickable && 'group-hover:bg-emerald-600 group-hover:ring-4 group-hover:ring-emerald-100 dark:group-hover:ring-emerald-900/50',
-                  isCurrent && 'bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/50',
-                  !isCompleted && !isCurrent && 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
-                  isSkipped && 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                  isCompleted && !isSkipped && 'bg-positive text-white',
+                  isCompleted && !isSkipped && isClickable && 'group-hover:bg-positive-dark group-hover:ring-4 group-hover:ring-positive-light dark:group-hover:ring-positive-bg-dark',
+                  isCurrent && 'bg-accent text-white ring-4 ring-accent-light dark:ring-accent-900/50',
+                  !isCompleted && !isCurrent && 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]',
+                  isSkipped && 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'
                 )}
               >
                 {isCompleted && !isSkipped ? (
@@ -56,10 +56,10 @@ export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps 
               <span
                 className={cn(
                   'text-sm font-medium hidden md:block transition-colors',
-                  isCompleted && !isSkipped && 'text-gray-900 dark:text-white',
-                  isCompleted && !isSkipped && isClickable && 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400',
-                  isCurrent && 'text-gray-900 dark:text-white',
-                  !isCompleted && !isCurrent && 'text-gray-400 dark:text-gray-500'
+                  isCompleted && !isSkipped && 'text-[var(--text-primary)]',
+                  isCompleted && !isSkipped && isClickable && 'group-hover:text-positive dark:group-hover:text-positive-dark',
+                  isCurrent && 'text-[var(--text-primary)]',
+                  !isCompleted && !isCurrent && 'text-[var(--text-tertiary)]'
                 )}
               >
                 {step.label}
@@ -70,8 +70,8 @@ export function WizardStepIndicator({ currentStep, maxReachedStep, skippedSteps 
                 className={cn(
                   'w-8 sm:w-12 lg:w-16 h-1 rounded-full transition-colors',
                   currentStep > step.num && !skippedSteps.includes(step.num + 1)
-                    ? 'bg-emerald-500'
-                    : 'bg-gray-200 dark:bg-gray-700'
+                    ? 'bg-positive'
+                    : 'bg-[var(--bg-tertiary)]'
                 )}
               />
             )}
