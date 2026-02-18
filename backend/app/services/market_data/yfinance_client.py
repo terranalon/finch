@@ -486,6 +486,48 @@ class YFinanceClient:
             futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
             return dict(f.result() for f in as_completed(futures))
 
+    def get_batch_ticker_info(
+        self,
+        symbols: list[str],
+        *,
+        max_workers: int = 16,
+        rate: float = 15.0,
+    ) -> dict[str, TickerMarketData | None]:
+        """Batch fetch rich ticker.info data using ThreadPoolExecutor.
+
+        Same concurrency pattern as get_batch_prices_threaded but calls
+        ticker.info instead of ticker.history, returning richer data for
+        the intraday enrichment flow.
+
+        Args:
+            symbols: List of ticker symbols
+            max_workers: Thread pool size
+            rate: Max requests per second
+
+        Returns:
+            Dict mapping symbol to TickerMarketData or None if failed
+        """
+        if not symbols:
+            return {}
+
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1), jitter=1.0 / rate)
+
+        def fetch_one(symbol: str) -> tuple[str, TickerMarketData | None]:
+            try:
+                bucket.acquire()
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                if not info:
+                    return symbol, None
+                return symbol, self._parse_ticker_info(symbol, info)
+            except Exception:
+                logger.debug("Failed to fetch info for %s", symbol, exc_info=True)
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
+            return dict(f.result() for f in as_completed(futures))
+
     @staticmethod
     def _safe_decimal(info: dict[str, Any], key: str) -> Decimal | None:
         """Extract a Decimal from info dict, handling None and NaN."""

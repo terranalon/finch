@@ -13,6 +13,7 @@ from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
     OHLCVRow,
     TickerInfo,
+    TickerMarketData,
     YFinanceClient,
     _TokenBucket,
 )
@@ -608,8 +609,6 @@ class TestParseTickerInfo:
     """Tests for YFinanceClient._parse_ticker_info."""
 
     def test_parses_all_fields(self):
-        from app.services.market_data.yfinance_client import TickerMarketData
-
         result = YFinanceClient._parse_ticker_info("AAPL", SAMPLE_TICKER_INFO)
         assert result is not None
         assert result.symbol == "AAPL"
@@ -699,3 +698,42 @@ class TestGetBatchPricesThreadedTargetDate:
 
         assert len(result) == 3
         assert all(v is not None for v in result.values())
+
+
+class TestGetBatchTickerInfo:
+    """Tests for YFinanceClient.get_batch_ticker_info."""
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_ticker_market_data(self, mock_yf: object) -> None:
+        mock_ticker = mock_yf.Ticker.return_value  # ty: ignore[unresolved-attribute]
+        mock_ticker.info = SAMPLE_TICKER_INFO
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["AAPL"], rate=100.0)
+        assert "AAPL" in result
+        assert isinstance(result["AAPL"], TickerMarketData)
+        assert result["AAPL"].price == Decimal("175.5")
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_none_for_failed_symbol(self, mock_yf: object) -> None:
+        mock_yf.Ticker.side_effect = Exception("Network error")  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["BAD"], rate=100.0)
+        assert result["BAD"] is None
+
+    def test_empty_list_returns_empty_dict(self) -> None:
+        result = YFinanceClient().get_batch_ticker_info([])
+        assert result == {}
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_multiple_symbols(self, mock_yf: object) -> None:
+        mock_yf.Ticker.return_value.info = SAMPLE_TICKER_INFO  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["AAPL", "MSFT"], rate=100.0)
+        assert len(result) == 2
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_none_for_no_price(self, mock_yf: object) -> None:
+        mock_yf.Ticker.return_value.info = {"quoteType": "EQUITY"}  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["DELISTED"], rate=100.0)
+        assert result["DELISTED"] is None
