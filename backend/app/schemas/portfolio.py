@@ -60,7 +60,7 @@ class AccountInPortfolio(BaseModel):
 
 
 class PortfolioWithAccountCount(Portfolio):
-    """Portfolio with account count for list endpoint."""
+    """Portfolio list response with account count, optional values, and optional account details."""
 
     account_count: int = 0
     total_value: float | None = None
