@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { cn } from '../lib';
 import { getMfaStatus, setPrimaryMfaMethod } from '../lib/api';
-import { useTheme, useCurrency, useAuth } from '../contexts';
+import { useTheme, useCurrency, useAuth, SUPPORTED_CURRENCIES } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { ChangePassword } from '../components/ChangePassword';
 import { TotpSetup, EmailOtpSetup, DisableMfaMethod, RegenerateRecoveryCodes } from '../components/MfaSetup';
@@ -571,8 +571,8 @@ export default function Settings() {
                 )}
               >
                 {SUPPORTED_CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                  <option key={c.code} value={c.code}>
+                    {c.code}
                   </option>
                 ))}
               </select>
