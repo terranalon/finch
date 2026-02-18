@@ -112,7 +112,7 @@ class TestUpdateAllAssetPricesBatch:
     @patch("app.services.market_data.price_fetcher.YFinanceClient")
     @patch("app.services.market_data.price_fetcher._get_coingecko_client")
     def test_agorot_conversion_in_batch(self, mock_cg, mock_yf_cls, mock_metrics):
-        """Should divide .TA symbol prices by 100 (Agorot to ILS)."""
+        """Should divide .TA symbol prices by 100 (Agorot to ILS) for all OHLC fields."""
         db = MagicMock()
         teva = _make_asset("TEVA.TA", currency="ILS")
         db.execute.return_value.scalars.return_value.all.return_value = [teva]
@@ -126,6 +126,12 @@ class TestUpdateAllAssetPricesBatch:
 
         assert stats["updated"] == 1
         assert teva.last_fetched_price == Decimal("56.78")
+        # All OHLC fields must be converted from Agorot to ILS (divided by 100)
+        call_kwargs = mock_metrics.upsert_daily_metrics.call_args.kwargs
+        assert call_kwargs["close"] == Decimal("56.78")
+        assert call_kwargs["open"] == Decimal("56.78")
+        assert call_kwargs["high"] == Decimal("56.78")
+        assert call_kwargs["low"] == Decimal("56.78")
 
     @patch("app.services.market_data.price_fetcher.AssetMetricsService")
     @patch("app.services.market_data.price_fetcher.YFinanceClient")

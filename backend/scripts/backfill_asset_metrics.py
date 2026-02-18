@@ -49,17 +49,19 @@ def backfill_stocks(db: Session, assets: list[Asset]) -> dict[str, int]:
             continue
 
         try:
-            price = data.close
-            if price is not None and asset.symbol.endswith(".TA"):
-                price = price / _AGOROT_DIVISOR
+            divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
+            price = data.close / divisor if divisor and data.close else data.close
+            open_ = data.open / divisor if divisor and data.open else data.open
+            high_ = data.high / divisor if divisor and data.high else data.high
+            low_ = data.low / divisor if divisor and data.low else data.low
 
             AssetMetricsService.upsert_daily_metrics(
                 db,
                 asset_id=asset.id,
                 target_date=today,
-                open=data.open,
-                high=data.high,
-                low=data.low,
+                open=open_,
+                high=high_,
+                low=low_,
                 close=price,
                 volume=data.volume,
                 market_cap=data.market_cap,

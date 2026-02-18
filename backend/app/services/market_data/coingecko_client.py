@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import httpx
 
@@ -371,7 +372,7 @@ class CoinGeckoClient:
             return None
 
     @staticmethod
-    def _parse_market_coin(symbol: str, coin: dict) -> CryptoMarketData:  # ty: ignore[invalid-argument-type]
+    def _parse_market_coin(symbol: str, coin: dict[str, Any]) -> CryptoMarketData:
         """Parse a single coin entry from /coins/markets response."""
 
         def _dec(key: str) -> Decimal | None:

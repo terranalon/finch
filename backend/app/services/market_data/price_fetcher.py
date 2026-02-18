@@ -190,9 +190,11 @@ class PriceFetcher:
                     logger.warning("No ticker info for %s", asset.symbol)
                     continue
 
-                price = data.price
-                if asset.symbol.endswith(".TA"):
-                    price = price / _AGOROT_DIVISOR
+                divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
+                price = data.price / divisor if divisor and data.price else data.price
+                open_ = data.open / divisor if divisor and data.open else data.open
+                high_ = data.high / divisor if divisor and data.high else data.high
+                low_ = data.low / divisor if divisor and data.low else data.low
 
                 asset.last_fetched_price = price
                 asset.last_fetched_at = datetime.now()
@@ -203,9 +205,9 @@ class PriceFetcher:
                         db,
                         asset_id=asset.id,
                         target_date=today,
-                        open=data.open,
-                        high=data.high,
-                        low=data.low,
+                        open=open_,
+                        high=high_,
+                        low=low_,
                         close=price,
                         volume=data.volume,
                         market_cap=data.market_cap,
