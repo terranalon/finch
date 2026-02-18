@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
 import { usePortfolioPage } from '../../contexts/PortfolioPageContext';
+import { cn } from '../../lib';
 
 export function AccountActionDialog({ isOpen, onClose, account, portfolioId }) {
-  const { unlinkAccount, deleteAccount } = usePortfolioPage();
+  const { unlinkAccount, deleteAccount, portfolios } = usePortfolioPage();
   const [acting, setActing] = useState(null);
+
+  const portfolioCount = portfolios.filter(
+    (p) => p.accounts?.some((a) => a.id === account?.id)
+  ).length;
+  const canUnlink = portfolioCount > 1;
+  const unlinkBlockedReason = canUnlink
+    ? null
+    : 'This account only exists in this portfolio and cannot be unlinked. Use "Delete" to remove it.';
 
   const handleUnlink = async () => {
     setActing('unlink');
@@ -46,18 +55,28 @@ export function AccountActionDialog({ isOpen, onClose, account, portfolioId }) {
           </p>
 
           <div className="flex flex-col gap-2 mb-5">
-            <button
-              onClick={handleUnlink}
-              disabled={!!acting}
-              className="w-full px-4 py-3 rounded-lg text-sm font-medium text-left border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <span className="block text-[var(--text-primary)]">
-                {acting === 'unlink' ? 'Unlinking...' : 'Unlink from this portfolio'}
-              </span>
-              <span className="block text-xs text-[var(--text-tertiary)] mt-0.5">
-                The account remains available in other portfolios
-              </span>
-            </button>
+            {/* Wrapper div carries the tooltip when the button is disabled */}
+            <div title={unlinkBlockedReason ?? undefined}>
+              <button
+                onClick={handleUnlink}
+                disabled={!!acting || !canUnlink}
+                className={cn(
+                  'w-full px-4 py-3 rounded-lg text-sm font-medium text-left border border-[var(--border-primary)] bg-[var(--bg-secondary)] transition-colors',
+                  canUnlink && !acting
+                    ? 'hover:bg-[var(--bg-tertiary)] cursor-pointer'
+                    : 'opacity-50 cursor-not-allowed pointer-events-none'
+                )}
+              >
+                <span className="block text-[var(--text-primary)]">
+                  {acting === 'unlink' ? 'Unlinking...' : 'Unlink from this portfolio'}
+                </span>
+                <span className="block text-xs text-[var(--text-tertiary)] mt-0.5">
+                  {canUnlink
+                    ? 'The account remains available in other portfolios'
+                    : 'Not available — account only exists in this portfolio'}
+                </span>
+              </button>
+            </div>
 
             <button
               onClick={handleDelete}
