@@ -1,6 +1,7 @@
 """Tests for portfolios router with many-to-many relationships."""
 
 import os
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
+from app.models import Asset, Holding
 from app.models.account import Account
 from app.models.portfolio import Portfolio
 from app.models.user import User
@@ -30,8 +32,10 @@ def test_db():
     yield engine
 
     with engine.connect() as conn:
+        conn.execute(text("DELETE FROM holdings"))
         conn.execute(text("DELETE FROM portfolio_accounts"))
         conn.execute(text("DELETE FROM accounts"))
+        conn.execute(text("DELETE FROM assets"))
         conn.execute(text("DELETE FROM portfolios"))
         conn.execute(text("DELETE FROM sessions"))
         conn.execute(text("DELETE FROM users WHERE email LIKE 'test_%'"))
@@ -97,6 +101,96 @@ def make_account(
 ):
     """Create an Account instance with sensible defaults."""
     return Account(name=name, institution=institution, account_type=account_type, currency=currency)
+
+
+def test_list_portfolios_without_include_accounts(client, auth_headers, test_user, db_session):
+    """GET /portfolios without include_accounts omits account details."""
+    portfolio = Portfolio(name="Test", user_id=test_user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = make_account()
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.get("/api/portfolios", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    p = next(p for p in data if p["name"] == "Test")
+    assert p["accounts"] is None
+
+
+def test_list_portfolios_with_include_accounts(client, auth_headers, test_user, db_session):
+    """GET /portfolios?include_accounts=true embeds account details."""
+    portfolio = Portfolio(name="Test", user_id=test_user.id)
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = make_account(name="Kraken", institution="Kraken", account_type="CryptoExchange")
+    account.broker_type = "kraken"
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.get("/api/portfolios?include_accounts=true", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    p = next(p for p in data if p["name"] == "Test")
+
+    assert p["accounts"] is not None
+    assert len(p["accounts"]) == 1
+    acc = p["accounts"][0]
+    assert acc["name"] == "Kraken"
+    assert acc["institution"] == "Kraken"
+    assert acc["account_type"] == "CryptoExchange"
+    assert acc["currency"] == "USD"
+    assert acc["broker_type"] == "kraken"
+    assert acc["value"] is None  # No include_values, so value is None
+
+
+def test_list_portfolios_with_accounts_and_values(client, auth_headers, test_user, db_session):
+    """GET /portfolios?include_accounts=true&include_values=true includes per-account values."""
+    portfolio = Portfolio(name="Test", user_id=test_user.id, default_currency="USD")
+    db_session.add(portfolio)
+    db_session.flush()
+
+    account = make_account()
+    account.portfolios = [portfolio]
+    db_session.add(account)
+    db_session.flush()
+
+    asset = Asset(
+        symbol="AAPL",
+        name="Apple Inc.",
+        asset_class="Equity",
+        currency="USD",
+        last_fetched_price=Decimal("200.00"),
+    )
+    db_session.add(asset)
+    db_session.flush()
+
+    holding = Holding(
+        account_id=account.id,
+        asset_id=asset.id,
+        quantity=Decimal("5"),
+        cost_basis=Decimal("900"),
+        is_active=True,
+    )
+    db_session.add(holding)
+    db_session.commit()
+
+    response = client.get(
+        "/api/portfolios?include_accounts=true&include_values=true",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    p = next(p for p in data if p["name"] == "Test")
+
+    assert p["total_value"] == pytest.approx(1000.0)
+    assert len(p["accounts"]) == 1
+    assert p["accounts"][0]["value"] == pytest.approx(1000.0)
 
 
 def test_list_portfolios_shows_account_count(client, auth_headers, test_user, db_session):

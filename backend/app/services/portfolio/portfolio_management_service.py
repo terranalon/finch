@@ -1,5 +1,6 @@
 """Portfolio lifecycle management - valuation and deletion."""
 
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -11,6 +12,14 @@ from app.schemas.portfolio import SharedAccountInfo
 from app.services.shared.currency_service import CurrencyService
 
 
+@dataclass(frozen=True)
+class PortfolioValuation:
+    """Result of portfolio value calculation with per-account breakdown."""
+
+    total: float
+    per_account: dict[int, float] = field(default_factory=dict)
+
+
 class PortfolioManagementService:
     """Handles portfolio valuation and lifecycle operations."""
 
@@ -18,49 +27,61 @@ class PortfolioManagementService:
         self._db = db
         self._currency = CurrencyService(db)
 
-    def calculate_portfolio_value(self, portfolio: Portfolio) -> float:
-        total_value_usd = Decimal("0")
+    def calculate_portfolio_value(self, portfolio: Portfolio) -> PortfolioValuation:
+        account_values_usd = {
+            account.id: self._calculate_account_value_usd(account) for account in portfolio.accounts
+        }
 
-        for account in portfolio.accounts:
-            holdings = (
-                self._db.query(Holding)
-                .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
-                .all()
-            )
-
-            for holding in holdings:
-                asset = self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
-                if not asset:
-                    continue
-
-                asset_currency = asset.currency or "USD"
-
-                if asset.asset_class == AssetClass.CASH:
-                    if holding.quantity <= 0:
-                        continue
-                    market_value_native = holding.quantity
-                else:
-                    if not asset.last_fetched_price:
-                        continue
-                    market_value_native = holding.quantity * asset.last_fetched_price
-
-                if asset_currency != "USD":
-                    rate_to_usd = self._currency.get_exchange_rate(asset_currency, "USD")
-                    market_value_usd = (
-                        market_value_native * rate_to_usd if rate_to_usd else market_value_native
-                    )
-                else:
-                    market_value_usd = market_value_native
-
-                total_value_usd += market_value_usd
+        total_value_usd = sum(account_values_usd.values(), Decimal("0"))
 
         if portfolio.default_currency != "USD":
             rate = self._currency.get_exchange_rate("USD", portfolio.default_currency)
-            total_value = total_value_usd * rate if rate else total_value_usd
+            convert = (lambda v: float(v * rate)) if rate else (lambda v: float(v))
         else:
-            total_value = total_value_usd
+            convert = float
 
-        return float(total_value)
+        return PortfolioValuation(
+            total=convert(total_value_usd),
+            per_account={
+                account_id: convert(value) for account_id, value in account_values_usd.items()
+            },
+        )
+
+    def _calculate_account_value_usd(self, account: Account) -> Decimal:
+        holdings = (
+            self._db.query(Holding)
+            .filter(Holding.account_id == account.id, Holding.is_active.is_(True))
+            .all()
+        )
+
+        total = Decimal("0")
+        for holding in holdings:
+            asset = self._db.query(Asset).filter(Asset.id == holding.asset_id).first()
+            if not asset:
+                continue
+
+            asset_currency = asset.currency or "USD"
+
+            if asset.asset_class == AssetClass.CASH:
+                if holding.quantity <= 0:
+                    continue
+                market_value_native = holding.quantity
+            else:
+                if not asset.last_fetched_price:
+                    continue
+                market_value_native = holding.quantity * asset.last_fetched_price
+
+            if asset_currency != "USD":
+                rate_to_usd = self._currency.get_exchange_rate(asset_currency, "USD")
+                market_value_usd = (
+                    market_value_native * rate_to_usd if rate_to_usd else market_value_native
+                )
+            else:
+                market_value_usd = market_value_native
+
+            total += market_value_usd
+
+        return total
 
     def categorize_accounts_for_deletion(
         self, portfolio: Portfolio
