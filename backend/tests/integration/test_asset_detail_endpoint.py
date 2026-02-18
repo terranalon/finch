@@ -3,8 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.models import Asset
-from app.models.asset_daily_metrics import AssetDailyMetrics
+from app.models import Asset, AssetDailyMetrics
 
 
 class TestGetAssetDetail:

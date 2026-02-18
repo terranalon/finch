@@ -20,37 +20,16 @@ class TestDailyMetricsResponse:
             pe_ratio=Decimal("37.2"),
             forward_pe=Decimal("31.8"),
             eps=Decimal("6.38"),
-            dividend_rate=None,
-            dividend_yield=None,
-            payout_ratio=None,
-            circulating_supply=None,
-            market_cap_rank=None,
-            dominance=None,
         )
         assert data.close == Decimal("237.42")
         assert data.pe_ratio == Decimal("37.2")
 
-    def test_nullable_fields(self) -> None:
-        """All fundamental fields should be nullable."""
-        data = DailyMetricsResponse(
-            date=date(2026, 2, 18),
-            open=None,
-            high=None,
-            low=None,
-            close=None,
-            volume=None,
-            market_cap=None,
-            pe_ratio=None,
-            forward_pe=None,
-            eps=None,
-            dividend_rate=None,
-            dividend_yield=None,
-            payout_ratio=None,
-            circulating_supply=None,
-            market_cap_rank=None,
-            dominance=None,
-        )
+    def test_nullable_fields_default_to_none(self) -> None:
+        """All optional fields should default to None."""
+        data = DailyMetricsResponse(date=date(2026, 2, 18))
         assert data.market_cap is None
+        assert data.close is None
+        assert data.volume is None
 
 
 class TestAssetDetailResponse:

@@ -43,21 +43,19 @@ class AssetDetailResponse(BaseModel):
     asset_class: str
     currency: str
     is_favorite: bool = False
-
-    # Existing fields
     category: str | None = None
     industry: str | None = None
     last_fetched_price: Decimal | None = None
     last_fetched_at: datetime | None = None
 
-    # About / static (new)
+    # About
     description: str | None = None
     exchange: str | None = None
     website: str | None = None
     ceo: str | None = None
     employees: int | None = None
 
-    # Slow-changing stats (new)
+    # Slow-changing stats
     beta: Decimal | None = None
     avg_volume: int | None = None
     earnings_date: date | None = None
@@ -67,21 +65,19 @@ class AssetDetailResponse(BaseModel):
     week_52_low: Decimal | None = None
     peg_ratio: Decimal | None = None
 
-    # ETF-specific (new)
+    # ETF-specific
     expense_ratio: Decimal | None = None
     fund_family: str | None = None
     nav: Decimal | None = None
 
-    # Crypto slow-changing (new)
+    # Crypto
     max_supply: Decimal | None = None
     ath: Decimal | None = None
     ath_date: date | None = None
     atl: Decimal | None = None
     atl_date: date | None = None
 
-    # Timestamps
     created_at: datetime
     updated_at: datetime
 
-    # Nested daily metrics (latest row from asset_daily_metrics)
     daily_metrics: DailyMetricsResponse | None = None

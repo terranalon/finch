@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models import Asset
-from app.models.asset_daily_metrics import AssetDailyMetrics
+from app.exceptions import NotFoundError
+from app.models import Asset, AssetDailyMetrics
 from app.services.asset_detail_service import AssetDetailService
 
 
@@ -80,5 +80,5 @@ class TestAssetDetailService:
         """Should raise NotFoundError when asset doesn't exist."""
         mock_db.get.return_value = None
 
-        with pytest.raises(Exception, match="not found"):
+        with pytest.raises(NotFoundError, match="not found"):
             AssetDetailService.get_asset_detail(mock_db, asset_id=999)
