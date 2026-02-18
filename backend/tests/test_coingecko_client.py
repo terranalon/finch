@@ -10,6 +10,7 @@ from app.services.market_data.coingecko_client import (
     SYMBOL_TO_ID,
     CoinGeckoAPIError,
     CoinGeckoClient,
+    CryptoMarketData,
 )
 
 
@@ -285,6 +286,99 @@ class TestAPIConfiguration:
         assert "x-cg-demo-api-key" not in headers
         assert "x-cg-pro-api-key" not in headers
         assert headers.get("Accept") == "application/json"
+
+
+SAMPLE_MARKETS_RESPONSE = [
+    {
+        "id": "bitcoin",
+        "symbol": "btc",
+        "name": "Bitcoin",
+        "current_price": 97500.00,
+        "market_cap": 1930000000000,
+        "market_cap_rank": 1,
+        "total_volume": 35000000000,
+        "high_24h": 98200.00,
+        "low_24h": 96800.00,
+        "circulating_supply": 19800000.0,
+        "max_supply": 21000000.0,
+        "ath": 108786.00,
+        "ath_date": "2024-12-17T15:02:41.429Z",
+        "atl": 67.81,
+        "atl_date": "2013-07-06T00:00:00.000Z",
+    },
+    {
+        "id": "ethereum",
+        "symbol": "eth",
+        "name": "Ethereum",
+        "current_price": 2700.00,
+        "market_cap": 325000000000,
+        "market_cap_rank": 2,
+        "total_volume": 15000000000,
+        "high_24h": 2750.00,
+        "low_24h": 2680.00,
+        "circulating_supply": 120000000.0,
+        "max_supply": None,
+        "ath": 4878.26,
+        "ath_date": "2021-11-10T14:24:19.604Z",
+        "atl": 0.432979,
+        "atl_date": "2015-10-20T00:00:00.000Z",
+    },
+]
+
+
+class TestGetMarketData:
+    """Tests for CoinGeckoClient.get_market_data."""
+
+    @patch.object(CoinGeckoClient, "_request")
+    def test_returns_crypto_market_data(self, mock_request: object, client: CoinGeckoClient) -> None:
+        mock_request.return_value = SAMPLE_MARKETS_RESPONSE  # ty: ignore[unresolved-attribute]
+        result = client.get_market_data(["BTC", "ETH"])
+        assert "BTC" in result
+        assert "ETH" in result
+        assert isinstance(result["BTC"], CryptoMarketData)
+        assert result["BTC"].price == Decimal("97500")
+        assert result["BTC"].market_cap_rank == 1
+        assert result["BTC"].max_supply == Decimal("21000000")
+        assert result["ETH"].max_supply is None
+
+    @patch.object(CoinGeckoClient, "_request")
+    def test_parses_ath_atl_dates(self, mock_request: object, client: CoinGeckoClient) -> None:
+        mock_request.return_value = SAMPLE_MARKETS_RESPONSE  # ty: ignore[unresolved-attribute]
+        result = client.get_market_data(["BTC"])
+        assert result["BTC"].ath_date == date(2024, 12, 17)
+        assert result["BTC"].atl_date == date(2013, 7, 6)
+
+    @patch.object(CoinGeckoClient, "_request")
+    def test_empty_symbols_returns_empty(self, mock_request: object, client: CoinGeckoClient) -> None:
+        result = client.get_market_data([])
+        assert result == {}
+        mock_request.assert_not_called()  # ty: ignore[unresolved-attribute]
+
+    @patch.object(CoinGeckoClient, "_request")
+    def test_api_error_returns_empty(self, mock_request: object, client: CoinGeckoClient) -> None:
+        mock_request.side_effect = CoinGeckoAPIError("Rate limit")  # ty: ignore[unresolved-attribute]
+        result = client.get_market_data(["BTC"])
+        assert result == {}
+
+    @patch.object(CoinGeckoClient, "_request")
+    def test_passes_correct_ids_param(self, mock_request: object, client: CoinGeckoClient) -> None:
+        mock_request.return_value = []  # ty: ignore[unresolved-attribute]
+        client.get_market_data(["BTC", "ETH"])
+        call_params = mock_request.call_args[0][1]  # ty: ignore[unresolved-attribute]
+        assert "bitcoin" in call_params["ids"]
+        assert "ethereum" in call_params["ids"]
+
+
+class TestParseMarketCoin:
+    """Tests for CoinGeckoClient._parse_market_coin."""
+
+    def test_handles_none_values(self) -> None:
+        coin = {"current_price": 100.0}
+        result = CoinGeckoClient._parse_market_coin("TEST", coin)
+        assert result.price == Decimal("100")
+        assert result.high_24h is None
+        assert result.max_supply is None
+        assert result.ath_date is None
 
 
 class TestCoinGeckoAPIError:
