@@ -1,0 +1,61 @@
+/* 3D perspective dashboard mockup */
+.lp-mockup-3d {
+  transform: perspective(1200px) rotateY(-8deg) rotateX(2deg);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Scroll-triggered fade-in animation */
+.lp-fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.lp-fade-up.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hero background glow */
+.lp-hero-glow {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    rgba(37, 99, 235, 0.08),
+    transparent
+  );
+}
+
+/* Frosted glass navbar */
+.lp-glass-nav {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Pricing featured card shadow */
+.lp-pricing-featured {
+  box-shadow: 0 0 0 1px var(--accent-primary),
+    0 8px 32px rgba(37, 99, 235, 0.1);
+}
+
+/* How It Works connecting line */
+.lp-steps-line::before {
+  content: "";
+  position: absolute;
+  top: 32px;
+  left: calc(16.67% + 32px);
+  right: calc(16.67% + 32px);
+  height: 2px;
+  background: var(--border-primary);
+}
+
+@media (max-width: 900px) {
+  .lp-mockup-3d {
+    transform: none;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .lp-steps-line::before {
+    display: none;
+  }
+}
