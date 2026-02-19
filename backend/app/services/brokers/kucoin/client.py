@@ -261,9 +261,18 @@ class KuCoinClient:
     def _fetch_staking_rewards(
         self, start: datetime | None, end: datetime | None
     ) -> list[ParsedTransaction]:
-        """Fetch staking rewards from account ledger."""
-        start_at = int(start.timestamp() * 1000) if start else None
-        end_at = int(end.timestamp() * 1000) if end else None
+        """Fetch staking rewards from account ledger.
+
+        KuCoin's ledger endpoint requires bounded date ranges. If no range is
+        provided, defaults to the last 180 days.
+        """
+        if not end:
+            end = datetime.now(tz=UTC)
+        if not start:
+            start = end - timedelta(days=180)
+
+        start_at = int(start.timestamp() * 1000)
+        end_at = int(end.timestamp() * 1000)
 
         staking_biz_types = ["KUCOIN_BONUS", "STAKING", "SOFT_STAKING_PROFITS"]
         results: list[ParsedTransaction] = []
