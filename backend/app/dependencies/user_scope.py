@@ -83,3 +83,13 @@ def get_broker_credentials(account: Account, broker_key: str) -> tuple[str | Non
         return None, None
     creds = account.meta_data[broker_key]
     return creds.get("api_key"), creds.get("api_secret")
+
+
+def get_broker_credentials_with_passphrase(
+    account: Account, broker_key: str
+) -> tuple[str | None, str | None, str | None]:
+    """Extract API credentials including passphrase from account metadata."""
+    if not account.meta_data or broker_key not in account.meta_data:
+        return None, None, None
+    creds = account.meta_data[broker_key]
+    return creds.get("api_key"), creds.get("api_secret"), creds.get("api_passphrase")

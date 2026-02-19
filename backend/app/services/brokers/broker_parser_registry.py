@@ -51,6 +51,7 @@ class BrokerParserRegistry:
         from app.services.brokers.bit2c.parser import Bit2CParser
         from app.services.brokers.ibkr.parser_adapter import IBKRParserAdapter
         from app.services.brokers.kraken.parser import KrakenParser
+        from app.services.brokers.kucoin.parser import KuCoinParser
         from app.services.brokers.leumi.parser import LeumiParser
         from app.services.brokers.manual.parser import ManualParser
         from app.services.brokers.meitav.parser import MeitavParser
@@ -63,6 +64,7 @@ class BrokerParserRegistry:
             "kraken": KrakenParser,
             "bit2c": Bit2CParser,
             "binance": BinanceParser,
+            "kucoin": KuCoinParser,
             "manual": ManualParser,
         }
         cls._initialized = True

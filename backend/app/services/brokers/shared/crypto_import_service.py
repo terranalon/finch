@@ -32,7 +32,7 @@ class CryptoImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         """Return list of broker types this service handles."""
-        return ["kraken", "bit2c", "binance"]
+        return ["kraken", "bit2c", "binance", "kucoin"]
 
     def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.

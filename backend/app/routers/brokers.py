@@ -67,6 +67,14 @@ class FlexQueryCredentials(BaseModel):
     flex_query_id: str
 
 
+class KuCoinApiCredentials(BaseModel):
+    """Credentials for KuCoin API (requires passphrase)."""
+
+    api_key: str
+    api_secret: str
+    api_passphrase: str
+
+
 class ApiConnectionResponse(BaseModel):
     """Response model for API connection entry."""
 
@@ -112,20 +120,22 @@ router = APIRouter(prefix="/api/brokers", tags=["brokers"])
 
 
 def build_credential_data(
-    credentials: ApiKeyCredentials | FlexQueryCredentials,
+    credentials: ApiKeyCredentials | FlexQueryCredentials | KuCoinApiCredentials,
     credential_type: CredentialType,
 ) -> dict[str, str]:
     """Build credential data dict from Pydantic model."""
-    field1, field2 = get_credential_fields(credential_type)
-    if isinstance(credentials, ApiKeyCredentials):
-        values = (credentials.api_key, credentials.api_secret)
+    fields = get_credential_fields(credential_type)
+    if isinstance(credentials, KuCoinApiCredentials):
+        values = {
+            "api_key": credentials.api_key,
+            "api_secret": credentials.api_secret,
+            "api_passphrase": credentials.api_passphrase,
+        }
+    elif isinstance(credentials, ApiKeyCredentials):
+        values = {"api_key": credentials.api_key, "api_secret": credentials.api_secret}
     else:
-        values = (credentials.flex_token, credentials.flex_query_id)
-    return {
-        field1: values[0],
-        field2: values[1],
-        "updated_at": datetime.now().isoformat(),
-    }
+        values = {"flex_token": credentials.flex_token, "flex_query_id": credentials.flex_query_id}
+    return {**{f: values[f] for f in fields}, "updated_at": datetime.now().isoformat()}
 
 
 def _get_broker_config(broker_type: str) -> BrokerConfig:
@@ -240,9 +250,10 @@ def _import_crypto_broker(
     api_secret: str,
     db: Session,
     start_date: date | None = None,
+    api_passphrase: str | None = None,
 ) -> dict[str, Any]:
-    """Import data from a crypto broker (Kraken, Bit2C, Binance)."""
-    client = config.create_client(api_key, api_secret)
+    """Import data from a crypto broker (Kraken, Bit2C, Binance, KuCoin)."""
+    client = config.create_client(api_key, api_secret, api_passphrase=api_passphrase)
 
     mode = f"incremental from {start_date}" if start_date else "full history"
     logger.info(f"Fetching {config.name} data for account {account_id} ({mode})")
@@ -397,6 +408,28 @@ async def import_broker_data(
             start_date = None if full_import else _get_incremental_start_date(account, config.key)
             stats = _import_crypto_broker(
                 account_id, config, api_key, api_secret, db, start_date=start_date
+            )
+        elif config.credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
+            from app.dependencies.user_scope import get_broker_credentials_with_passphrase
+
+            api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
+                account, config.key
+            )
+            if not api_key or not api_secret or not api_passphrase:
+                raise BadRequestError(
+                    f"No {config.name} credentials configured. "
+                    f"Please add {config.key}.api_key, {config.key}.api_secret, "
+                    f"and {config.key}.api_passphrase to account metadata.",
+                )
+            start_date = None if full_import else _get_incremental_start_date(account, config.key)
+            stats = _import_crypto_broker(
+                account_id,
+                config,
+                api_key,
+                api_secret,
+                db,
+                start_date=start_date,
+                api_passphrase=api_passphrase,
             )
         elif config.credential_type == CredentialType.FLEX_QUERY:
             flex_token, flex_query_id = _get_flex_query_credentials(
@@ -565,7 +598,7 @@ async def import_ibkr_snapshot(
 async def test_credentials_stateless(
     request: Request,
     broker_type: BrokerType,
-    credentials: ApiKeyCredentials | FlexQueryCredentials = Body(...),
+    credentials: ApiKeyCredentials | FlexQueryCredentials | KuCoinApiCredentials = Body(...),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Test broker API credentials without requiring an account.
@@ -577,8 +610,17 @@ async def test_credentials_stateless(
     config = _get_broker_config(broker_type)
 
     try:
-        field1, field2 = get_credential_fields(config.credential_type)
-        return test_credentials(config, getattr(credentials, field1), getattr(credentials, field2))
+        if isinstance(credentials, KuCoinApiCredentials):
+            return test_credentials(
+                config,
+                credentials.api_key,
+                credentials.api_secret,
+                api_passphrase=credentials.api_passphrase,
+            )
+        fields = get_credential_fields(config.credential_type)
+        return test_credentials(
+            config, getattr(credentials, fields[0]), getattr(credentials, fields[1])
+        )
     except AppError:
         raise
     except Exception:
@@ -616,10 +658,20 @@ async def test_broker_credentials(
             cred1, cred2 = _get_flex_query_credentials(
                 account, config.key, config.name, config.env_fallback_prefix
             )
+            result = test_credentials(config, cred1, cred2)
+        elif config.credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
+            from app.dependencies.user_scope import get_broker_credentials_with_passphrase
+
+            api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
+                account, config.key
+            )
+            if not api_key or not api_secret or not api_passphrase:
+                raise BadRequestError(f"No {config.name} credentials configured.")
+            result = test_credentials(config, api_key, api_secret, api_passphrase=api_passphrase)
         else:
             cred1, cred2 = _get_api_key_credentials(account, config.key, config.name)
+            result = test_credentials(config, cred1, cred2)
 
-        result = test_credentials(config, cred1, cred2)
         result["account_id"] = account_id
         return result
 
@@ -643,7 +695,7 @@ async def test_broker_credentials(
 async def set_broker_credentials(
     broker_type: BrokerType,
     account_id: int,
-    credentials: ApiKeyCredentials | FlexQueryCredentials = Body(...),
+    credentials: ApiKeyCredentials | FlexQueryCredentials | KuCoinApiCredentials = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -653,11 +705,20 @@ async def set_broker_credentials(
     This endpoint stores credentials in account metadata for future imports.
     Use test-credentials to validate them, then import to fetch data.
 
-    **For Kraken/Bit2C (api_key_secret):**
+    **For Kraken/Bit2C/Binance (api_key_secret):**
     ```json
     {
         "api_key": "your_api_key",
         "api_secret": "your_api_secret"
+    }
+    ```
+
+    **For KuCoin (api_key_secret_passphrase):**
+    ```json
+    {
+        "api_key": "your_api_key",
+        "api_secret": "your_api_secret",
+        "api_passphrase": "your_api_passphrase"
     }
     ```
 
@@ -681,14 +742,16 @@ async def set_broker_credentials(
     account = _get_validated_account(account_id, current_user, db)
 
     # Validate credential type matches expected model
-    expected_type = (
-        ApiKeyCredentials
-        if config.credential_type == CredentialType.API_KEY_SECRET
-        else FlexQueryCredentials
-    )
+    if config.credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
+        expected_type = KuCoinApiCredentials
+    elif config.credential_type == CredentialType.API_KEY_SECRET:
+        expected_type = ApiKeyCredentials
+    else:
+        expected_type = FlexQueryCredentials
+
     if not isinstance(credentials, expected_type):
-        field1, field2 = get_credential_fields(config.credential_type)
-        raise BadRequestError(f"{config.name} requires {field1} and {field2}")
+        fields = get_credential_fields(config.credential_type)
+        raise BadRequestError(f"{config.name} requires {', '.join(fields)}")
 
     cred_data = build_credential_data(credentials, config.credential_type)
 
