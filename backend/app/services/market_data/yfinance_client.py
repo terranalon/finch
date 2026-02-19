@@ -177,22 +177,19 @@ class YFinanceClient:
     @staticmethod
     def _dataframe_to_ohlcv_rows(df: "pd.DataFrame") -> list[OHLCVRow]:
         """Convert a pandas DataFrame of historical data to OHLCVRow list."""
-        rows: list[OHLCVRow] = []
-        for idx, row in df.iterrows():
-            close = row.get("Close")
-            if close is None or (isinstance(close, float) and math.isnan(close)):
-                continue
-            rows.append(
-                OHLCVRow(
-                    date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
-                    open=Decimal(str(row.get("Open", 0))),
-                    high=Decimal(str(row.get("High", 0))),
-                    low=Decimal(str(row.get("Low", 0))),
-                    close=Decimal(str(close)),
-                    volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
-                )
+        return [
+            OHLCVRow(
+                date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
+                open=Decimal(str(row.get("Open", 0))),
+                high=Decimal(str(row.get("High", 0))),
+                low=Decimal(str(row.get("Low", 0))),
+                close=Decimal(str(close)),
+                volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
             )
-        return rows
+            for idx, row in df.iterrows()
+            if (close := row.get("Close")) is not None
+            and not (isinstance(close, float) and math.isnan(close))
+        ]
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.

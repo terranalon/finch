@@ -308,12 +308,11 @@ class CoinGeckoClient:
             return []
 
         prices_data = result.get("prices", [])
-        history: list[tuple[date, Decimal]] = []
-
-        for timestamp_ms, price in prices_data:
-            if price is not None:
-                dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
-                history.append((dt.date(), Decimal(str(price))))
+        history = [
+            (datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC).date(), Decimal(str(price)))
+            for timestamp_ms, price in prices_data
+            if price is not None
+        ]
 
         logger.info(f"Fetched {len(history)} historical prices for {symbol}")
         return history

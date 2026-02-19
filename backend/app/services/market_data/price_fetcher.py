@@ -95,16 +95,15 @@ class PriceFetcher:
             return {}
         client = YFinanceClient()
         batch_results = client.get_batch_prices_threaded(symbols)
-        results: dict[str, tuple[Decimal, datetime]] = {}
         now = datetime.now()
-        for symbol, row in batch_results.items():
-            if row is None:
-                continue
-            price = row.close
-            if symbol.endswith(".TA"):
-                price = price / _AGOROT_DIVISOR
-            results[symbol] = (price, now)
-        return results
+        return {
+            symbol: (
+                row.close / _AGOROT_DIVISOR if symbol.endswith(".TA") else row.close,
+                now,
+            )
+            for symbol, row in batch_results.items()
+            if row is not None
+        }
 
     @staticmethod
     def fetch_crypto_price(
@@ -158,9 +157,9 @@ class PriceFetcher:
                 db.commit()
                 logger.info(f"Updated price for {asset.symbol}: {price}")
                 return True
-            else:
-                logger.warning(f"Failed to fetch price for {asset.symbol}")
-                return False
+
+            logger.warning(f"Failed to fetch price for {asset.symbol}")
+            return False
 
         except Exception as e:
             logger.error(f"Error updating price for {asset.symbol}: {str(e)}")
