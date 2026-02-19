@@ -68,7 +68,7 @@ class TestKuCoinParserMetadata:
 
 
 class TestKuCoinTradeCSVParsing:
-    """Tests for parsing KuCoin trade history CSV."""
+    """Tests for parsing KuCoin Billing History trade CSV."""
 
     @pytest.fixture
     def sample_csv(self) -> bytes:
@@ -141,6 +141,58 @@ class TestKuCoinTradeCSVParsing:
         assert result.cash_transactions == []
         assert result.dividends == []
 
+    def test_cancelled_order_filtered(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = (
+            b"UID,Account Type,Order ID,Order Time(UTC),Symbol,Side,Order Type,"
+            b"Order Price,Order Amount,Avg. Filled Price,Filled Amount,Filled Volume,"
+            b"Filled Volume (USDT),Filled Time(UTC),Fee,Fee Currency,Tax,Status\n"
+            b"123,main,o1,2024-01-15 10:00:00,BTC-USDT,BUY,LIMIT,42000,0.5,42000,0.5,"
+            b"21000,21000,2024-01-15 10:00:00,10,USDT,,deal\n"
+            b"123,main,o2,2024-01-16 10:00:00,BTC-USDT,BUY,LIMIT,41000,1.0,0,0,"
+            b"0,0,2024-01-16 10:00:00,0,USDT,,cancelled\n"
+        )
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.transactions) == 1
+        assert result.transactions[0].transaction_type == "Buy"
+
+    def test_part_deal_status_accepted(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = (
+            b"UID,Account Type,Order ID,Order Time(UTC),Symbol,Side,Order Type,"
+            b"Order Price,Order Amount,Avg. Filled Price,Filled Amount,Filled Volume,"
+            b"Filled Volume (USDT),Filled Time(UTC),Fee,Fee Currency,Tax,Status\n"
+            b"123,main,o1,2024-12-06 18:10:14,KAS-BTC,BUY,MARKET,0.00000168,,0.00000168,"
+            b"9352.45,0.01570601,1574.39,2024-12-06 18:10:14,0.0000314,BTC,,part_deal\n"
+        )
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.transactions) == 1
+        assert result.transactions[0].symbol == "KAS"
+        assert result.transactions[0].currency == "BTC"
+
+
+class TestKuCoinAPIStyleCSVParsing:
+    """Tests for the older API-style CSV format (backward compatibility)."""
+
+    def test_parse_api_style_trade(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = b"""tradeCreatedAt,orderId,symbol,side,price,size,funds,fee,liquidity,feeCurrency
+2024-01-15T10:30:00.000Z,order1,BTC-USDT,buy,42000,0.5,21000,10.50,taker,USDT
+"""
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.transactions) == 1
+        txn = result.transactions[0]
+        assert txn.symbol == "BTC"
+        assert txn.transaction_type == "Buy"
+        assert txn.quantity == Decimal("0.5")
+        assert txn.price_per_unit == Decimal("42000")
+
 
 class TestKuCoinDepositCSVParsing:
     """Tests for parsing deposit/withdrawal CSV."""
@@ -181,6 +233,72 @@ class TestKuCoinDepositCSVParsing:
         assert withdrawals[0].amount == Decimal("-1000")
 
 
+class TestKuCoinBillingHistoryDeposits:
+    """Tests for Billing History deposit/withdrawal format (no Type column)."""
+
+    def test_deposit_file_inferred_from_headers(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = (
+            b"UID,Account Type,Time(UTC),Coin,Amount,Fee,Hash,"
+            b"Deposit Address,Transfer Network,Status,Remarks\n"
+            b"123,main,2024-01-10 09:00:00,BTC,0.5,0,abc123,"
+            b"1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2,Bitcoin,Completed,\n"
+        )
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.cash_transactions) == 1
+        assert result.cash_transactions[0].transaction_type == "Deposit"
+        assert result.cash_transactions[0].amount == Decimal("0.5")
+        assert result.cash_transactions[0].currency == "BTC"
+
+    def test_withdrawal_file_inferred_from_headers(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = (
+            b"UID,Account Type,Time(UTC),Coin,Amount,Fee,Hash,"
+            b"Withdrawal Address/Account,Transfer Network,Status,Remarks\n"
+            b"123,main,2024-01-25 11:00:00,USDT,1000,1,def456,"
+            b"0xabc123,ERC20,Completed,\n"
+        )
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.cash_transactions) == 1
+        assert result.cash_transactions[0].transaction_type == "Withdrawal"
+        assert result.cash_transactions[0].amount == Decimal("-1000")
+
+    def test_pending_deposit_filtered(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = (
+            b"UID,Account Type,Time(UTC),Coin,Amount,Fee,Hash,"
+            b"Deposit Address,Transfer Network,Status,Remarks\n"
+            b"123,main,2024-01-10 09:00:00,BTC,0.5,0,abc123,"
+            b"1BvBMSEYst,Bitcoin,Processing,\n"
+        )
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        assert len(result.cash_transactions) == 0
+
+
+class TestKuCoinAccountHistory:
+    """Tests for Account History CSV detection."""
+
+    def test_account_history_detected_and_skipped(self):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        csv_content = b"""UID,Account Type,Currency,Side,Amount,Fee,Time(UTC),Remark,Type
+192933403,mainAccount,BNB,Withdrawal,0.7722,0,2024-01-09 12:52:49,,Spot
+192933403,mainAccount,BTC,Deposit,0.00499491786222,0,2024-01-09 12:52:49,,Spot
+"""
+        parser = KuCoinParser()
+        result = parser.parse(csv_content)
+        # Account history is detected but skipped to avoid double-counting
+        assert result.transactions == []
+        assert result.cash_transactions == []
+        assert result.dividends == []
+
+
 class TestKuCoinStakingCSVParsing:
     """Tests for parsing staking/bonus history CSV."""
 
@@ -209,6 +327,50 @@ class TestKuCoinStakingCSVParsing:
         assert staking.symbol == "SOL"
         assert staking.amount == Decimal("0.05")
         assert staking.transaction_type == "Staking"
+
+
+class TestKuCoinRealFile:
+    """Tests against real KuCoin Billing History export."""
+
+    REAL_FILE = Path(
+        "/Users/alonsamocha/Taxes/2024/KuCoin/"
+        "BillingHistory20251028_192933403/Spot Orders_Filled Orders.csv"
+    )
+
+    @pytest.fixture
+    def real_csv(self) -> bytes:
+        if not self.REAL_FILE.exists():
+            pytest.skip("Real KuCoin file not available")
+        return self.REAL_FILE.read_bytes()
+
+    def test_parse_real_file(self, real_csv):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        parser = KuCoinParser()
+        result = parser.parse(real_csv)
+
+        # 12 real trades from Jan to Dec 2024 (all deal/part_deal)
+        assert len(result.transactions) == 12
+        assert result.start_date == date(2024, 1, 9)
+        assert result.end_date == date(2024, 12, 19)
+
+    def test_real_file_symbols(self, real_csv):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        parser = KuCoinParser()
+        result = parser.parse(real_csv)
+
+        symbols = {t.symbol for t in result.transactions}
+        assert symbols == {"BNB", "CRO", "ENJ", "KAS", "CHZ"}
+
+    def test_real_file_all_btc_denominated(self, real_csv):
+        from app.services.brokers.kucoin.parser import KuCoinParser
+
+        parser = KuCoinParser()
+        result = parser.parse(real_csv)
+
+        currencies = {t.currency for t in result.transactions}
+        assert currencies == {"BTC"}
 
 
 class TestKuCoinEdgeCases:

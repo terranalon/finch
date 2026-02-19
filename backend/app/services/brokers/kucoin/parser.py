@@ -24,10 +24,13 @@ logger = logging.getLogger(__name__)
 class KuCoinParser(BaseBrokerParser):
     """Parser for KuCoin cryptocurrency exchange CSV exports.
 
-    Supports three CSV export types, auto-detected from headers:
-    - Trade History: buy/sell orders with symbol, side, price, size, funds, fee
-    - Deposit/Withdrawal: deposits and withdrawals with coin, amount, type, status
+    Supports multiple CSV export types (auto-detected from headers), including
+    both the Billing History download format and the older API-style format:
+    - Trade History: Billing History (Filled Time, Avg. Filled Price, etc.)
+      or API-style (tradeCreatedAt, price, size, funds)
+    - Deposit/Withdrawal: with or without Type column
     - Staking/Bonus: staking rewards with currency, amount, remarks
+    - Account History: detected but skipped (use trade file instead)
     """
 
     @classmethod
@@ -88,16 +91,28 @@ class KuCoinParser(BaseBrokerParser):
             raise ValueError(f"Failed to parse CSV: {e}") from e
 
     def _detect_file_type(self, headers: list[str]) -> str:
-        """Detect the type of KuCoin export file based on headers."""
+        """Detect the type of KuCoin export file based on headers.
+
+        Supports both the Billing History export format and the older API-style format.
+        """
         headers_lower = [h.lower() for h in headers]
 
+        # Trade history: has symbol + side columns
         if "symbol" in headers_lower and "side" in headers_lower:
             return "trades"
 
-        if "type" in headers_lower and ("coin" in headers_lower or "status" in headers_lower):
+        # Deposit/withdrawal: has coin + (type or status) columns
+        if "coin" in headers_lower and ("type" in headers_lower or "status" in headers_lower):
             return "deposits"
 
-        if "currency" in headers_lower and "remarks" in headers_lower:
+        # Account history (Billing History export): has currency + side + type
+        if "currency" in headers_lower and "side" in headers_lower and "type" in headers_lower:
+            return "account_history"
+
+        # Staking/bonus: has currency + remarks without side
+        if "currency" in headers_lower and (
+            "remarks" in headers_lower or "remark" in headers_lower
+        ):
             return "staking"
 
         return "unknown"
@@ -111,6 +126,9 @@ class KuCoinParser(BaseBrokerParser):
 
         dates: list[date] = []
         date_columns = [
+            "Filled Time(UTC)",
+            "Order Time(UTC)",
+            "Time(UTC)",
             "tradeCreatedAt",
             "Time",
             "time",
@@ -164,6 +182,12 @@ class KuCoinParser(BaseBrokerParser):
             cash_transactions = self._parse_cash_transactions(rows)
         elif file_type == "staking":
             dividends = self._parse_staking(rows)
+        elif file_type == "account_history":
+            logger.info(
+                "Account history CSV detected (%d rows). "
+                "Import via the Spot Orders file to avoid double-counting.",
+                len(rows),
+            )
         else:
             transactions = self._parse_trades(rows)
 
@@ -199,26 +223,52 @@ class KuCoinParser(BaseBrokerParser):
         return transactions
 
     def _parse_trade_row(self, row: dict) -> ParsedTransaction | None:
-        """Parse a single trade row."""
-        date_str = row.get("tradeCreatedAt") or row.get("Time") or row.get("time", "")
+        """Parse a single trade row.
+
+        Supports both the Billing History export format (Filled Time(UTC),
+        Avg. Filled Price, Filled Amount, Filled Volume) and the older
+        API-style format (tradeCreatedAt, price, size, funds).
+        """
+        # Date: Billing History -> API-style fallback
+        date_str = (
+            row.get("Filled Time(UTC)")
+            or row.get("Order Time(UTC)")
+            or row.get("tradeCreatedAt")
+            or row.get("Time")
+            or row.get("time", "")
+        )
         dt = self._parse_datetime(date_str)
         if not dt:
             return None
 
-        symbol_str = row.get("symbol") or row.get("Symbol") or ""
+        symbol_str = row.get("Symbol") or row.get("symbol") or ""
         if not symbol_str:
             return None
 
         base_asset, quote_asset = parse_symbol(symbol_str)
 
-        side = (row.get("side") or row.get("Side") or "").lower()
+        side = (row.get("Side") or row.get("side") or "").lower()
         if side not in ("buy", "sell"):
             return None
 
-        quantity = self._parse_decimal(row.get("size") or row.get("Size"))
-        price = self._parse_decimal(row.get("price") or row.get("Price"))
-        amount = self._parse_decimal(row.get("funds") or row.get("Funds") or row.get("Amount"))
-        fee = self._parse_decimal(row.get("fee") or row.get("Fee") or "0")
+        # Filter by status if present (Billing History: "deal"/"part_deal")
+        status = (row.get("Status") or row.get("status") or "").lower()
+        if status and status not in ("deal", "part_deal"):
+            return None
+
+        # Quantity: Billing History "Filled Amount" -> API "size"
+        quantity = self._parse_decimal(
+            row.get("Filled Amount") or row.get("size") or row.get("Size")
+        )
+        # Price: Billing History "Avg. Filled Price" -> API "price"
+        price = self._parse_decimal(
+            row.get("Avg. Filled Price") or row.get("price") or row.get("Price")
+        )
+        # Amount: Billing History "Filled Volume" -> API "funds"
+        amount = self._parse_decimal(
+            row.get("Filled Volume") or row.get("funds") or row.get("Funds") or row.get("Amount")
+        )
+        fee = self._parse_decimal(row.get("Fee") or row.get("fee") or "0")
 
         if quantity is None:
             return None
@@ -226,7 +276,7 @@ class KuCoinParser(BaseBrokerParser):
         if amount is None and price is not None:
             amount = price * quantity
 
-        order_id = row.get("orderId") or row.get("OrderId") or ""
+        order_id = row.get("Order ID") or row.get("orderId") or row.get("OrderId") or ""
 
         return ParsedTransaction(
             trade_date=dt.date(),
@@ -257,8 +307,15 @@ class KuCoinParser(BaseBrokerParser):
         return transactions
 
     def _parse_cash_row(self, row: dict) -> ParsedCashTransaction | None:
-        """Parse a single deposit/withdrawal row."""
-        date_str = row.get("Time") or row.get("time") or row.get("createAt") or ""
+        """Parse a single deposit/withdrawal row.
+
+        Supports both the combined format (has Type column) and the Billing
+        History format (separate deposit/withdrawal files, no Type column --
+        inferred from header presence of "Deposit Address" or "Withdrawal Address").
+        """
+        date_str = (
+            row.get("Time(UTC)") or row.get("Time") or row.get("time") or row.get("createAt") or ""
+        )
         dt = self._parse_datetime(date_str)
         if not dt:
             return None
@@ -280,6 +337,17 @@ class KuCoinParser(BaseBrokerParser):
         elif "withdraw" in txn_type:
             transaction_type = "Withdrawal"
             amount = -abs(amount)
+        elif not txn_type:
+            # Billing History format: separate files with no Type column.
+            # Infer from header columns (Deposit Address vs Withdrawal Address).
+            row_keys_lower = {k.lower() for k in row}
+            if any("deposit" in k for k in row_keys_lower):
+                transaction_type = "Deposit"
+            elif any("withdrawal" in k for k in row_keys_lower):
+                transaction_type = "Withdrawal"
+                amount = -abs(amount)
+            else:
+                transaction_type = "Deposit" if amount >= 0 else "Withdrawal"
         else:
             transaction_type = txn_type.capitalize() or "Transfer"
 

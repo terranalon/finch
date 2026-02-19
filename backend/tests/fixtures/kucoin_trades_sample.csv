@@ -1,6 +1,6 @@
-tradeCreatedAt,orderId,symbol,side,price,size,funds,fee,liquidity,feeCurrency
-2024-01-15T10:30:00.000Z,order-abc-123,BTC-USDT,buy,42000.00,0.5,21000.00,10.50,taker,USDT
-2024-01-20T14:00:00.000Z,order-def-456,BTC-USDT,sell,43500.00,0.25,10875.00,5.44,maker,USDT
-2024-02-01T09:15:00.000Z,order-ghi-789,ETH-USDT,buy,2500.00,2.0,5000.00,2.50,taker,USDT
-2024-02-05T16:45:00.000Z,order-jkl-012,ETH-BTC,buy,0.058,1.5,0.087,0.000044,maker,BTC
-2024-02-10T11:20:00.000Z,order-mno-345,SOL-USDT,sell,95.50,10.0,955.00,0.48,taker,USDT
+UID,Account Type,Order ID,Order Time(UTC),Symbol,Side,Order Type,Order Price,Order Amount,Avg. Filled Price,Filled Amount,Filled Volume,Filled Volume (USDT),Filled Time(UTC),Fee,Fee Currency,Tax,Status
+123456,mainAccount,order-abc-123,2024-01-15 10:30:00,BTC-USDT,BUY,LIMIT,42000.00,0.5,42000.00,0.5,21000.00,21000.00,2024-01-15 10:30:00,10.50,USDT,,deal
+123456,mainAccount,order-def-456,2024-01-20 14:00:00,BTC-USDT,SELL,MARKET,0,0.25,43500.00,0.25,10875.00,10875.00,2024-01-20 14:00:00,5.44,USDT,,deal
+123456,mainAccount,order-ghi-789,2024-02-01 09:15:00,ETH-USDT,BUY,LIMIT,2500.00,2.0,2500.00,2.0,5000.00,5000.00,2024-02-01 09:15:00,2.50,USDT,,deal
+123456,mainAccount,order-jkl-012,2024-02-05 16:45:00,ETH-BTC,BUY,LIMIT,0.058,1.5,0.058,1.5,0.087,405.00,2024-02-05 16:45:00,0.000044,BTC,,deal
+123456,mainAccount,order-mno-345,2024-02-10 11:20:00,SOL-USDT,SELL,MARKET,0,10.0,95.50,10.0,955.00,955.00,2024-02-10 11:20:00,0.48,USDT,,deal
