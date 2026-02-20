@@ -59,7 +59,7 @@ class TestKuCoinSyntheticImportService:
         with (
             patch.object(client, "get_account_balances", return_value=balances),
             patch(
-                "app.services.brokers.shared.crypto_import_service.CryptoImportService._get_or_create_holding",
+                "app.services.brokers.shared.crypto_import_service.CryptoImportService.get_or_create_holding",
                 return_value=(mock_holding, False),
             ),
             patch(

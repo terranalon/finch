@@ -16,7 +16,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
-from app.dependencies.user_scope import get_broker_credentials, get_user_account
+from app.dependencies.user_scope import (
+    get_broker_credentials,
+    get_broker_credentials_with_passphrase,
+    get_user_account,
+)
 from app.exceptions import AppError, BadRequestError, NotFoundError, UnprocessableEntityError
 from app.models.account import Account
 from app.models.user import User
@@ -169,6 +173,22 @@ def _get_api_key_credentials(
             f"Please add {broker_key}.api_key and {broker_key}.api_secret to account metadata.",
         )
     return api_key, api_secret
+
+
+def _get_passphrase_credentials(
+    account: Account, broker_key: str, broker_name: str
+) -> tuple[str, str, str]:
+    """Get api_key/api_secret/api_passphrase credentials from account metadata."""
+    api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
+        account, broker_key
+    )
+    if not api_key or not api_secret or not api_passphrase:
+        raise BadRequestError(
+            f"No {broker_name} credentials configured. "
+            f"Please add {broker_key}.api_key, {broker_key}.api_secret, "
+            f"and {broker_key}.api_passphrase to account metadata.",
+        )
+    return api_key, api_secret, api_passphrase
 
 
 def _get_flex_query_credentials(
@@ -410,17 +430,9 @@ async def import_broker_data(
                 account_id, config, api_key, api_secret, db, start_date=start_date
             )
         elif config.credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
-            from app.dependencies.user_scope import get_broker_credentials_with_passphrase
-
-            api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
-                account, config.key
+            api_key, api_secret, api_passphrase = _get_passphrase_credentials(
+                account, config.key, config.name
             )
-            if not api_key or not api_secret or not api_passphrase:
-                raise BadRequestError(
-                    f"No {config.name} credentials configured. "
-                    f"Please add {config.key}.api_key, {config.key}.api_secret, "
-                    f"and {config.key}.api_passphrase to account metadata.",
-                )
             start_date = None if full_import else _get_incremental_start_date(account, config.key)
             stats = _import_crypto_broker(
                 account_id,
@@ -556,21 +568,14 @@ async def onboard_kucoin(
     For older accounts where the fill history is truncated, creates a synthetic snapshot
     of current positions. The user can then upload CSV files for full historical data.
     """
-    from app.dependencies.user_scope import get_broker_credentials_with_passphrase
     from app.services.brokers.kucoin.import_orchestrator import KuCoinImportOrchestrator
 
     config = _get_broker_config(BrokerType.KUCOIN)
     account = _get_validated_account(account_id, current_user, db)
 
-    api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
-        account, config.key
+    api_key, api_secret, api_passphrase = _get_passphrase_credentials(
+        account, config.key, config.name
     )
-    if not api_key or not api_secret or not api_passphrase:
-        raise BadRequestError(
-            f"No {config.name} credentials configured. "
-            f"Please add {config.key}.api_key, {config.key}.api_secret, "
-            f"and {config.key}.api_passphrase to account metadata.",
-        )
 
     client = config.create_client(api_key, api_secret, api_passphrase=api_passphrase)
 
@@ -578,9 +583,9 @@ async def onboard_kucoin(
         result = KuCoinImportOrchestrator.execute(db, account_id, client)
     except AppError:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("KuCoin onboarding failed for account %d", account_id)
-        raise AppError(f"KuCoin onboarding failed: {e}")
+        raise AppError("KuCoin onboarding failed. Check credentials and try again.")
 
     if result.stats.get("status") == "failed":
         raise AppError(
@@ -727,13 +732,9 @@ async def test_broker_credentials(
             )
             result = test_credentials(config, cred1, cred2)
         elif config.credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
-            from app.dependencies.user_scope import get_broker_credentials_with_passphrase
-
-            api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
-                account, config.key
+            api_key, api_secret, api_passphrase = _get_passphrase_credentials(
+                account, config.key, config.name
             )
-            if not api_key or not api_secret or not api_passphrase:
-                raise BadRequestError(f"No {config.name} credentials configured.")
             result = test_credentials(config, api_key, api_secret, api_passphrase=api_passphrase)
         else:
             cred1, cred2 = _get_api_key_credentials(account, config.key, config.name)

@@ -96,7 +96,7 @@ class KuCoinSyntheticImportService:
                 if quantity == Decimal("0"):
                     continue
 
-                holding, asset_created = crypto_service._get_or_create_holding(
+                holding, asset_created = crypto_service.get_or_create_holding(
                     account_id, currency, "Crypto", currency
                 )
                 if asset_created:

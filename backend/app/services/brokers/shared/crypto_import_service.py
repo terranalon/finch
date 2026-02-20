@@ -133,7 +133,7 @@ class CryptoImportService(BaseBrokerImportService):
         stats["end_time"] = datetime.now().isoformat()
         return stats
 
-    def _get_or_create_holding(
+    def get_or_create_holding(
         self, account_id: int, symbol: str, asset_class: str, currency: str
     ) -> tuple[Holding, bool]:
         """Get existing holding or create new one with its asset."""
@@ -227,7 +227,7 @@ class CryptoImportService(BaseBrokerImportService):
 
         for txn in transactions:
             try:
-                holding, asset_created = self._get_or_create_holding(
+                holding, asset_created = self.get_or_create_holding(
                     account_id, txn.symbol, "Crypto", txn.currency
                 )
                 if asset_created:
@@ -276,9 +276,7 @@ class CryptoImportService(BaseBrokerImportService):
             try:
                 currency = cash_txn.currency
                 asset_class = "Cash" if currency in FIAT_CURRENCIES else "Crypto"
-                holding, _ = self._get_or_create_holding(
-                    account_id, currency, asset_class, currency
-                )
+                holding, _ = self.get_or_create_holding(account_id, currency, asset_class, currency)
 
                 # Create or transfer transaction with automatic deduplication
                 result, _ = create_or_transfer_transaction(
@@ -315,7 +313,7 @@ class CryptoImportService(BaseBrokerImportService):
 
         for div in dividends:
             try:
-                holding, _ = self._get_or_create_holding(
+                holding, _ = self.get_or_create_holding(
                     account_id, div.symbol, "Crypto", div.currency
                 )
 
