@@ -337,7 +337,10 @@ class PriceFetcher:
         """Fetch a fresh price only if the cached value is older than cooldown_seconds.
 
         Uses asset.last_fetched_at as a per-asset, cross-user cooldown backed by
-        the DB row — no external cache needed, works across multiple workers.
+        the DB row — no external cache needed. Note: the staleness check reads the
+        already-loaded ORM object and is not atomic; under concurrent load two requests
+        may both pass the cooldown check and both fetch, but this causes at most an extra
+        API call rather than data corruption.
 
         Args:
             db: Database session.

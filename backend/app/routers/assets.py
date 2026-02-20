@@ -411,5 +411,5 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
         "symbol": asset.symbol,
         "refreshed": refreshed,
         "last_fetched_price": float(price) if price is not None else None,
-        "last_fetched_at": fetched_at.isoformat() if fetched_at else None,
+        "last_fetched_at": fetched_at.isoformat() if fetched_at is not None else None,
     }
