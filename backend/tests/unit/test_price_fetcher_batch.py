@@ -136,6 +136,25 @@ class TestUpdateAllAssetPricesBatch:
     @patch("app.services.market_data.price_fetcher.AssetMetricsService")
     @patch("app.services.market_data.price_fetcher.YFinanceClient")
     @patch("app.services.market_data.price_fetcher._get_coingecko_client")
+    def test_zero_price_counts_as_failed(self, mock_cg, mock_yf_cls, mock_metrics):
+        """Stock with price=0 should be counted as failed, not updated."""
+        db = MagicMock()
+        delisted = _make_asset("DLIST")
+        db.execute.return_value.scalars.return_value.all.return_value = [delisted]
+
+        zero_data = _make_ticker_market_data("DLIST", 0.0)
+        mock_client = mock_yf_cls.return_value
+        mock_client.get_batch_ticker_info.return_value = {"DLIST": zero_data}
+
+        stats = PriceFetcher.update_all_asset_prices(db)
+
+        assert stats["failed"] == 1
+        assert stats["updated"] == 0
+        assert delisted.last_fetched_price is None
+
+    @patch("app.services.market_data.price_fetcher.AssetMetricsService")
+    @patch("app.services.market_data.price_fetcher.YFinanceClient")
+    @patch("app.services.market_data.price_fetcher._get_coingecko_client")
     def test_partial_batch_failure(self, mock_cg, mock_yf_cls, mock_metrics):
         """Some symbols returning None should count as failed, others succeed."""
         db = MagicMock()

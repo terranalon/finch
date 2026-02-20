@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 _AGOROT_DIVISOR = Decimal("100")
 
 
+def _apply_agorot(v: Decimal | None, divisor: Decimal | None) -> Decimal | None:
+    return v / divisor if divisor is not None and v is not None else v
+
+
 def backfill_stocks(db: Session, assets: list[Asset]) -> dict[str, int]:
     """Backfill stock/ETF assets using ticker.info."""
     stats: dict[str, int] = {"updated": 0, "failed": 0}
@@ -51,23 +55,20 @@ def backfill_stocks(db: Session, assets: list[Asset]) -> dict[str, int]:
         try:
             divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
 
-            def _agorot(v: Decimal | None) -> Decimal | None:
-                return v / divisor if divisor is not None and v is not None else v
-
             AssetMetricsService.upsert_daily_metrics(
                 db,
                 asset_id=asset.id,
                 target_date=today,
-                open=_agorot(data.open),
-                high=_agorot(data.high),
-                low=_agorot(data.low),
-                close=_agorot(data.close),
+                open=_apply_agorot(data.open, divisor),
+                high=_apply_agorot(data.high, divisor),
+                low=_apply_agorot(data.low, divisor),
+                close=_apply_agorot(data.close, divisor),
                 volume=data.volume,
                 market_cap=data.market_cap,
                 pe_ratio=data.pe_ratio,
                 forward_pe=data.forward_pe,
                 eps=data.eps,
-                dividend_rate=_agorot(data.dividend_rate),
+                dividend_rate=_apply_agorot(data.dividend_rate, divisor),
                 dividend_yield=data.dividend_yield,
                 payout_ratio=data.payout_ratio,
                 source="Yahoo Finance",
@@ -84,13 +85,13 @@ def backfill_stocks(db: Session, assets: list[Asset]) -> dict[str, int]:
                 avg_volume=data.avg_volume,
                 earnings_date=data.earnings_date,
                 ex_dividend_date=data.ex_dividend_date,
-                target_est=_agorot(data.target_est),
-                week_52_high=_agorot(data.week_52_high),
-                week_52_low=_agorot(data.week_52_low),
+                target_est=_apply_agorot(data.target_est, divisor),
+                week_52_high=_apply_agorot(data.week_52_high, divisor),
+                week_52_low=_apply_agorot(data.week_52_low, divisor),
                 peg_ratio=data.peg_ratio,
                 expense_ratio=data.expense_ratio,
                 fund_family=data.fund_family,
-                nav=_agorot(data.nav),
+                nav=_apply_agorot(data.nav, divisor),
             )
             stats["updated"] += 1
         except Exception:

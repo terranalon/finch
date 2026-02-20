@@ -12,12 +12,18 @@ from app.models.asset_price import AssetPrice
 from app.services.asset_metrics_service import AssetMetricsService
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
-from app.services.market_data.yfinance_client import YFinanceClient
+from app.services.market_data.yfinance_client import TickerMarketData, YFinanceClient
 
 logger = logging.getLogger(__name__)
 
 # Israeli stocks (.TA) prices from Yahoo Finance are in Agorot (1/100 ILS)
 _AGOROT_DIVISOR = Decimal("100")
+
+
+def _apply_agorot(v: Decimal | None, divisor: Decimal | None) -> Decimal | None:
+    """Divide v by divisor when both are non-None (Agorot → ILS conversion)."""
+    return v / divisor if divisor is not None and v is not None else v
+
 
 # Lazy-loaded CoinGecko client (singleton)
 _coingecko_client: CoinGeckoClient | None = None
@@ -167,6 +173,62 @@ class PriceFetcher:
             return False
 
     @staticmethod
+    def _write_stock_metrics(
+        db: Session,
+        asset: Asset,
+        data: TickerMarketData,
+        today: date,
+        price: Decimal | None,
+        divisor: Decimal | None,
+    ) -> None:
+        """Upsert daily metrics and slow-changing fields for a single stock asset."""
+        try:
+            AssetMetricsService.upsert_daily_metrics(
+                db,
+                asset_id=asset.id,
+                target_date=today,
+                open=_apply_agorot(data.open, divisor),
+                high=_apply_agorot(data.high, divisor),
+                low=_apply_agorot(data.low, divisor),
+                close=price,
+                volume=data.volume,
+                market_cap=data.market_cap,
+                pe_ratio=data.pe_ratio,
+                forward_pe=data.forward_pe,
+                eps=data.eps,
+                dividend_rate=_apply_agorot(data.dividend_rate, divisor),
+                dividend_yield=data.dividend_yield,
+                payout_ratio=data.payout_ratio,
+                source="Yahoo Finance",
+            )
+        except Exception:
+            logger.exception("Failed to upsert daily metrics for %s", asset.symbol)
+
+        try:
+            AssetMetricsService.update_slow_changing_fields(
+                db,
+                asset,
+                description=data.description,
+                exchange=data.exchange,
+                website=data.website,
+                ceo=data.ceo,
+                employees=data.employees,
+                beta=data.beta,
+                avg_volume=data.avg_volume,
+                earnings_date=data.earnings_date,
+                ex_dividend_date=data.ex_dividend_date,
+                target_est=_apply_agorot(data.target_est, divisor),
+                week_52_high=_apply_agorot(data.week_52_high, divisor),
+                week_52_low=_apply_agorot(data.week_52_low, divisor),
+                peg_ratio=data.peg_ratio,
+                expense_ratio=data.expense_ratio,
+                fund_family=data.fund_family,
+                nav=_apply_agorot(data.nav, divisor),
+            )
+        except Exception:
+            logger.exception("Failed to update slow fields for %s", asset.symbol)
+
+    @staticmethod
     def _update_stock_assets(
         db: Session,
         assets: list[Asset],
@@ -178,72 +240,21 @@ class PriceFetcher:
         processed_before = stats["updated"] + stats["failed"]
 
         try:
-            yf_client = YFinanceClient()
-            batch_results = yf_client.get_batch_ticker_info(symbols)
-
+            batch_results = YFinanceClient().get_batch_ticker_info(symbols)
             today = date.today()
             for asset in assets:
                 data = batch_results.get(asset.symbol)
-                if data is None or data.price is None:
+                if data is None or data.price is None or data.price <= 0:
                     stats["failed"] += 1
                     logger.warning("No ticker info for %s", asset.symbol)
                     continue
 
                 divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
-
-                def _agorot(v: Decimal | None) -> Decimal | None:
-                    return v / divisor if divisor is not None and v is not None else v
-
-                price = _agorot(data.price)
+                price = _apply_agorot(data.price, divisor)
                 asset.last_fetched_price = price
                 asset.last_fetched_at = datetime.now()
                 stats["updated"] += 1
-
-                try:
-                    AssetMetricsService.upsert_daily_metrics(
-                        db,
-                        asset_id=asset.id,
-                        target_date=today,
-                        open=_agorot(data.open),
-                        high=_agorot(data.high),
-                        low=_agorot(data.low),
-                        close=price,
-                        volume=data.volume,
-                        market_cap=data.market_cap,
-                        pe_ratio=data.pe_ratio,
-                        forward_pe=data.forward_pe,
-                        eps=data.eps,
-                        dividend_rate=_agorot(data.dividend_rate),
-                        dividend_yield=data.dividend_yield,
-                        payout_ratio=data.payout_ratio,
-                        source="Yahoo Finance",
-                    )
-                except Exception:
-                    logger.exception("Failed to upsert daily metrics for %s", asset.symbol)
-
-                try:
-                    AssetMetricsService.update_slow_changing_fields(
-                        db,
-                        asset,
-                        description=data.description,
-                        exchange=data.exchange,
-                        website=data.website,
-                        ceo=data.ceo,
-                        employees=data.employees,
-                        beta=data.beta,
-                        avg_volume=data.avg_volume,
-                        earnings_date=data.earnings_date,
-                        ex_dividend_date=data.ex_dividend_date,
-                        target_est=_agorot(data.target_est),
-                        week_52_high=_agorot(data.week_52_high),
-                        week_52_low=_agorot(data.week_52_low),
-                        peg_ratio=data.peg_ratio,
-                        expense_ratio=data.expense_ratio,
-                        fund_family=data.fund_family,
-                        nav=_agorot(data.nav),
-                    )
-                except Exception:
-                    logger.exception("Failed to update slow fields for %s", asset.symbol)
+                PriceFetcher._write_stock_metrics(db, asset, data, today, price, divisor)
 
             db.commit()
         except Exception as e:
