@@ -4,6 +4,7 @@ import { api, cn } from '../lib';
 import { PageContainer } from '../components/Layout';
 import { SkeletonHero, SkeletonChart, SkeletonCard } from '../components/ui/Skeleton';
 import AssetHero from '../components/asset-detail/AssetHero';
+import PositionStrip from '../components/asset-detail/PositionStrip';
 
 export default function AssetDetail() {
   const { id } = useParams();
@@ -142,7 +143,7 @@ export default function AssetDetail() {
 
       <AssetHero asset={asset} onToggleFavorite={handleToggleFavorite} onRefreshPrice={handleRefreshPrice} />
 
-      {/* Position strip placeholder - replaced in Task 3 */}
+      {position && <PositionStrip position={position} asset={asset} />}
 
       {/* Content tabs */}
       <div className="flex gap-6 border-b border-[var(--border-primary)] mb-6">
