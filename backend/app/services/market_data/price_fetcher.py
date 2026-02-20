@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Israeli stocks (.TA) prices from Yahoo Finance are in Agorot (1/100 ILS)
 _AGOROT_DIVISOR = Decimal("100")
 
+# Minimum age in seconds before re-fetching a price via the manual refresh endpoint
+MANUAL_REFRESH_COOLDOWN_SECONDS = 60
+
 
 def _apply_agorot(v: Decimal | None, divisor: Decimal | None) -> Decimal | None:
     """Divide v by divisor when both are non-None (Agorot → ILS conversion)."""
@@ -324,6 +327,38 @@ class PriceFetcher:
             logger.error("Error batch fetching crypto market data: %s", e)
             already_counted = (stats["updated"] + stats["failed"]) - processed_before
             stats["failed"] += len(assets) - already_counted
+
+    @staticmethod
+    def refresh_if_stale(
+        db: Session,
+        asset: Asset,
+        cooldown_seconds: int = MANUAL_REFRESH_COOLDOWN_SECONDS,
+    ) -> tuple[bool, Decimal | None, datetime | None]:
+        """Fetch a fresh price only if the cached value is older than cooldown_seconds.
+
+        Uses asset.last_fetched_at as a per-asset, cross-user cooldown backed by
+        the DB row — no external cache needed, works across multiple workers.
+
+        Args:
+            db: Database session.
+            asset: Asset model instance.
+            cooldown_seconds: Minimum age in seconds before re-fetching. Default 60.
+
+        Returns:
+            (refreshed, price, fetched_at):
+            - refreshed=False: cooldown active, cached values returned
+            - refreshed=True, price not None: fresh fetch succeeded
+            - refreshed=True, price is None: fresh fetch attempted but failed
+        """
+        if asset.last_fetched_at is not None:
+            age_seconds = (datetime.now() - asset.last_fetched_at).total_seconds()
+            if age_seconds < cooldown_seconds:
+                return False, asset.last_fetched_price, asset.last_fetched_at
+
+        success = PriceFetcher.update_asset_price(db, asset)
+        if success:
+            return True, asset.last_fetched_price, asset.last_fetched_at
+        return True, None, None
 
     @staticmethod
     def update_all_asset_prices(db: Session, asset_class: str | None = None) -> dict[str, int]:
