@@ -68,6 +68,17 @@ describe("HeroSection", () => {
     });
   });
 
+  it("navigates to /login if demo account has MFA enabled", async () => {
+    mockLogin.mockResolvedValue({ mfa_required: true });
+    renderHero();
+
+    fireEvent.click(screen.getByRole("button", { name: /try demo/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith("/login");
+    });
+  });
+
   it("renders the dashboard mockup", () => {
     renderHero();
     expect(screen.getByText("$247,832.15")).toBeInTheDocument();

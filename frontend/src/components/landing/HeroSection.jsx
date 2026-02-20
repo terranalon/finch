@@ -123,7 +123,11 @@ export default function HeroSection() {
   const handleDemoLogin = async () => {
     setDemoLoading(true);
     try {
-      await login("demo@finch.com", "Demo1234");
+      const result = await login("demo@finch.com", "Demo1234");
+      if (result.mfa_required) {
+        navigate("/login");
+        return;
+      }
       navigate("/");
     } catch {
       navigate("/login");
