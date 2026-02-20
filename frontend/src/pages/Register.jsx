@@ -1,14 +1,7 @@
-/**
- * Register Page - Finch Portfolio Tracker
- *
- * Handles new user registration.
- */
-
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useTheme } from '../contexts';
-import { FinchIcon, ThemeToggle } from '../components/ui';
 import { register } from '../lib/api';
+import { AuthLayout } from '../components/auth';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -18,7 +11,6 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -39,7 +31,6 @@ export default function Register() {
 
     try {
       await register(email, password, username);
-      // Redirect to verification pending page with email
       navigate('/verification-pending', { state: { email } });
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -49,128 +40,112 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8 relative">
-      {/* Theme toggle in top-right corner */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      </div>
+    <AuthLayout page="register">
+      <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-6">
+        Create your account
+      </h2>
 
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Link to="/" className="flex items-center justify-center gap-2 no-underline">
-            <FinchIcon className="size-10 text-accent" />
-            <h1 className="text-4xl font-bold text-[var(--text-primary)]">
-              <span className="text-accent">Fin</span>ch
-            </h1>
-          </Link>
-          <h2 className="mt-6 text-center text-2xl font-bold text-[var(--text-primary)] text-balance">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-[var(--text-secondary)] text-pretty">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-accent hover:text-accent-hover">
-              Sign in
-            </Link>
-          </p>
-        </div>
+      <form onSubmit={handleSubmit}>
+        {error && (
+          <div className="rounded-md bg-[var(--negative-bg)] p-4 mb-4" role="alert">
+            <p className="text-sm text-[var(--negative)]">{error}</p>
+          </div>
+        )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-negative-bg dark:bg-negative-bg-dark p-4" role="alert">
-              <p className="text-sm text-negative dark:text-negative-dark">{error}</p>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-[var(--text-primary)]">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-[var(--text-primary)]">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                minLength={3}
-                maxLength={30}
-                pattern="[A-Za-z0-9_]+"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="your_username"
-              />
-              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                3-30 characters: letters, numbers, and underscores
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[var(--text-primary)]">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="At least 8 characters"
-              />
-              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                Must contain uppercase, lowercase, and a number
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-primary)]">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-[var(--bg-secondary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors"
-                placeholder="Confirm your password"
-              />
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-[13px] font-medium text-[var(--text-primary)] mb-1">
+              Email address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              placeholder="you@example.com"
+            />
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating account...' : 'Create account'}
-            </button>
+            <label htmlFor="username" className="block text-[13px] font-medium text-[var(--text-primary)] mb-1">
+              Username
+            </label>
+            <input
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              required
+              minLength={3}
+              maxLength={30}
+              pattern="[A-Za-z0-9_]+"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              placeholder="your_username"
+            />
+            <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+              3-30 characters: letters, numbers, and underscores
+            </p>
           </div>
-        </form>
-      </div>
-    </div>
+
+          <div>
+            <label htmlFor="password" className="block text-[13px] font-medium text-[var(--text-primary)] mb-1">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              placeholder="At least 8 characters"
+            />
+            <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+              Must contain uppercase, lowercase, and a number
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" className="block text-[13px] font-medium text-[var(--text-primary)] mb-1">
+              Confirm Password
+            </label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              placeholder="Confirm your password"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-primary w-full py-2.5 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Creating account...' : 'Create account'}
+        </button>
+      </form>
+
+      <p className="text-center text-[13px] text-[var(--text-tertiary)] mt-5">
+        Already have an account?{' '}
+        <Link to="/login" className="text-accent hover:text-accent-hover font-medium">
+          Sign in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }
