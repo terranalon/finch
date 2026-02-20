@@ -4,8 +4,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.models import Asset
 from app.services.market_data.price_fetcher import PriceFetcher
 
