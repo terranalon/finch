@@ -162,6 +162,7 @@ function TroubleshootingItem({ item }) {
 }
 
 function SecurityList({ icon: Icon, label, items, colorClass }) {
+  if (!items?.length) return null;
   return (
     <div>
       <p className={`text-xs font-semibold ${colorClass} uppercase tracking-wide mb-2`}>{label}</p>
