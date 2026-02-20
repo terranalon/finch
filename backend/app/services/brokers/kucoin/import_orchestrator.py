@@ -62,7 +62,7 @@ class KuCoinImportOrchestrator:
             balances = {}
 
         if balances:
-            return KuCoinImportOrchestrator._do_snapshot(db, account_id, client)
+            return KuCoinImportOrchestrator._do_snapshot(db, account_id, client, balances)
 
         return KuCoinImportOrchestrator._do_full_history(db, account_id, client)
 
@@ -88,11 +88,16 @@ class KuCoinImportOrchestrator:
         )
 
     @staticmethod
-    def _do_snapshot(db: Session, account_id: int, client: KuCoinClient) -> ImportResult:
+    def _do_snapshot(
+        db: Session,
+        account_id: int,
+        client: KuCoinClient,
+        balances: dict | None = None,
+    ) -> ImportResult:
         """Create synthetic snapshot from current positions."""
         logger.info("Account %d: using snapshot import", account_id)
 
-        stats = KuCoinSyntheticImportService.import_snapshot(db, account_id, client)
+        stats = KuCoinSyntheticImportService.import_snapshot(db, account_id, client, balances)
 
         return ImportResult(
             import_mode="snapshot",

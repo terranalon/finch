@@ -52,6 +52,7 @@ class KuCoinSyntheticImportService:
         db: Session,
         account_id: int,
         client: KuCoinClient,
+        balances: dict[str, Decimal] | None = None,
     ) -> dict:
         """Fetch current balances and create synthetic Buy transactions.
 
@@ -59,6 +60,11 @@ class KuCoinSyntheticImportService:
         1. A BrokerDataSource with source_type='synthetic'
         2. One synthetic 'Buy' transaction per non-zero balance
         3. Stores snapshot_positions in import_stats for later validation
+
+        Args:
+            balances: Pre-fetched balances from the orchestrator. If None,
+                      balances are fetched from the API. Pass pre-fetched
+                      balances to avoid a duplicate API call.
 
         Returns:
             Statistics dictionary
@@ -70,7 +76,8 @@ class KuCoinSyntheticImportService:
             if not account:
                 return _fail_stats(stats, f"Account {account_id} not found")
 
-            balances = client.get_account_balances()
+            if balances is None:
+                balances = client.get_account_balances()
             today = date.today()
 
             source = BrokerDataSource(

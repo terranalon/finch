@@ -329,50 +329,6 @@ class TestKuCoinStakingCSVParsing:
         assert staking.transaction_type == "Staking"
 
 
-class TestKuCoinRealFile:
-    """Tests against real KuCoin Billing History export."""
-
-    REAL_FILE = Path(
-        "/Users/alonsamocha/Taxes/2024/KuCoin/"
-        "BillingHistory20251028_192933403/Spot Orders_Filled Orders.csv"
-    )
-
-    @pytest.fixture
-    def real_csv(self) -> bytes:
-        if not self.REAL_FILE.exists():
-            pytest.skip("Real KuCoin file not available")
-        return self.REAL_FILE.read_bytes()
-
-    def test_parse_real_file(self, real_csv):
-        from app.services.brokers.kucoin.parser import KuCoinParser
-
-        parser = KuCoinParser()
-        result = parser.parse(real_csv)
-
-        # 12 real trades from Jan to Dec 2024 (all deal/part_deal)
-        assert len(result.transactions) == 12
-        assert result.start_date == date(2024, 1, 9)
-        assert result.end_date == date(2024, 12, 19)
-
-    def test_real_file_symbols(self, real_csv):
-        from app.services.brokers.kucoin.parser import KuCoinParser
-
-        parser = KuCoinParser()
-        result = parser.parse(real_csv)
-
-        symbols = {t.symbol for t in result.transactions}
-        assert symbols == {"BNB", "CRO", "ENJ", "KAS", "CHZ"}
-
-    def test_real_file_all_btc_denominated(self, real_csv):
-        from app.services.brokers.kucoin.parser import KuCoinParser
-
-        parser = KuCoinParser()
-        result = parser.parse(real_csv)
-
-        currencies = {t.currency for t in result.transactions}
-        assert currencies == {"BTC"}
-
-
 class TestKuCoinEdgeCases:
     """Tests for edge cases and error handling."""
 

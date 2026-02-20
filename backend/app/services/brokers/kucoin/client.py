@@ -264,7 +264,7 @@ class KuCoinClient:
 
         if not start or not end:
             end = end or datetime.now(tz=UTC)
-            start = start or (end - timedelta(days=_FILLS_WINDOW_DAYS))
+            start = start or (end - timedelta(days=_MAX_API_HISTORY_DAYS))
 
         current_start = start
         while current_start < end:
