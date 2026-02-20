@@ -16,13 +16,12 @@ export default function LandingPage() {
     const hadDark = document.documentElement.classList.contains("dark");
     document.documentElement.classList.remove("dark");
     return () => {
-      if (hadDark) {
-        document.documentElement.classList.add("dark");
-      }
+      if (hadDark) document.documentElement.classList.add("dark");
     };
   }, []);
 
-  // Scroll-triggered fade-in for all .lp-fade-up elements
+  // Fade-in animations: IntersectionObserver for scroll reveal,
+  // hero elements animate in immediately without waiting for scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) =>
@@ -31,19 +30,18 @@ export default function LandingPage() {
         }),
       { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
     );
-    const elements = document.querySelectorAll(".lp-fade-up");
-    elements.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+    document.querySelectorAll(".lp-fade-up").forEach((el) => observer.observe(el));
 
-  // Hero elements animate in immediately without waiting for scroll
-  useEffect(() => {
-    const timer = setTimeout(() => {
+    const heroTimer = setTimeout(() => {
       document
         .querySelectorAll(".lp-hero-glow .lp-fade-up")
         .forEach((el) => el.classList.add("is-visible"));
     }, 100);
-    return () => clearTimeout(timer);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(heroTimer);
+    };
   }, []);
 
   return (
