@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 import httpx
 
@@ -29,6 +30,8 @@ KUCOIN_API_URL = "https://api.kucoin.com"
 _FILLS_WINDOW_DAYS = 7
 _PAGE_SIZE = 500
 _REQUEST_DELAY = 0.35  # seconds between requests
+_MAX_API_HISTORY_DAYS = 180  # KuCoin fills endpoint retains ~6 months
+_TRUNCATION_BUFFER_DAYS = 7  # If oldest fill is within this range of the limit, assume truncated
 
 
 @dataclass
@@ -156,6 +159,69 @@ class KuCoinClient:
                 balances[currency] = balance
 
         return balances
+
+    def probe_history_coverage(self) -> Literal["full", "truncated", "empty"]:
+        """Probe whether the fills endpoint covers the full account history.
+
+        Fetches the first page of fills from the maximum lookback window and
+        checks if the oldest fill is near the retention boundary.
+
+        Returns:
+            "full" - Oldest fill is well within the window
+            "truncated" - Oldest fill is near the 180-day boundary
+            "empty" - No fills found at all
+        """
+        end = datetime.now(tz=UTC)
+        start = end - timedelta(days=_MAX_API_HISTORY_DAYS)
+
+        start_ms = int(start.timestamp() * 1000)
+        end_ms = int(end.timestamp() * 1000)
+
+        params: dict = {
+            "pageSize": _PAGE_SIZE,
+            "currentPage": 1,
+            "startAt": start_ms,
+            "endAt": end_ms,
+        }
+        result = self._signed_request("GET", "/api/v1/fills", params)
+        data = result.get("data", {})
+        items = data.get("items", [])
+        total_page = data.get("totalPage", 1)
+
+        if not items:
+            return "empty"
+
+        # If there are multiple pages, fetch the LAST page to find the oldest fill
+        if total_page > 1:
+            params["currentPage"] = total_page
+            result = self._signed_request("GET", "/api/v1/fills", params)
+            data = result.get("data", {})
+            items = data.get("items", [])
+
+        if not items:
+            return "empty"
+
+        # The last item on the last page is the oldest fill
+        oldest_created_at = items[-1].get("createdAt")
+        if not oldest_created_at:
+            return "empty"
+
+        oldest_date = datetime.fromtimestamp(oldest_created_at / 1000, tz=UTC)
+        days_ago = (end - oldest_date).days
+
+        if days_ago >= (_MAX_API_HISTORY_DAYS - _TRUNCATION_BUFFER_DAYS):
+            logger.info(
+                "KuCoin history truncated: oldest fill is %d days old (limit: %d)",
+                days_ago,
+                _MAX_API_HISTORY_DAYS,
+            )
+            return "truncated"
+
+        logger.info(
+            "KuCoin history appears complete: oldest fill is %d days old",
+            days_ago,
+        )
+        return "full"
 
     def _fetch_paginated(
         self,
