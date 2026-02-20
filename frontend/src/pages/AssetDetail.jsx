@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api, cn } from '../lib';
 import { PageContainer } from '../components/Layout';
 import { SkeletonHero, SkeletonChart, SkeletonCard } from '../components/ui/Skeleton';
+import AssetHero from '../components/asset-detail/AssetHero';
 
 export default function AssetDetail() {
   const { id } = useParams();
@@ -139,7 +140,7 @@ export default function AssetDetail() {
         <span className="text-[var(--text-primary)] font-medium">{asset.symbol}</span>
       </nav>
 
-      {/* Hero placeholder - replaced in Task 2 */}
+      <AssetHero asset={asset} onToggleFavorite={handleToggleFavorite} onRefreshPrice={handleRefreshPrice} />
 
       {/* Position strip placeholder - replaced in Task 3 */}
 

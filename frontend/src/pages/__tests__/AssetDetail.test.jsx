@@ -26,6 +26,10 @@ vi.mock('../../contexts/index.js', () => ({
   useCurrency: () => ({ currency: 'USD', currencySymbol: '$' }),
 }));
 
+vi.mock('../../components/asset-detail/AssetHero', () => ({
+  default: () => <div data-testid="asset-hero" />,
+}));
+
 const mockAssetDetail = {
   id: 1, symbol: 'AAPL', name: 'Apple Inc.', asset_class: 'Stock',
   currency: 'USD', exchange: 'NASDAQ', is_favorite: false,
