@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api, cn } from '../lib';
 import { PageContainer } from '../components/Layout';
 import { SkeletonHero, SkeletonChart, SkeletonCard } from '../components/ui/Skeleton';
 import AssetHero from '../components/asset-detail/AssetHero';
 import PositionStrip from '../components/asset-detail/PositionStrip';
+import AssetChart from '../components/asset-detail/AssetChart';
+
+const TABS = ['Overview', 'Transactions'];
 
 export default function AssetDetail() {
   const { id } = useParams();
@@ -130,8 +133,6 @@ export default function AssetDetail() {
     );
   }
 
-  const TABS = ['Overview', 'Transactions'];
-
   return (
     <PageContainer>
       {/* Breadcrumb */}
@@ -163,8 +164,12 @@ export default function AssetDetail() {
         ))}
       </div>
 
-      {/* Chart placeholder - replaced in Task 4 */}
-      <div className="mb-6" />
+      <AssetChart
+        priceHistory={priceHistory}
+        activePeriod={chartPeriod}
+        onPeriodChange={handlePeriodChange}
+        currency={asset.currency}
+      />
 
       {/* Tab content */}
       {activeTab === 'Overview' && (
