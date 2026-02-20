@@ -380,7 +380,12 @@ async def toggle_favorite(asset_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{asset_id}/price", response_model=SingleAssetPriceResponse)
 async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
-    """Fetch the latest price from the market data provider for a specific asset."""
+    """Fetch the latest price from the market data provider for a specific asset.
+
+    Skips the external API call and returns the cached price if it was fetched
+    within the last 60 seconds, protecting against button-mashing and
+    multi-user hammering of the same asset's endpoint.
+    """
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
 
     if not asset:
@@ -389,14 +394,22 @@ async def update_asset_price(asset_id: int, db: Session = Depends(get_db)):
     if not asset.symbol:
         raise BadRequestError(f"Asset {asset.name} has no symbol")
 
-    if not PriceFetcher.update_asset_price(db, asset):
+    refreshed, price, fetched_at = PriceFetcher.refresh_if_stale(db, asset)
+
+    if refreshed and price is None:
         raise AppError(f"Failed to fetch price for {asset.symbol}")
 
+    message = (
+        f"Price refreshed for {asset.symbol}"
+        if refreshed
+        else f"Price is up to date for {asset.symbol}"
+    )
     return {
         "status": "success",
-        "message": f"Price updated for {asset.symbol}",
+        "message": message,
         "asset_id": asset.id,
         "symbol": asset.symbol,
-        "price": float(asset.last_fetched_price) if asset.last_fetched_price else None,
-        "updated_at": asset.last_price_update.isoformat() if asset.last_price_update else None,
+        "refreshed": refreshed,
+        "last_fetched_price": float(price) if price is not None else None,
+        "last_fetched_at": fetched_at.isoformat() if fetched_at is not None else None,
     }

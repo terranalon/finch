@@ -19,8 +19,9 @@ class SingleAssetPriceResponse(StatusResponse):
 
     asset_id: int
     symbol: str
-    price: float | None = None
-    updated_at: str | None = None
+    refreshed: bool
+    last_fetched_price: float | None = None
+    last_fetched_at: str | None = None
 
 
 class HistoricalPricePoint(BaseModel):
