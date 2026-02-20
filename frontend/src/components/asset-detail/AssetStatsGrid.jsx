@@ -48,15 +48,15 @@ function getStatsItems(asset) {
     { label: 'Market Cap', value: fmt(m.market_cap, (v) => formatCurrency(v, cur, { compact: true })) },
     { label: 'Volume', value: fmt(m.volume, (v) => formatNumber(v, { compact: true })) },
     { label: 'Avg Volume', value: fmt(asset.avg_volume, (v) => formatNumber(v, { compact: true })) },
-    { label: 'Beta', value: fmt(asset.beta, (v) => v.toFixed(2)) },
-    { label: 'P/E (TTM)', value: fmt(m.pe_ratio, (v) => v.toFixed(2)) },
-    { label: 'Forward P/E', value: fmt(m.forward_pe, (v) => v.toFixed(2)) },
+    { label: 'Beta', value: fmt(asset.beta, (v) => Number(v).toFixed(2)) },
+    { label: 'P/E (TTM)', value: fmt(m.pe_ratio, (v) => Number(v).toFixed(2)) },
+    { label: 'Forward P/E', value: fmt(m.forward_pe, (v) => Number(v).toFixed(2)) },
     { label: 'EPS (TTM)', value: fmt(m.eps, (v) => formatCurrency(v, cur)) },
     { label: 'Earnings Date', value: fmt(asset.earnings_date, formatDate) },
     { label: 'Div Yield', value: fmt(m.dividend_yield, (v) => formatPercent(v * 100)) },
     { label: 'Ex-Div Date', value: fmt(asset.ex_dividend_date, formatDate) },
     { label: '1Y Target Est', value: fmt(asset.target_est, (v) => formatCurrency(v, cur)) },
-    { label: 'PEG Ratio', value: fmt(asset.peg_ratio, (v) => v.toFixed(2)) },
+    { label: 'PEG Ratio', value: fmt(asset.peg_ratio, (v) => Number(v).toFixed(2)) },
   ];
 }
 
