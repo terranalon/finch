@@ -9,13 +9,13 @@ const VALUE_PROPS = [
   "Returns calculated with deposits excluded",
 ];
 
-function MiniDashboard() {
-  const holdings = [
-    { icon: "A", bg: "#333", ticker: "AAPL", ret: "+18.4%", gain: true },
-    { icon: "M", bg: "#0078D4", ticker: "MSFT", ret: "+24.1%", gain: true },
-    { icon: "B", bg: "#F7931A", ticker: "BTC", ret: "+142.3%", gain: true },
-  ];
+const HOLDINGS = [
+  { icon: "A", bg: "#333", ticker: "AAPL", ret: "+18.4%", gain: true },
+  { icon: "M", bg: "#0078D4", ticker: "MSFT", ret: "+24.1%", gain: true },
+  { icon: "B", bg: "#F7931A", ticker: "BTC", ret: "+142.3%", gain: true },
+];
 
+function MiniDashboard() {
   return (
     <div className="bg-white border border-[var(--border-primary)] rounded-[10px] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.08)] max-w-[360px]">
       <div className="flex items-center gap-[5px] px-3 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)]">
@@ -36,7 +36,7 @@ function MiniDashboard() {
           <path d="M0,40 C20,38 40,35 60,32 C80,29 100,27 120,22 C140,17 160,25 180,20 C200,16 220,14 240,11 C260,8 280,10 300,7 L320,5 L320,50 L0,50Z" fill="url(#auth-cg)" />
           <path d="M0,40 C20,38 40,35 60,32 C80,29 100,27 120,22 C140,17 160,25 180,20 C200,16 220,14 240,11 C260,8 280,10 300,7 L320,5" fill="none" stroke="#2563EB" strokeWidth="2" />
         </svg>
-        {holdings.map((h) => (
+        {HOLDINGS.map((h) => (
           <div key={h.ticker} className="flex justify-between items-center py-[7px] border-t border-[var(--bg-secondary)] text-xs">
             <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
               <span className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold text-white" style={{ background: h.bg }}>{h.icon}</span>
