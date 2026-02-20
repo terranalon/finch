@@ -1,23 +1,52 @@
+const ALLOCATION_SEGMENTS = [
+  { width: "38%", color: "#2563EB", label: "Stock 38%" },
+  { width: "22%", color: "#60A5FA", label: "ETF 22%" },
+  { width: "32%", color: "#F59E0B", label: "Crypto 32%" },
+  { width: "8%", color: "#94A3B8", label: "Cash 8%" },
+];
+
+const TRANSACTIONS = [
+  { badge: "BUY", badgeBg: "#D1FAE5", badgeColor: "#059669", text: <>Bought <strong>50</strong> MSFT at $415.20</>, amount: "-$20,760", amountColor: "#DC2626" },
+  { badge: "DIV", badgeBg: "#DBEAFE", badgeColor: "#2563EB", text: <>Dividend from <strong>AAPL</strong></>, amount: "+$96.00", amountColor: "#059669" },
+  { badge: "SELL", badgeBg: "#FEE2E2", badgeColor: "#DC2626", text: <>Sold <strong>0.5</strong> BTC at $96,420</>, amount: "+$48,210", amountColor: "#059669" },
+];
+
+const PERFORMANCE_ROWS = [
+  { label: "YTD", value: "+18.7%", width: "75%", color: "#059669" },
+  { label: "1Y", value: "+32.4%", width: "90%", color: "#059669" },
+  { label: "S&P 500 (YTD)", value: "+12.3%", width: "50%", color: "#94A3B8", muted: true },
+];
+
+const HOLDINGS_ROWS = [
+  { label: "Quantity", value: "142.5" },
+  { label: "Market Value", value: "$34,221.38" },
+  { label: "P&L", value: "+$5,316.88 (+18.4%)", color: "#059669" },
+];
+
 function UnifiedDashboardMockup() {
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3.5 text-xs">
       <div className="text-center pb-2.5 mb-2.5 border-b border-[var(--bg-tertiary)]">
-        <div style={{ fontSize: "10px", color: "#94A3B8", marginBottom: "2px" }}>Total Portfolio Value</div>
-        <div className="font-numeric" style={{ fontSize: "20px", fontWeight: 700, color: "#0F172A" }}>$247,832.15</div>
-        <div className="font-numeric" style={{ fontSize: "11px", color: "#059669", marginTop: "2px" }}>+$1,247.33 (+0.51%) today</div>
+        <div className="text-[10px] text-[#94A3B8] mb-0.5">Total Portfolio Value</div>
+        <div className="font-numeric text-[20px] font-bold text-[#0F172A]">$247,832.15</div>
+        <div className="font-numeric text-[11px] text-[#059669] mt-0.5">+$1,247.33 (+0.51%) today</div>
       </div>
       <div>
-        <div style={{ display: "flex", height: "8px", borderRadius: "4px", overflow: "hidden", marginBottom: "8px" }}>
-          <div style={{ width: "38%", background: "#2563EB" }} />
-          <div style={{ width: "22%", background: "#60A5FA" }} />
-          <div style={{ width: "32%", background: "#F59E0B" }} />
-          <div style={{ width: "8%", background: "#94A3B8" }} />
+        <div className="flex h-2 rounded overflow-hidden mb-2">
+          {ALLOCATION_SEGMENTS.map((seg) => (
+            <div key={seg.label} style={{ width: seg.width, background: seg.color }} />
+          ))}
         </div>
-        <div style={{ display: "flex", gap: "12px", fontSize: "10px", color: "#475569" }}>
-          <span><span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "#2563EB", marginRight: "3px" }} />Stock 38%</span>
-          <span><span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "#60A5FA", marginRight: "3px" }} />ETF 22%</span>
-          <span><span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "#F59E0B", marginRight: "3px" }} />Crypto 32%</span>
-          <span><span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "#94A3B8", marginRight: "3px" }} />Cash 8%</span>
+        <div className="flex gap-3 text-[10px] text-[#475569]">
+          {ALLOCATION_SEGMENTS.map((seg) => (
+            <span key={seg.label}>
+              <span
+                className="inline-block w-1.5 h-1.5 rounded-full mr-[3px]"
+                style={{ background: seg.color }}
+              />
+              {seg.label}
+            </span>
+          ))}
         </div>
       </div>
     </div>
@@ -27,19 +56,25 @@ function UnifiedDashboardMockup() {
 function AutoSyncMockup() {
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3.5 text-xs">
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-        <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#2563EB" }} />
-        <span style={{ fontSize: "10px", fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.5px" }}>Feb 19, 2026</span>
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className="w-[5px] h-[5px] rounded-full bg-[#2563EB]" />
+        <span className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-[0.5px]">Feb 19, 2026</span>
       </div>
-      {[
-        { badge: "BUY", badgeBg: "#D1FAE5", badgeColor: "#059669", text: <>Bought <strong>50</strong> MSFT at $415.20</>, amount: "-$20,760", amountColor: "#DC2626" },
-        { badge: "DIV", badgeBg: "#DBEAFE", badgeColor: "#2563EB", text: <>Dividend from <strong>AAPL</strong></>, amount: "+$96.00", amountColor: "#059669" },
-        { badge: "SELL", badgeBg: "#FEE2E2", badgeColor: "#DC2626", text: <>Sold <strong>0.5</strong> BTC at $96,420</>, amount: "+$48,210", amountColor: "#059669" },
-      ].map((row, i, arr) => (
-        <div key={row.badge + i} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 0", borderBottom: i < arr.length - 1 ? "1px solid #F1F5F9" : "none" }}>
-          <span style={{ fontSize: "9px", fontWeight: 600, padding: "2px 6px", borderRadius: "9999px", background: row.badgeBg, color: row.badgeColor }}>{row.badge}</span>
-          <span style={{ fontSize: "11px", color: "#0F172A", flex: 1 }}>{row.text}</span>
-          <span className="font-numeric" style={{ fontSize: "11px", color: row.amountColor }}>{row.amount}</span>
+      {TRANSACTIONS.map((row, i) => (
+        <div
+          key={row.badge + i}
+          className={`flex items-center gap-2 py-1.5 ${
+            i < TRANSACTIONS.length - 1 ? "border-b border-[#F1F5F9]" : ""
+          }`}
+        >
+          <span
+            className="text-[9px] font-semibold px-1.5 py-px rounded-full"
+            style={{ background: row.badgeBg, color: row.badgeColor }}
+          >
+            {row.badge}
+          </span>
+          <span className="text-[11px] text-[#0F172A] flex-1">{row.text}</span>
+          <span className="font-numeric text-[11px]" style={{ color: row.amountColor }}>{row.amount}</span>
         </div>
       ))}
     </div>
@@ -49,22 +84,21 @@ function AutoSyncMockup() {
 function PerformanceMockup() {
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3.5 text-xs">
-      <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "#DBEAFE", color: "#2563EB" }}>By Period</span>
-        <span style={{ fontSize: "10px", fontWeight: 500, padding: "2px 8px", borderRadius: "4px", color: "#94A3B8" }}>By Asset Class</span>
+      <div className="flex gap-1.5 mb-2.5">
+        <span className="text-[10px] font-semibold px-2 py-px rounded bg-[#DBEAFE] text-[#2563EB]">By Period</span>
+        <span className="text-[10px] font-medium px-2 py-px rounded text-[#94A3B8]">By Asset Class</span>
       </div>
-      {[
-        { label: "YTD", value: "+18.7%", width: "75%", color: "#059669" },
-        { label: "1Y", value: "+32.4%", width: "90%", color: "#059669" },
-        { label: "S&P 500 (YTD)", value: "+12.3%", width: "50%", color: "#94A3B8", muted: true },
-      ].map((row) => (
-        <div key={row.label} style={{ marginBottom: row.muted ? 0 : "6px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "3px" }}>
-            <span style={{ color: row.muted ? "#94A3B8" : "#475569" }}>{row.label}</span>
-            <span className="font-numeric" style={{ color: row.color, fontWeight: 500 }}>{row.value}</span>
+      {PERFORMANCE_ROWS.map((row) => (
+        <div key={row.label} className={row.muted ? "" : "mb-1.5"}>
+          <div className="flex justify-between text-[11px] mb-[3px]">
+            <span className={row.muted ? "text-[#94A3B8]" : "text-[#475569]"}>{row.label}</span>
+            <span className="font-numeric font-medium" style={{ color: row.color }}>{row.value}</span>
           </div>
-          <div style={{ height: "6px", background: "#F1F5F9", borderRadius: "3px", overflow: "hidden" }}>
-            <div style={{ width: row.width, height: "100%", background: row.muted ? "#CBD5E1" : "#059669", borderRadius: "3px" }} />
+          <div className="h-1.5 bg-[#F1F5F9] rounded-[3px] overflow-hidden">
+            <div
+              className="h-full rounded-[3px]"
+              style={{ width: row.width, background: row.muted ? "#CBD5E1" : "#059669" }}
+            />
           </div>
         </div>
       ))}
@@ -75,15 +109,15 @@ function PerformanceMockup() {
 function AssetInsightsMockup() {
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3.5 text-xs">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", paddingBottom: "8px", borderBottom: "1px solid #F1F5F9" }}>
+      <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#F1F5F9]">
         <div>
-          <span style={{ fontWeight: 700, color: "#0F172A", fontSize: "13px" }}>AAPL</span>
-          <span style={{ color: "#94A3B8", fontSize: "10px", marginLeft: "4px" }}>Stock</span>
+          <span className="font-bold text-[#0F172A] text-[13px]">AAPL</span>
+          <span className="text-[#94A3B8] text-[10px] ml-1">Stock</span>
         </div>
-        <div className="font-numeric" style={{ fontSize: "13px", fontWeight: 600, color: "#0F172A" }}>$240.15</div>
+        <div className="font-numeric text-[13px] font-semibold text-[#0F172A]">$240.15</div>
       </div>
-      <div style={{ marginBottom: "8px" }}>
-        <svg viewBox="0 0 200 40" style={{ width: "100%", height: "32px" }} preserveAspectRatio="none">
+      <div className="mb-2">
+        <svg viewBox="0 0 200 40" className="w-full h-8" preserveAspectRatio="none">
           <defs>
             <linearGradient id="feat-asset-grad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#059669" stopOpacity="0.15" />
@@ -93,30 +127,26 @@ function AssetInsightsMockup() {
           <path d="M0,32 C20,30 40,28 60,24 C80,20 100,26 120,18 C140,10 160,14 180,8 C190,6 200,4 200,4 L200,40 L0,40Z" fill="url(#feat-asset-grad)" />
           <path d="M0,32 C20,30 40,28 60,24 C80,20 100,26 120,18 C140,10 160,14 180,8 C190,6 200,4 200,4" fill="none" stroke="#059669" strokeWidth="1.5" />
         </svg>
-        <div style={{ display: "flex", gap: "6px" }}>
+        <div className="flex gap-1.5">
           {["1W", "1M", "3M", "1Y"].map((period) => (
             <span
               key={period}
-              style={{
-                fontSize: "9px", fontWeight: 600, padding: "1px 6px", borderRadius: "3px",
-                background: period === "1M" ? "#DBEAFE" : "#F1F5F9",
-                color: period === "1M" ? "#2563EB" : "#94A3B8",
-              }}
+              className={`text-[9px] font-semibold px-1.5 py-px rounded-[3px] ${
+                period === "1M"
+                  ? "bg-[#DBEAFE] text-[#2563EB]"
+                  : "bg-[#F1F5F9] text-[#94A3B8]"
+              }`}
             >
               {period}
             </span>
           ))}
         </div>
       </div>
-      <div style={{ fontSize: "10px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px", fontWeight: 600 }}>Your Holdings</div>
-      {[
-        { label: "Quantity", value: "142.5" },
-        { label: "Market Value", value: "$34,221.38" },
-        { label: "P&L", value: "+$5,316.88 (+18.4%)", color: "#059669" },
-      ].map((row) => (
-        <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", padding: "3px 0" }}>
-          <span style={{ color: "#475569" }}>{row.label}</span>
-          <span className="font-numeric" style={{ color: row.color ?? "#0F172A", fontWeight: 500 }}>{row.value}</span>
+      <div className="text-[10px] text-[#94A3B8] uppercase tracking-[0.5px] mb-1 font-semibold">Your Holdings</div>
+      {HOLDINGS_ROWS.map((row) => (
+        <div key={row.label} className="flex justify-between text-[11px] py-[3px]">
+          <span className="text-[#475569]">{row.label}</span>
+          <span className="font-numeric font-medium" style={{ color: row.color ?? "#0F172A" }}>{row.value}</span>
         </div>
       ))}
     </div>

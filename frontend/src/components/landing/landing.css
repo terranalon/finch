@@ -38,6 +38,11 @@
     0 8px 32px rgba(37, 99, 235, 0.1);
 }
 
+/* CTA section gradient background */
+.lp-cta-gradient {
+  background: linear-gradient(135deg, #1E3A5F 0%, #0F2440 100%);
+}
+
 /* How It Works connecting line */
 .lp-steps-line::before {
   content: "";

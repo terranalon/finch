@@ -1,5 +1,15 @@
 import { Link } from "react-router-dom";
 
+const HOLDINGS = [
+  { icon: "A", bg: "#333", ticker: "AAPL", shares: "142.5", value: "$34,218.75", ret: "+18.4%", gain: true },
+  { icon: "M", bg: "#0078D4", ticker: "MSFT", shares: "85.0", value: "$35,275.00", ret: "+24.1%", gain: true },
+  { icon: "B", bg: "#F7931A", ticker: "BTC", shares: "1.847", value: "$178,120.40", ret: "+142.3%", gain: true },
+  { icon: "E", bg: "#627EEA", ticker: "ETH", shares: "3.21", value: "$8,718.00", ret: "-5.2%", gain: false },
+];
+
+const TH_CLASS =
+  "text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide py-2 border-b border-[var(--border-primary)]";
+
 function DashboardMockup() {
   return (
     <div className="lp-mockup-3d bg-white border border-[var(--border-primary)] rounded-lg overflow-hidden">
@@ -10,9 +20,7 @@ function DashboardMockup() {
         <div className="w-2.5 h-2.5 rounded-full bg-[#6EE7B7]" />
       </div>
 
-      {/* Mockup body */}
       <div className="p-5">
-        {/* Header row */}
         <div className="flex items-start justify-between mb-5">
           <div>
             <div className="font-numeric text-[28px] font-bold text-[var(--text-primary)] leading-tight">
@@ -35,7 +43,6 @@ function DashboardMockup() {
           </div>
         </div>
 
-        {/* Chart */}
         <div className="mb-5 h-[100px]">
           <svg
             viewBox="0 0 500 100"
@@ -61,31 +68,17 @@ function DashboardMockup() {
           </svg>
         </div>
 
-        {/* Holdings table */}
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-left text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide py-2 border-b border-[var(--border-primary)]">
-                Asset
-              </th>
-              <th className="text-left text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide py-2 border-b border-[var(--border-primary)]">
-                Shares
-              </th>
-              <th className="text-left text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide py-2 border-b border-[var(--border-primary)]">
-                Value
-              </th>
-              <th className="text-right text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide py-2 border-b border-[var(--border-primary)]">
-                Return
-              </th>
+              <th className={`text-left ${TH_CLASS}`}>Asset</th>
+              <th className={`text-left ${TH_CLASS}`}>Shares</th>
+              <th className={`text-left ${TH_CLASS}`}>Value</th>
+              <th className={`text-right ${TH_CLASS}`}>Return</th>
             </tr>
           </thead>
           <tbody>
-            {[
-              { icon: "A", bg: "#333", ticker: "AAPL", shares: "142.5", value: "$34,218.75", ret: "+18.4%", gain: true },
-              { icon: "M", bg: "#0078D4", ticker: "MSFT", shares: "85.0", value: "$35,275.00", ret: "+24.1%", gain: true },
-              { icon: "B", bg: "#F7931A", ticker: "BTC", shares: "1.847", value: "$178,120.40", ret: "+142.3%", gain: true },
-              { icon: "E", bg: "#627EEA", ticker: "ETH", shares: "3.21", value: "$8,718.00", ret: "-5.2%", gain: false },
-            ].map((row) => (
+            {HOLDINGS.map((row) => (
               <tr key={row.ticker}>
                 <td className="text-[13px] py-2.5 border-b border-[var(--bg-secondary)] text-[var(--text-primary)]">
                   <span className="flex items-center gap-2 font-semibold">
@@ -124,7 +117,6 @@ export default function HeroSection() {
   return (
     <div className="lp-hero-glow">
       <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-16 items-center max-w-[1200px] mx-auto px-8 pt-24 pb-20">
-        {/* Left: text content */}
         <div className="lp-fade-up max-w-[520px]">
           <h1 className="text-[54px] max-sm:text-[32px] sm:text-[38px] lg:text-[54px] font-bold leading-[1.08] text-[var(--text-primary)] tracking-[-0.025em] mb-6">
             Know your{" "}
@@ -151,7 +143,6 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* Right: dashboard mockup */}
         <div className="lp-fade-up">
           <DashboardMockup />
         </div>

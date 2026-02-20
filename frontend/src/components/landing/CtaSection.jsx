@@ -2,10 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function CtaSection() {
   return (
-    <section
-      className="lp-fade-up py-24 px-8 text-center"
-      style={{ background: "linear-gradient(135deg, #1E3A5F 0%, #0F2440 100%)" }}
-    >
+    <section className="lp-fade-up lp-cta-gradient py-24 px-8 text-center">
       <div className="max-w-[600px] mx-auto">
         <h2 className="text-[36px] max-sm:text-[28px] font-bold text-white tracking-[-0.02em] mb-4">
           Start tracking your real performance.

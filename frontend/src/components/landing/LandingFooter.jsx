@@ -1,14 +1,29 @@
 import { Link } from "react-router-dom";
+import FinchLogo from "./FinchLogo";
 
-function FinchLogo({ size = 24 }) {
+const FOOTER_LINKS = [
+  { href: "#features", label: "Features" },
+  { href: "#integrations", label: "Integrations" },
+  { href: "#pricing", label: "Pricing" },
+  { to: "/login", label: "Sign In" },
+  { to: "/register", label: "Register" },
+];
+
+const LINK_CLASS =
+  "text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline";
+
+function FooterLink({ href, to, children }) {
+  if (to) {
+    return (
+      <Link to={to} className={LINK_CLASS}>
+        {children}
+      </Link>
+    );
+  }
   return (
-    <svg viewBox="0 0 32 32" fill="#2563EB" width={size} height={size}>
-      <path
-        d="M4 16c0-1.5 1-2.5 2-3l8-5c1-.5 2-.5 3 0l8 5c1 .5 2 1.5 2 3s-1 2.5-2 3l-3 2v3c0 1-1 2-2 2h-8c-1 0-2-1-2-2v-3l-3-2c-1-.5-2-1.5-2-3z"
-        fillRule="evenodd"
-      />
-      <path d="M16 9l6 4-6 3-6-3 6-4z" fill="#2563EB" opacity="0.3" />
-    </svg>
+    <a href={href} className={LINK_CLASS}>
+      {children}
+    </a>
   );
 }
 
@@ -30,36 +45,11 @@ export default function LandingFooter() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-6">
-          <a
-            href="#features"
-            className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          >
-            Features
-          </a>
-          <a
-            href="#integrations"
-            className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          >
-            Integrations
-          </a>
-          <a
-            href="#pricing"
-            className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          >
-            Pricing
-          </a>
-          <Link
-            to="/login"
-            className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          >
-            Sign In
-          </Link>
-          <Link
-            to="/register"
-            className="text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          >
-            Register
-          </Link>
+          {FOOTER_LINKS.map((link) => (
+            <FooterLink key={link.label} href={link.href} to={link.to}>
+              {link.label}
+            </FooterLink>
+          ))}
         </div>
       </div>
     </footer>

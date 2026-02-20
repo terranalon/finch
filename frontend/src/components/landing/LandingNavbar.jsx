@@ -1,14 +1,21 @@
 import { Link } from "react-router-dom";
+import FinchLogo from "./FinchLogo";
 
-function FinchLogo({ size = 32 }) {
+const NAV_LINKS = [
+  { href: "#features", label: "Features" },
+  { href: "#how-it-works", label: "How It Works" },
+  { href: "#integrations", label: "Integrations" },
+  { href: "#pricing", label: "Pricing" },
+];
+
+function NavLink({ href, children }) {
   return (
-    <svg viewBox="0 0 32 32" fill="#2563EB" width={size} height={size}>
-      <path
-        d="M4 16c0-1.5 1-2.5 2-3l8-5c1-.5 2-.5 3 0l8 5c1 .5 2 1.5 2 3s-1 2.5-2 3l-3 2v3c0 1-1 2-2 2h-8c-1 0-2-1-2-2v-3l-3-2c-1-.5-2-1.5-2-3z"
-        fillRule="evenodd"
-      />
-      <path d="M16 9l6 4-6 3-6-3 6-4z" fill="#2563EB" opacity="0.3" />
-    </svg>
+    <a
+      href={href}
+      className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
+    >
+      {children}
+    </a>
   );
 }
 
@@ -25,30 +32,11 @@ export default function LandingNavbar() {
         </a>
 
         <div className="hidden md:flex items-center gap-8">
-          <a
-            href="#features"
-            className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
-          >
-            Features
-          </a>
-          <a
-            href="#how-it-works"
-            className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
-          >
-            How It Works
-          </a>
-          <a
-            href="#integrations"
-            className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
-          >
-            Integrations
-          </a>
-          <a
-            href="#pricing"
-            className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
-          >
-            Pricing
-          </a>
+          {NAV_LINKS.map((link) => (
+            <NavLink key={link.href} href={link.href}>
+              {link.label}
+            </NavLink>
+          ))}
         </div>
 
         <div className="flex items-center gap-4">
