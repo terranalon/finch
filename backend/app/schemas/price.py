@@ -41,4 +41,3 @@ class HistoricalPriceResponse(BaseModel):
     period: str
     currency: str | None = None
     data: list[HistoricalPricePoint]
-    dividend_dates: list[str] = []

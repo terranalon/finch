@@ -10,7 +10,6 @@ vi.mock('recharts', () => ({
   YAxis: () => null,
   Tooltip: () => null,
   CartesianGrid: () => null,
-  ReferenceLine: ({ x }) => <div data-testid={`reference-line-${x}`} />,
   defs: () => null,
   linearGradient: () => null,
   stop: () => null,
@@ -81,46 +80,5 @@ describe('AssetChart', () => {
   it('renders chart container when data is provided', () => {
     render(<AssetChart priceHistory={mockPriceHistory} activePeriod="1y" onPeriodChange={onPeriodChange} currency="USD" />);
     expect(screen.getByTestId('responsive-container')).toBeInTheDocument();
-  });
-
-  it('renders a ReferenceLine for each dividend date within the chart range', () => {
-    render(
-      <AssetChart
-        priceHistory={mockPriceHistory}
-        activePeriod="1y"
-        onPeriodChange={onPeriodChange}
-        currency="USD"
-        dividendDates={['2026-01-15', '2026-02-01']}
-      />
-    );
-    expect(screen.getByTestId('reference-line-2026-01-15')).toBeInTheDocument();
-    expect(screen.getByTestId('reference-line-2026-02-01')).toBeInTheDocument();
-  });
-
-  it('snaps dividend date to the nearest trading day', () => {
-    render(
-      <AssetChart
-        priceHistory={mockPriceHistory}
-        activePeriod="1y"
-        onPeriodChange={onPeriodChange}
-        currency="USD"
-        dividendDates={['2026-01-10']}
-      />
-    );
-    // 2026-01-10 is not in data; nearest trading day >= it is 2026-01-15
-    expect(screen.getByTestId('reference-line-2026-01-15')).toBeInTheDocument();
-  });
-
-  it('does not render ReferenceLine for dividend dates outside the chart range', () => {
-    render(
-      <AssetChart
-        priceHistory={mockPriceHistory}
-        activePeriod="1y"
-        onPeriodChange={onPeriodChange}
-        currency="USD"
-        dividendDates={['2025-12-01', '2026-03-01']}
-      />
-    );
-    expect(screen.queryByTestId(/reference-line/)).not.toBeInTheDocument();
   });
 });

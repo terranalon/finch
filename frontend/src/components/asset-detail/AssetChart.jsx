@@ -1,4 +1,4 @@
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useChartColors } from '../../hooks/useChartColors';
 import { formatCurrency, cn } from '../../lib';
 
@@ -23,27 +23,12 @@ function CustomTooltip({ active, payload, label, currency }) {
   );
 }
 
-function snapToTradingDay(date, dataDateArray) {
-  if (dataDateArray.includes(date)) return date;
-  return dataDateArray.find((d) => d >= date) ?? null;
-}
-
-export default function AssetChart({ priceHistory, activePeriod, onPeriodChange, currency, dividendDates = [] }) {
+export default function AssetChart({ priceHistory, activePeriod, onPeriodChange, currency }) {
   const chartColors = useChartColors();
   const data = priceHistory?.data || [];
   const isPositive = data.length >= 2 && data[data.length - 1].close >= data[0].close;
   const lineColor = isPositive ? chartColors.positive : chartColors.negative;
   const gradientId = `assetGradient-${isPositive ? 'pos' : 'neg'}`;
-
-  const dataDateArray = data.map((d) => d.date);
-  const chartDividendDates = dataDateArray.length === 0 ? [] : [
-    ...new Set(
-      dividendDates
-        .filter((d) => d >= dataDateArray[0] && d <= dataDateArray[dataDateArray.length - 1])
-        .map((d) => snapToTradingDay(d, dataDateArray))
-        .filter(Boolean)
-    ),
-  ];
 
   if (data.length === 0) {
     return (
@@ -87,16 +72,6 @@ export default function AssetChart({ priceHistory, activePeriod, onPeriodChange,
             fill={`url(#${gradientId})`}
             dot={false}
           />
-          {chartDividendDates.map((date) => (
-            <ReferenceLine
-              key={date}
-              x={date}
-              stroke={chartColors.accent}
-              strokeDasharray="4 3"
-              strokeWidth={1.5}
-              strokeOpacity={0.7}
-            />
-          ))}
         </AreaChart>
       </ResponsiveContainer>
 
