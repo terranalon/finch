@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatCurrency, formatDate, getChangeColor, getChangeIndicator, cn } from '../../lib';
 import { Badge } from '../ui/Badge';
 
@@ -17,7 +16,6 @@ export default function AssetHero({ asset, onToggleFavorite, onRefreshPrice }) {
   const colorClass = change !== null ? getChangeColor(change) : '';
   const indicator = change !== null ? getChangeIndicator(change) : '';
 
-  const isFavorite = asset.is_favorite;
   const badgeVariant = ASSET_CLASS_VARIANTS[asset.asset_class] || 'default';
 
   return (
@@ -33,10 +31,10 @@ export default function AssetHero({ asset, onToggleFavorite, onRefreshPrice }) {
         </div>
         <button
           onClick={onToggleFavorite}
-          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={asset.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
           className="flex-shrink-0 p-1.5 rounded-full hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-secondary)] hover:text-amber-400"
         >
-          {isFavorite ? (
+          {asset.is_favorite ? (
             <svg className="size-5 fill-amber-400 text-amber-400" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>

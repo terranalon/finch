@@ -112,4 +112,37 @@ describe('AssetDetail', () => {
     fireEvent.click(screen.getByText('Back to Assets'));
     expect(mockNavigate).toHaveBeenCalledWith('/assets');
   });
+
+  it('shows "No transactions" empty state when trades and dividends are empty', async () => {
+    mockSuccessfulFetch();
+    render(<AssetDetail />);
+    await waitFor(() => screen.getByText('AAPL'));
+    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+    await waitFor(() => {
+      expect(screen.getByText(/no transactions/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders transaction rows when trades data exists', async () => {
+    const mockTrade = {
+      date: '2026-01-15',
+      type: 'BUY',
+      quantity: 10,
+      price: 230.00,
+      amount: 2300.00,
+      account_name: 'IBKR Main',
+    };
+    mockApi
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAssetDetail) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockTrade], total: 1 }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+    render(<AssetDetail />);
+    await waitFor(() => screen.getByText('AAPL'));
+    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+    await waitFor(() => {
+      expect(screen.getByText('IBKR Main')).toBeInTheDocument();
+    });
+  });
 });

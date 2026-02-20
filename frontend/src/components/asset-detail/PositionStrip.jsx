@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { formatCurrency, formatPercent, formatNumber, cn } from '../../lib';
 
 export default function PositionStrip({ position, asset }) {
@@ -15,7 +15,7 @@ export default function PositionStrip({ position, asset }) {
   const accentClass = isPositive ? 'border-positive' : 'border-negative';
   const returnColorClass = isPositive ? 'text-positive' : 'text-negative';
 
-  const hasMultipleAccounts = position.accounts && position.accounts.length > 1;
+  const hasMultipleAccounts = position.accounts?.length > 1;
 
   return (
     <div className={cn('bg-[var(--bg-secondary)] border border-[var(--border-primary)] border-t-2 rounded-lg mb-6', accentClass)}>
