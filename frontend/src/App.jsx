@@ -22,6 +22,8 @@ import VerifyEmail from './pages/VerifyEmail'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import MfaVerify from './pages/MfaVerify'
+import LandingPage from './pages/LandingPage'
+import AuthSwitchRoute from './components/AuthSwitchRoute'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,13 +95,18 @@ function App() {
                   <MfaVerify />
                 } />
 
-                {/* Protected routes */}
+                {/* Home: landing page for visitors, dashboard for authenticated users */}
                 <Route path="/" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Overview />
-                    </AppLayout>
-                  </ProtectedRoute>
+                  <AuthSwitchRoute
+                    authenticated={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <Overview />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                    unauthenticated={<LandingPage />}
+                  />
                 } />
                 <Route path="/holdings" element={
                   <ProtectedRoute>

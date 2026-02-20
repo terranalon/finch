@@ -57,12 +57,12 @@ export default function Register() {
 
       <div className="max-w-md w-full space-y-8">
         <div>
-          <div className="flex items-center justify-center gap-2">
+          <Link to="/" className="flex items-center justify-center gap-2 no-underline">
             <FinchIcon className="size-10 text-accent" />
             <h1 className="text-4xl font-bold text-[var(--text-primary)]">
               <span className="text-accent">Fin</span>ch
             </h1>
-          </div>
+          </Link>
           <h2 className="mt-6 text-center text-2xl font-bold text-[var(--text-primary)] text-balance">
             Create your account
           </h2>
