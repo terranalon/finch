@@ -7,6 +7,7 @@ import AssetHero from '../components/asset-detail/AssetHero';
 import PositionStrip from '../components/asset-detail/PositionStrip';
 import AssetChart from '../components/asset-detail/AssetChart';
 import AssetStatsGrid from '../components/asset-detail/AssetStatsGrid';
+import AssetAbout from '../components/asset-detail/AssetAbout';
 
 const TABS = ['Overview', 'Transactions'];
 
@@ -176,7 +177,10 @@ export default function AssetDetail() {
       {activeTab === 'Overview' && (
         <div>
           <AssetStatsGrid asset={asset} />
-          {/* About / dividend section - Tasks 6-7 */}
+          <div className="grid gap-6 lg:grid-cols-2 items-start">
+            <AssetAbout asset={asset} />
+            {/* Dividend card - Task 7 */}
+          </div>
         </div>
       )}
 

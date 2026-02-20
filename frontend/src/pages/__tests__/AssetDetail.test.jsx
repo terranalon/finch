@@ -38,6 +38,10 @@ vi.mock('../../components/asset-detail/AssetStatsGrid', () => ({
   default: () => <div data-testid="asset-stats-grid" />,
 }));
 
+vi.mock('../../components/asset-detail/AssetAbout', () => ({
+  default: () => <div data-testid="asset-about" />,
+}));
+
 const mockAssetDetail = {
   id: 1, symbol: 'AAPL', name: 'Apple Inc.', asset_class: 'Stock',
   currency: 'USD', exchange: 'NASDAQ', is_favorite: false,
