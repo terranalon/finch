@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
+from app.models import Asset
+
 PATCH_TARGET = "app.routers.assets.PriceFetcher.refresh_if_stale"
 
 
@@ -49,8 +51,6 @@ def test_refresh_price_404_for_unknown_asset(client):
 
 def test_refresh_price_400_for_asset_without_symbol(client, db):
     """Endpoint returns 400 when the asset has an empty symbol (e.g. a Cash asset)."""
-    from app.models import Asset
-
     # symbol is NOT NULL in the DB schema; use empty string to trigger the
     # `if not asset.symbol` guard without violating the DB constraint
     cash_asset = Asset(
