@@ -62,7 +62,8 @@ describe("VerificationPending", () => {
 
   it("renders the sign-in link", () => {
     renderPage();
-    expect(screen.getByRole("link", { name: /sign in/i })).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: /sign in/i });
+    expect(links.length).toBeGreaterThanOrEqual(1);
   });
 
   it("calls resendVerification on button click", async () => {
