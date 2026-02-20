@@ -48,29 +48,29 @@ class TestKuCoinSyntheticImportService:
         from app.services.brokers.kucoin.synthetic_import_service import (
             KuCoinSyntheticImportService,
         )
+        from app.services.shared.transaction_hash_service import DedupResult
 
         balances = {"BTC": Decimal("1.5"), "ETH": Decimal("10.0")}
 
+        mock_holding = MagicMock()
+        mock_holding.id = 1
+
+        # Lazy import in function body: patch at definition site, not usage site
         with (
             patch.object(client, "get_account_balances", return_value=balances),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.CryptoImportService"
-            ) as mock_crypto,
+                "app.services.brokers.shared.crypto_import_service.CryptoImportService._get_or_create_holding",
+                return_value=(mock_holding, False),
+            ),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction"
-            ) as mock_create,
+                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction",
+                return_value=(DedupResult.NEW, MagicMock()),
+            ),
             patch(
                 "app.services.brokers.kucoin.synthetic_import_service.reconstruct_and_update_holdings",
                 return_value={},
             ),
         ):
-            mock_holding = MagicMock()
-            mock_holding.id = 1
-            mock_crypto.return_value._get_or_create_holding.return_value = (mock_holding, False)
-            from app.services.shared.transaction_hash_service import DedupResult
-
-            mock_create.return_value = (DedupResult.NEW, MagicMock())
-
             stats = KuCoinSyntheticImportService.import_snapshot(db, 1, client)
 
         assert stats["positions_imported"] == 2
@@ -80,29 +80,28 @@ class TestKuCoinSyntheticImportService:
         from app.services.brokers.kucoin.synthetic_import_service import (
             KuCoinSyntheticImportService,
         )
+        from app.services.shared.transaction_hash_service import DedupResult
 
         balances = {"BTC": Decimal("0.5")}
+
+        mock_holding = MagicMock()
+        mock_holding.id = 1
 
         with (
             patch.object(client, "get_account_balances", return_value=balances),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.CryptoImportService"
-            ) as mock_crypto,
+                "app.services.brokers.shared.crypto_import_service.CryptoImportService._get_or_create_holding",
+                return_value=(mock_holding, False),
+            ),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction"
-            ) as mock_create,
+                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction",
+                return_value=(DedupResult.NEW, MagicMock()),
+            ),
             patch(
                 "app.services.brokers.kucoin.synthetic_import_service.reconstruct_and_update_holdings",
                 return_value={},
             ),
         ):
-            mock_holding = MagicMock()
-            mock_holding.id = 1
-            mock_crypto.return_value._get_or_create_holding.return_value = (mock_holding, False)
-            from app.services.shared.transaction_hash_service import DedupResult
-
-            mock_create.return_value = (DedupResult.NEW, MagicMock())
-
             stats = KuCoinSyntheticImportService.import_snapshot(db, 1, client)
 
         assert stats["status"] == "completed"
@@ -114,29 +113,28 @@ class TestKuCoinSyntheticImportService:
         from app.services.brokers.kucoin.synthetic_import_service import (
             KuCoinSyntheticImportService,
         )
+        from app.services.shared.transaction_hash_service import DedupResult
 
         balances = {"BTC": Decimal("0"), "ETH": Decimal("5.0")}
+
+        mock_holding = MagicMock()
+        mock_holding.id = 1
 
         with (
             patch.object(client, "get_account_balances", return_value=balances),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.CryptoImportService"
-            ) as mock_crypto,
+                "app.services.brokers.shared.crypto_import_service.CryptoImportService._get_or_create_holding",
+                return_value=(mock_holding, False),
+            ),
             patch(
-                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction"
-            ) as mock_create,
+                "app.services.brokers.kucoin.synthetic_import_service.create_or_transfer_transaction",
+                return_value=(DedupResult.NEW, MagicMock()),
+            ),
             patch(
                 "app.services.brokers.kucoin.synthetic_import_service.reconstruct_and_update_holdings",
                 return_value={},
             ),
         ):
-            mock_holding = MagicMock()
-            mock_holding.id = 1
-            mock_crypto.return_value._get_or_create_holding.return_value = (mock_holding, False)
-            from app.services.shared.transaction_hash_service import DedupResult
-
-            mock_create.return_value = (DedupResult.NEW, MagicMock())
-
             stats = KuCoinSyntheticImportService.import_snapshot(db, 1, client)
 
         assert stats["positions_imported"] == 1
