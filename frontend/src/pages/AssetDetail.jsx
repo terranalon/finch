@@ -8,6 +8,7 @@ import PositionStrip from '../components/asset-detail/PositionStrip';
 import AssetChart from '../components/asset-detail/AssetChart';
 import AssetStatsGrid from '../components/asset-detail/AssetStatsGrid';
 import AssetAbout from '../components/asset-detail/AssetAbout';
+import AssetDividend from '../components/asset-detail/AssetDividend';
 
 const TABS = ['Overview', 'Transactions'];
 
@@ -177,10 +178,15 @@ export default function AssetDetail() {
       {activeTab === 'Overview' && (
         <div>
           <AssetStatsGrid asset={asset} />
-          <div className="grid gap-6 lg:grid-cols-2 items-start">
-            <AssetAbout asset={asset} />
-            {/* Dividend card - Task 7 */}
-          </div>
+          {(() => {
+            const hasDividend = asset.daily_metrics?.dividend_yield != null && asset.asset_class !== 'Crypto';
+            return (
+              <div className={`grid gap-6 items-start ${hasDividend ? 'lg:grid-cols-2' : ''}`}>
+                <AssetAbout asset={asset} />
+                {hasDividend && <AssetDividend asset={asset} position={position} />}
+              </div>
+            );
+          })()}
         </div>
       )}
 
