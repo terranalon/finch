@@ -312,6 +312,23 @@ class YFinanceClient:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
             return []
 
+    def get_dividend_dates(self, symbol: str, period: str = "1y") -> list[str]:
+        """Return ISO-format ex-dividend dates within a period where Dividends > 0."""
+        try:
+            self._rate_limit()
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period=period)
+            if history.empty or "Dividends" not in history.columns:
+                return []
+            return [
+                idx.strftime("%Y-%m-%d")  # ty: ignore[unresolved-attribute]
+                for idx, val in history["Dividends"].items()
+                if val > 0
+            ]
+        except Exception as e:
+            logger.error(f"Error fetching dividend dates for {symbol}: {e}")
+            return []
+
     def get_history_for_range(self, symbol: str, start: date, end: date) -> list[OHLCVRow]:
         """Get historical OHLCV data for a date range.
 

@@ -369,7 +369,8 @@ class PriceFetcher:
             Dictionary with historical data or None if fetch failed
         """
         try:
-            rows = YFinanceClient().get_historical_data(symbol, period=period)
+            client = YFinanceClient()
+            rows = client.get_historical_data(symbol, period=period)
 
             if not rows:
                 logger.warning(f"No historical data found for {symbol}")
@@ -381,6 +382,7 @@ class PriceFetcher:
             data = {
                 "symbol": symbol,
                 "period": period,
+                "dividend_dates": client.get_dividend_dates(symbol, period=period),
                 "data": [
                     {
                         "date": row.date.strftime("%Y-%m-%d")

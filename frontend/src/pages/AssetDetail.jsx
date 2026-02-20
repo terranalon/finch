@@ -203,7 +203,7 @@ export default function AssetDetail() {
         activePeriod={chartPeriod}
         onPeriodChange={handlePeriodChange}
         currency={asset.currency}
-        dividendDates={dividends.map((d) => d.date)}
+        dividendDates={priceHistory?.dividend_dates || []}
       />
 
       {activeTab === 'Overview' && (
