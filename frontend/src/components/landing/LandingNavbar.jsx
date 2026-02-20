@@ -9,9 +9,17 @@ const NAV_LINKS = [
 ];
 
 function NavLink({ href, children }) {
+  const handleClick = (e) => {
+    if (href.startsWith("#")) {
+      e.preventDefault();
+      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   return (
     <a
       href={href}
+      onClick={handleClick}
       className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-md transition-colors no-underline"
     >
       {children}
