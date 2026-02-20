@@ -393,6 +393,7 @@ export function Navbar() {
                 <NavLink
                   key={link.to}
                   to={link.to}
+                  end={link.to === '/'}
                   className={({ isActive }) =>
                     cn(
                       'px-3 py-2 rounded-md text-sm font-medium transition-colors',
@@ -422,6 +423,7 @@ export function Navbar() {
             <NavLink
               key={link.to}
               to={link.to}
+              end={link.to === '/'}
               className={({ isActive }) =>
                 cn(
                   'px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors',

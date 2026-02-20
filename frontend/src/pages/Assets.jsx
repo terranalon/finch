@@ -354,19 +354,31 @@ function AssetDetailSlideOut({ asset, currency, userHolding, onClose, onToggleFa
               />
             </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-          >
-            <XMarkIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/assets/${asset.id}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors"
+            >
+              View Details
+              <ArrowTopRightIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+            >
+              <XMarkIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Asset Header */}
           <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{asset.name}</h2>
+            <h2
+              className="text-xl font-semibold text-[var(--text-primary)] hover:text-accent cursor-pointer transition-colors"
+              onClick={() => navigate(`/assets/${asset.id}`)}
+            >{asset.name}</h2>
             <p className="text-sm text-[var(--text-secondary)]">
               {asset.symbol} · {asset.asset_class} · {asset.category || asset.industry || 'N/A'}
             </p>
@@ -500,6 +512,8 @@ function AssetDetailSlideOut({ asset, currency, userHolding, onClose, onToggleFa
             )}
           </div>
         </div>
+
+
       </div>
     </>
   );
