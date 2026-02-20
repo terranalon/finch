@@ -6,6 +6,7 @@ import { SkeletonHero, SkeletonChart, SkeletonCard } from '../components/ui/Skel
 import AssetHero from '../components/asset-detail/AssetHero';
 import PositionStrip from '../components/asset-detail/PositionStrip';
 import AssetChart from '../components/asset-detail/AssetChart';
+import AssetStatsGrid from '../components/asset-detail/AssetStatsGrid';
 
 const TABS = ['Overview', 'Transactions'];
 
@@ -174,8 +175,8 @@ export default function AssetDetail() {
       {/* Tab content */}
       {activeTab === 'Overview' && (
         <div>
-          {/* Stats grid placeholder - Task 5 */}
-          {/* About / dividend section placeholder - Tasks 6-7 */}
+          <AssetStatsGrid asset={asset} />
+          {/* About / dividend section - Tasks 6-7 */}
         </div>
       )}
 
