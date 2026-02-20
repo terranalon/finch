@@ -500,6 +500,15 @@ function AssetDetailSlideOut({ asset, currency, userHolding, onClose, onToggleFa
             )}
           </div>
         </div>
+
+        <div className="px-6 pb-6">
+          <button
+            onClick={() => navigate(`/assets/${asset.id}`)}
+            className="btn btn-primary w-full"
+          >
+            View Details
+          </button>
+        </div>
       </div>
     </>
   );
