@@ -9,14 +9,21 @@ from sqlalchemy.orm import Session
 
 from app.models import Asset
 from app.models.asset_price import AssetPrice
+from app.services.asset_metrics_service import AssetMetricsService
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.cryptocompare_client import CryptoCompareClient
-from app.services.market_data.yfinance_client import YFinanceClient
+from app.services.market_data.yfinance_client import TickerMarketData, YFinanceClient
 
 logger = logging.getLogger(__name__)
 
 # Israeli stocks (.TA) prices from Yahoo Finance are in Agorot (1/100 ILS)
 _AGOROT_DIVISOR = Decimal("100")
+
+
+def _apply_agorot(v: Decimal | None, divisor: Decimal | None) -> Decimal | None:
+    """Divide v by divisor when both are non-None (Agorot → ILS conversion)."""
+    return v / divisor if divisor is not None and v is not None else v
+
 
 # Lazy-loaded CoinGecko client (singleton)
 _coingecko_client: CoinGeckoClient | None = None
@@ -94,16 +101,15 @@ class PriceFetcher:
             return {}
         client = YFinanceClient()
         batch_results = client.get_batch_prices_threaded(symbols)
-        results: dict[str, tuple[Decimal, datetime]] = {}
         now = datetime.now()
-        for symbol, row in batch_results.items():
-            if row is None:
-                continue
-            price = row.close
-            if symbol.endswith(".TA"):
-                price = price / _AGOROT_DIVISOR
-            results[symbol] = (price, now)
-        return results
+        return {
+            symbol: (
+                row.close / _AGOROT_DIVISOR if symbol.endswith(".TA") else row.close,
+                now,
+            )
+            for symbol, row in batch_results.items()
+            if row is not None
+        }
 
     @staticmethod
     def fetch_crypto_price(
@@ -157,9 +163,9 @@ class PriceFetcher:
                 db.commit()
                 logger.info(f"Updated price for {asset.symbol}: {price}")
                 return True
-            else:
-                logger.warning(f"Failed to fetch price for {asset.symbol}")
-                return False
+
+            logger.warning(f"Failed to fetch price for {asset.symbol}")
+            return False
 
         except Exception as e:
             logger.error(f"Error updating price for {asset.symbol}: {str(e)}")
@@ -167,100 +173,187 @@ class PriceFetcher:
             return False
 
     @staticmethod
+    def _write_stock_metrics(
+        db: Session,
+        asset: Asset,
+        data: TickerMarketData,
+        today: date,
+        price: Decimal | None,
+        divisor: Decimal | None,
+    ) -> None:
+        """Upsert daily metrics and slow-changing fields for a single stock asset."""
+        try:
+            AssetMetricsService.upsert_daily_metrics(
+                db,
+                asset_id=asset.id,
+                target_date=today,
+                open=_apply_agorot(data.open, divisor),
+                high=_apply_agorot(data.high, divisor),
+                low=_apply_agorot(data.low, divisor),
+                close=price,
+                volume=data.volume,
+                market_cap=data.market_cap,
+                pe_ratio=data.pe_ratio,
+                forward_pe=data.forward_pe,
+                eps=data.eps,
+                dividend_rate=_apply_agorot(data.dividend_rate, divisor),
+                dividend_yield=data.dividend_yield,
+                payout_ratio=data.payout_ratio,
+                source="Yahoo Finance",
+            )
+        except Exception:
+            logger.exception("Failed to upsert daily metrics for %s", asset.symbol)
+
+        try:
+            AssetMetricsService.update_slow_changing_fields(
+                db,
+                asset,
+                description=data.description,
+                exchange=data.exchange,
+                website=data.website,
+                ceo=data.ceo,
+                employees=data.employees,
+                beta=data.beta,
+                avg_volume=data.avg_volume,
+                earnings_date=data.earnings_date,
+                ex_dividend_date=data.ex_dividend_date,
+                target_est=_apply_agorot(data.target_est, divisor),
+                week_52_high=_apply_agorot(data.week_52_high, divisor),
+                week_52_low=_apply_agorot(data.week_52_low, divisor),
+                peg_ratio=data.peg_ratio,
+                expense_ratio=data.expense_ratio,
+                fund_family=data.fund_family,
+                nav=_apply_agorot(data.nav, divisor),
+            )
+        except Exception:
+            logger.exception("Failed to update slow fields for %s", asset.symbol)
+
+    @staticmethod
+    def _update_stock_assets(
+        db: Session,
+        assets: list[Asset],
+        stats: dict[str, int],
+    ) -> None:
+        """Fetch enriched data from Yahoo Finance and update prices + metrics + slow fields."""
+        symbols = [a.symbol for a in assets]
+        logger.info("Batch fetching ticker info for %d non-crypto assets", len(symbols))
+        processed_before = stats["updated"] + stats["failed"]
+
+        try:
+            batch_results = YFinanceClient().get_batch_ticker_info(symbols)
+            today = date.today()
+            for asset in assets:
+                data = batch_results.get(asset.symbol)
+                if data is None or data.price is None or data.price <= 0:
+                    stats["failed"] += 1
+                    logger.warning("No ticker info for %s", asset.symbol)
+                    continue
+
+                divisor = _AGOROT_DIVISOR if asset.symbol.endswith(".TA") else None
+                price = _apply_agorot(data.price, divisor)
+                asset.last_fetched_price = price
+                asset.last_fetched_at = datetime.now()
+                stats["updated"] += 1
+                PriceFetcher._write_stock_metrics(db, asset, data, today, price, divisor)
+
+            db.commit()
+        except Exception as e:
+            logger.error("Error batch fetching stock ticker info: %s", e)
+            already_counted = (stats["updated"] + stats["failed"]) - processed_before
+            stats["failed"] += len(assets) - already_counted
+
+    @staticmethod
+    def _update_crypto_assets(
+        db: Session,
+        assets: list[Asset],
+        stats: dict[str, int],
+    ) -> None:
+        """Fetch market data from CoinGecko and update prices + metrics + slow fields."""
+        crypto_symbols = [a.symbol for a in assets]
+        logger.info("Batch fetching market data for %d crypto assets", len(crypto_symbols))
+        processed_before = stats["updated"] + stats["failed"]
+
+        try:
+            client = _get_coingecko_client()
+            market_data = client.get_market_data(crypto_symbols, "usd")
+
+            today = date.today()
+            for asset in assets:
+                data = market_data.get(asset.symbol)
+                if data is None or data.price is None or data.price <= 0:
+                    stats["failed"] += 1
+                    logger.warning("No market data for crypto %s", asset.symbol)
+                    continue
+
+                asset.last_fetched_price = data.price
+                asset.last_fetched_at = datetime.now()
+                stats["updated"] += 1
+
+                try:
+                    AssetMetricsService.upsert_daily_metrics(
+                        db,
+                        asset_id=asset.id,
+                        target_date=today,
+                        high=data.high_24h,
+                        low=data.low_24h,
+                        close=data.price,
+                        volume=int(data.volume) if data.volume is not None else None,
+                        market_cap=data.market_cap,
+                        circulating_supply=data.circulating_supply,
+                        market_cap_rank=data.market_cap_rank,
+                        source="CoinGecko",
+                    )
+                except Exception:
+                    logger.exception("Failed to upsert daily metrics for %s", asset.symbol)
+
+                try:
+                    AssetMetricsService.update_slow_changing_fields(
+                        db,
+                        asset,
+                        max_supply=data.max_supply,
+                        ath=data.ath,
+                        ath_date=data.ath_date,
+                        atl=data.atl,
+                        atl_date=data.atl_date,
+                    )
+                except Exception:
+                    logger.exception("Failed to update slow fields for %s", asset.symbol)
+
+            db.commit()
+        except Exception as e:
+            logger.error("Error batch fetching crypto market data: %s", e)
+            already_counted = (stats["updated"] + stats["failed"]) - processed_before
+            stats["failed"] += len(assets) - already_counted
+
+    @staticmethod
     def update_all_asset_prices(db: Session, asset_class: str | None = None) -> dict[str, int]:
-        """
-        Update prices for all assets (or filtered by asset class).
-
-        Crypto assets are batched in a single API call to avoid rate limits.
-
-        Args:
-            db: Database session
-            asset_class: Optional filter for specific asset class
-
-        Returns:
-            Dictionary with update statistics
-        """
+        """Update prices, daily metrics, and slow-changing fields for all assets."""
         query = select(Asset)
-
         if asset_class:
             query = query.where(Asset.asset_class == asset_class)
 
         assets = db.execute(query).scalars().all()
-
         stats = {"total": len(assets), "updated": 0, "failed": 0, "skipped": 0}
 
-        # Separate crypto and non-crypto assets
-        crypto_assets = []
-        other_assets = []
+        crypto_assets: list[Asset] = []
+        other_assets: list[Asset] = []
 
         for asset in assets:
             if not asset.symbol or asset.asset_class == "Cash":
                 stats["skipped"] += 1
                 continue
-
             if asset.asset_class == "Crypto":
                 crypto_assets = [*crypto_assets, asset]
             else:
                 other_assets = [*other_assets, asset]
 
-        # Batch fetch crypto prices in a single API call
         if crypto_assets:
-            crypto_symbols = [a.symbol for a in crypto_assets]
-            logger.info(f"Batch fetching prices for {len(crypto_symbols)} crypto assets")
+            PriceFetcher._update_crypto_assets(db, crypto_assets, stats)
 
-            try:
-                client = _get_coingecko_client()
-                crypto_prices = client.get_current_prices(crypto_symbols, "usd")
-
-                for asset in crypto_assets:
-                    price = crypto_prices.get(asset.symbol)
-                    if price and price > 0:
-                        asset.last_fetched_price = price
-                        asset.last_fetched_at = datetime.now()
-                        stats["updated"] += 1
-                        logger.debug(f"Updated crypto price for {asset.symbol}: {price}")
-                    else:
-                        stats["failed"] += 1
-                        logger.warning(f"No price found for crypto {asset.symbol}")
-
-                db.commit()
-            except Exception as e:
-                logger.error(f"Error batch fetching crypto prices: {e}")
-                stats["failed"] += len(crypto_assets)
-
-        # Batch fetch non-crypto prices via Yahoo Finance
         if other_assets:
-            symbols = [a.symbol for a in other_assets]
-            logger.info(f"Batch fetching prices for {len(symbols)} non-crypto assets")
-            processed_before = stats["updated"] + stats["failed"]
+            PriceFetcher._update_stock_assets(db, other_assets, stats)
 
-            try:
-                yf_client = YFinanceClient()
-                batch_results = yf_client.get_batch_prices_threaded(symbols)
-
-                for asset in other_assets:
-                    row = batch_results.get(asset.symbol)
-                    if row is None:
-                        stats["failed"] += 1
-                        logger.warning("No batch price for %s", asset.symbol)
-                        continue
-
-                    price = row.close
-                    if asset.symbol.endswith(".TA"):
-                        price = price / _AGOROT_DIVISOR
-
-                    asset.last_fetched_price = price
-                    asset.last_fetched_at = datetime.now()
-                    stats["updated"] += 1
-                    logger.debug("Updated price for %s: %s", asset.symbol, price)
-
-                db.commit()
-            except Exception as e:
-                logger.error(f"Error batch fetching non-crypto prices: {e}")
-                already_counted = (stats["updated"] + stats["failed"]) - processed_before
-                stats["failed"] += len(other_assets) - already_counted
-
-        logger.info(f"Price update complete: {stats}")
+        logger.info("Price update complete: %s", stats)
         return stats
 
     @staticmethod

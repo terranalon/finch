@@ -6,8 +6,10 @@ analogous to yfinance for stocks.
 
 import logging
 import time
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import httpx
 
@@ -57,6 +59,25 @@ SYMBOL_TO_ID: dict[str, str] = {
     "SNX": "havven",  # Synthetix
     "SAND": "the-sandbox",
 }
+
+
+@dataclass
+class CryptoMarketData:
+    """Rich crypto data from /coins/markets for intraday enrichment."""
+
+    symbol: str
+    price: Decimal | None
+    high_24h: Decimal | None
+    low_24h: Decimal | None
+    volume: Decimal | None
+    market_cap: Decimal | None
+    market_cap_rank: int | None
+    circulating_supply: Decimal | None
+    max_supply: Decimal | None
+    ath: Decimal | None
+    ath_date: date | None
+    atl: Decimal | None
+    atl_date: date | None
 
 
 class CoinGeckoAPIError(Exception):
@@ -287,12 +308,11 @@ class CoinGeckoClient:
             return []
 
         prices_data = result.get("prices", [])
-        history: list[tuple[date, Decimal]] = []
-
-        for timestamp_ms, price in prices_data:
-            if price is not None:
-                dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
-                history.append((dt.date(), Decimal(str(price))))
+        history = [
+            (datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC).date(), Decimal(str(price)))
+            for timestamp_ms, price in prices_data
+            if price is not None
+        ]
 
         logger.info(f"Fetched {len(history)} historical prices for {symbol}")
         return history
@@ -339,6 +359,97 @@ class CoinGeckoClient:
         except CoinGeckoAPIError as e:
             logger.error(f"Failed to fetch coin info for {symbol}: {e}")
             return None
+
+    @staticmethod
+    def _parse_date_string(val: str | None) -> date | None:
+        """Parse ISO date string (e.g. '2021-11-10T...') to date."""
+        if val is None:
+            return None
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00")).date()
+        except (ValueError, AttributeError):
+            return None
+
+    @staticmethod
+    def _parse_market_coin(symbol: str, coin: dict[str, Any]) -> CryptoMarketData:
+        """Parse a single coin entry from /coins/markets response."""
+
+        def _dec(key: str) -> Decimal | None:
+            val = coin.get(key)
+            if val is None:
+                return None
+            return Decimal(str(val))
+
+        return CryptoMarketData(
+            symbol=symbol,
+            price=_dec("current_price"),
+            high_24h=_dec("high_24h"),
+            low_24h=_dec("low_24h"),
+            volume=_dec("total_volume"),
+            market_cap=_dec("market_cap"),
+            market_cap_rank=coin.get("market_cap_rank"),
+            circulating_supply=_dec("circulating_supply"),
+            max_supply=_dec("max_supply"),
+            ath=_dec("ath"),
+            ath_date=CoinGeckoClient._parse_date_string(coin.get("ath_date")),
+            atl=_dec("atl"),
+            atl_date=CoinGeckoClient._parse_date_string(coin.get("atl_date")),
+        )
+
+    def get_market_data(
+        self, symbols: list[str], vs_currency: str = "usd"
+    ) -> dict[str, CryptoMarketData]:
+        """Fetch enriched market data for multiple cryptocurrencies.
+
+        Uses /coins/markets endpoint which returns price, 24h high/low,
+        market cap, supply data, and ATH/ATL in a single batch call
+        (up to 250 per request).
+
+        Args:
+            symbols: List of crypto symbols (e.g., ["BTC", "ETH"])
+            vs_currency: Quote currency (default: "usd")
+
+        Returns:
+            Dict mapping original symbol to CryptoMarketData
+        """
+        if not symbols:
+            return {}
+
+        symbol_to_id_map = {s: self._symbol_to_id(s) for s in symbols}
+        id_to_symbol = {v: k for k, v in symbol_to_id_map.items()}
+        ids = list(symbol_to_id_map.values())
+
+        results: dict[str, CryptoMarketData] = {}
+
+        for i in range(0, len(ids), 250):
+            chunk = ids[i : i + 250]
+            params = {
+                "ids": ",".join(chunk),
+                "vs_currency": vs_currency,
+                "per_page": str(len(chunk)),
+                "page": "1",
+                "sparkline": "false",
+            }
+
+            try:
+                response = self._request("/coins/markets", params)
+            except CoinGeckoAPIError as e:
+                logger.error("Failed to fetch market data: %s", e)
+                continue
+
+            for coin in response:
+                coin_id = coin.get("id")
+                symbol = id_to_symbol.get(coin_id)
+                if symbol is None:
+                    continue
+                results[symbol] = self._parse_market_coin(symbol, coin)
+
+        logger.info(
+            "Fetched market data for %d/%d cryptocurrencies",
+            len(results),
+            len(symbols),
+        )
+        return results
 
     def add_symbol_mapping(self, symbol: str, coin_id: str) -> None:
         """Add or update a symbol to CoinGecko ID mapping.

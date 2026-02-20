@@ -13,6 +13,7 @@ from app.services.market_data.yfinance_client import (
     QUOTE_TYPE_MAP,
     OHLCVRow,
     TickerInfo,
+    TickerMarketData,
     YFinanceClient,
     _TokenBucket,
 )
@@ -569,6 +570,85 @@ class TestGetBatchPricesThreaded:
         assert elapsed < 0.15
 
 
+SAMPLE_TICKER_INFO = {
+    "regularMarketPrice": 175.50,
+    "regularMarketOpen": 174.00,
+    "regularMarketDayHigh": 176.80,
+    "regularMarketDayLow": 173.50,
+    "regularMarketVolume": 58700000,
+    "marketCap": 2700000000000,
+    "trailingPE": 28.5,
+    "forwardPE": 25.1,
+    "trailingEps": 6.16,
+    "dividendRate": 0.96,
+    "dividendYield": 0.0055,
+    "payoutRatio": 0.155,
+    "longBusinessSummary": "Apple Inc. designs...",
+    "exchange": "NMS",
+    "website": "https://apple.com",
+    "companyOfficers": [
+        {"name": "Tim Cook", "title": "Chief Executive Officer"},
+        {"name": "Luca Maestri", "title": "Chief Financial Officer"},
+    ],
+    "fullTimeEmployees": 164000,
+    "beta": 1.24,
+    "averageVolume": 58500000,
+    "earningsDate": 1745452800,
+    "exDividendDate": 1707523200,
+    "targetMeanPrice": 248.50,
+    "fiftyTwoWeekHigh": 244.63,
+    "fiftyTwoWeekLow": 164.08,
+    "pegRatio": 1.68,
+    "annualReportExpenseRatio": None,
+    "fundFamily": None,
+    "navPrice": None,
+}
+
+
+class TestParseTickerInfo:
+    """Tests for YFinanceClient._parse_ticker_info."""
+
+    def test_parses_all_fields(self):
+        result = YFinanceClient._parse_ticker_info("AAPL", SAMPLE_TICKER_INFO)
+        assert result is not None
+        assert result.symbol == "AAPL"
+        assert result.price == Decimal("175.5")
+        assert result.open == Decimal("174")
+        assert result.high == Decimal("176.8")
+        assert result.low == Decimal("173.5")
+        assert result.close == result.price
+        assert result.volume == 58700000
+        assert result.market_cap == Decimal("2700000000000")
+        assert result.pe_ratio == Decimal("28.5")
+        assert result.ceo == "Tim Cook"
+        assert result.employees == 164000
+        assert result.beta == Decimal("1.24")
+        assert result.description == "Apple Inc. designs..."
+
+    def test_returns_none_when_no_price(self):
+        result = YFinanceClient._parse_ticker_info("BAD", {})
+        assert result is None
+
+    def test_handles_nan_values(self):
+        info = {**SAMPLE_TICKER_INFO, "beta": float("nan"), "trailingPE": float("nan")}
+        result = YFinanceClient._parse_ticker_info("AAPL", info)
+        assert result is not None
+        assert result.beta is None
+        assert result.pe_ratio is None
+
+    def test_handles_missing_company_officers(self):
+        info = {**SAMPLE_TICKER_INFO, "companyOfficers": []}
+        result = YFinanceClient._parse_ticker_info("AAPL", info)
+        assert result is not None
+        assert result.ceo is None
+
+    def test_handles_zero_epoch_date(self):
+        info = {**SAMPLE_TICKER_INFO, "exDividendDate": 0}
+        result = YFinanceClient._parse_ticker_info("AAPL", info)
+        assert result is not None
+        assert result.ex_dividend_date is None
+
+
 class TestGetBatchPricesThreadedTargetDate:
     """Tests for get_batch_prices_threaded with target_date parameter."""
 
@@ -617,3 +697,42 @@ class TestGetBatchPricesThreadedTargetDate:
 
         assert len(result) == 3
         assert all(v is not None for v in result.values())
+
+
+class TestGetBatchTickerInfo:
+    """Tests for YFinanceClient.get_batch_ticker_info."""
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_ticker_market_data(self, mock_yf: object) -> None:
+        mock_ticker = mock_yf.Ticker.return_value  # ty: ignore[unresolved-attribute]
+        mock_ticker.info = SAMPLE_TICKER_INFO
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["AAPL"], rate=100.0)
+        assert "AAPL" in result
+        assert isinstance(result["AAPL"], TickerMarketData)
+        assert result["AAPL"].price == Decimal("175.5")
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_none_for_failed_symbol(self, mock_yf: object) -> None:
+        mock_yf.Ticker.side_effect = Exception("Network error")  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["BAD"], rate=100.0)
+        assert result["BAD"] is None
+
+    def test_empty_list_returns_empty_dict(self) -> None:
+        result = YFinanceClient().get_batch_ticker_info([])
+        assert result == {}
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_multiple_symbols(self, mock_yf: object) -> None:
+        mock_yf.Ticker.return_value.info = SAMPLE_TICKER_INFO  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["AAPL", "MSFT"], rate=100.0)
+        assert len(result) == 2
+
+    @patch("app.services.market_data.yfinance_client.yf")
+    def test_returns_none_for_no_price(self, mock_yf: object) -> None:
+        mock_yf.Ticker.return_value.info = {"quoteType": "EQUITY"}  # ty: ignore[unresolved-attribute]
+        client = YFinanceClient()
+        result = client.get_batch_ticker_info(["DELISTED"], rate=100.0)
+        assert result["DELISTED"] is None

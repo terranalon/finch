@@ -70,6 +70,46 @@ class OHLCVRow:
     volume: Decimal
 
 
+@dataclass
+class TickerMarketData:
+    """Rich ticker data from ticker.info for intraday enrichment."""
+
+    symbol: str
+    price: Decimal | None
+    # OHLCV
+    open: Decimal | None
+    high: Decimal | None
+    low: Decimal | None
+    close: Decimal | None
+    volume: int | None
+    # Daily fundamentals
+    market_cap: Decimal | None
+    pe_ratio: Decimal | None
+    forward_pe: Decimal | None
+    eps: Decimal | None
+    dividend_rate: Decimal | None
+    dividend_yield: Decimal | None
+    payout_ratio: Decimal | None
+    # Slow-changing (stocks)
+    description: str | None
+    exchange: str | None
+    website: str | None
+    ceo: str | None
+    employees: int | None
+    beta: Decimal | None
+    avg_volume: int | None
+    earnings_date: date | None
+    ex_dividend_date: date | None
+    target_est: Decimal | None
+    week_52_high: Decimal | None
+    week_52_low: Decimal | None
+    peg_ratio: Decimal | None
+    # ETF-specific
+    expense_ratio: Decimal | None
+    fund_family: str | None
+    nav: Decimal | None
+
+
 class _TokenBucket:
     """Thread-safe token bucket rate limiter."""
 
@@ -137,22 +177,19 @@ class YFinanceClient:
     @staticmethod
     def _dataframe_to_ohlcv_rows(df: "pd.DataFrame") -> list[OHLCVRow]:
         """Convert a pandas DataFrame of historical data to OHLCVRow list."""
-        rows: list[OHLCVRow] = []
-        for idx, row in df.iterrows():
-            close = row.get("Close")
-            if close is None or (isinstance(close, float) and math.isnan(close)):
-                continue
-            rows.append(
-                OHLCVRow(
-                    date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
-                    open=Decimal(str(row.get("Open", 0))),
-                    high=Decimal(str(row.get("High", 0))),
-                    low=Decimal(str(row.get("Low", 0))),
-                    close=Decimal(str(close)),
-                    volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
-                )
+        return [
+            OHLCVRow(
+                date=idx.date(),  # ty: ignore[unresolved-attribute] # pandas Timestamp
+                open=Decimal(str(row.get("Open", 0))),
+                high=Decimal(str(row.get("High", 0))),
+                low=Decimal(str(row.get("Low", 0))),
+                close=Decimal(str(close)),
+                volume=YFinanceClient._safe_volume(row.get("Volume", 0)),
             )
-        return rows
+            for idx, row in df.iterrows()
+            if (close := row.get("Close")) is not None
+            and not (isinstance(close, float) and math.isnan(close))
+        ]
 
     def get_ticker_info(self, symbol: str) -> TickerInfo | None:
         """Get comprehensive ticker information.
@@ -445,6 +482,129 @@ class YFinanceClient:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
             return dict(f.result() for f in as_completed(futures))
+
+    def get_batch_ticker_info(
+        self,
+        symbols: list[str],
+        *,
+        max_workers: int = 16,
+        rate: float = 15.0,
+    ) -> dict[str, TickerMarketData | None]:
+        """Batch fetch rich ticker.info data using ThreadPoolExecutor.
+
+        Same concurrency pattern as get_batch_prices_threaded but calls
+        ticker.info instead of ticker.history, returning richer data for
+        the intraday enrichment flow.
+
+        Args:
+            symbols: List of ticker symbols
+            max_workers: Thread pool size
+            rate: Max requests per second
+
+        Returns:
+            Dict mapping symbol to TickerMarketData or None if failed
+        """
+        if not symbols:
+            return {}
+
+        bucket = _TokenBucket(rate=rate, capacity=max(int(rate), 1), jitter=1.0 / rate)
+
+        def fetch_one(symbol: str) -> tuple[str, TickerMarketData | None]:
+            try:
+                bucket.acquire()
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                if not info:
+                    return symbol, None
+                return symbol, self._parse_ticker_info(symbol, info)
+            except Exception:
+                logger.debug("Failed to fetch info for %s", symbol, exc_info=True)
+                return symbol, None
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(fetch_one, sym): sym for sym in symbols}
+            return dict(f.result() for f in as_completed(futures))
+
+    @staticmethod
+    def _safe_decimal(info: dict[str, Any], key: str) -> Decimal | None:
+        """Extract a Decimal from info dict, handling None and NaN."""
+        val = info.get(key)
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return None
+        return Decimal(str(val))
+
+    @staticmethod
+    def _safe_int(info: dict[str, Any], key: str) -> int | None:
+        """Extract an int from info dict, handling None."""
+        val = info.get(key)
+        return None if val is None else int(val)
+
+    @staticmethod
+    def _extract_ceo(info: dict[str, Any]) -> str | None:
+        """Extract CEO name from companyOfficers list."""
+        for officer in info.get("companyOfficers", []):
+            title = (officer.get("title") or "").lower()
+            if "chief executive" in title or title == "ceo":
+                return officer.get("name")
+        return None
+
+    @staticmethod
+    def _parse_epoch_date(info: dict[str, Any], key: str) -> date | None:
+        """Parse a Unix epoch timestamp to date, returning None on failure."""
+        val = info.get(key)
+        if val is None or val == 0:
+            return None
+        try:
+            return datetime.fromtimestamp(val).date()
+        except (OSError, ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_ticker_info(symbol: str, info: dict[str, Any]) -> TickerMarketData | None:
+        """Parse raw ticker.info dict into TickerMarketData.
+
+        Returns None if no valid price found (symbol invalid/delisted).
+        """
+        _dec = YFinanceClient._safe_decimal
+        _int = YFinanceClient._safe_int
+        _epoch = YFinanceClient._parse_epoch_date
+
+        price = _dec(info, "regularMarketPrice")
+        if price is None:
+            return None
+
+        return TickerMarketData(
+            symbol=symbol,
+            price=price,
+            open=_dec(info, "regularMarketOpen"),
+            high=_dec(info, "regularMarketDayHigh"),
+            low=_dec(info, "regularMarketDayLow"),
+            close=price,
+            volume=_int(info, "regularMarketVolume"),
+            market_cap=_dec(info, "marketCap"),
+            pe_ratio=_dec(info, "trailingPE"),
+            forward_pe=_dec(info, "forwardPE"),
+            eps=_dec(info, "trailingEps"),
+            dividend_rate=_dec(info, "dividendRate"),
+            dividend_yield=_dec(info, "dividendYield"),
+            payout_ratio=_dec(info, "payoutRatio"),
+            description=info.get("longBusinessSummary"),
+            exchange=info.get("exchange"),
+            website=info.get("website"),
+            ceo=YFinanceClient._extract_ceo(info),
+            employees=_int(info, "fullTimeEmployees"),
+            beta=_dec(info, "beta"),
+            avg_volume=_int(info, "averageVolume"),
+            earnings_date=_epoch(info, "earningsDate"),
+            ex_dividend_date=_epoch(info, "exDividendDate"),
+            target_est=_dec(info, "targetMeanPrice"),
+            week_52_high=_dec(info, "fiftyTwoWeekHigh"),
+            week_52_low=_dec(info, "fiftyTwoWeekLow"),
+            peg_ratio=_dec(info, "pegRatio"),
+            expense_ratio=_dec(info, "annualReportExpenseRatio"),
+            fund_family=info.get("fundFamily"),
+            nav=_dec(info, "navPrice"),
+        )
 
     def resolve_symbols(self, symbols: list[str]) -> dict[str, TickerInfo | None]:
         """Fetch ticker info for multiple symbols with dedup and rate limiting.
