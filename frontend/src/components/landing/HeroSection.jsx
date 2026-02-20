@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts";
 
 const HOLDINGS = [
   { icon: "A", bg: "#333", ticker: "AAPL", shares: "142.5", value: "$34,218.75", ret: "+18.4%", gain: true },
@@ -114,6 +116,22 @@ function DashboardMockup() {
 }
 
 export default function HeroSection() {
+  const [demoLoading, setDemoLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleDemoLogin = async () => {
+    setDemoLoading(true);
+    try {
+      await login("demo@finch.com", "Demo1234");
+      navigate("/");
+    } catch {
+      navigate("/login");
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
   return (
     <div className="lp-hero-glow">
       <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-16 items-center max-w-[1200px] mx-auto px-8 pt-24 pb-20">
@@ -134,12 +152,14 @@ export default function HeroSection() {
             >
               Get Started Free
             </Link>
-            <a
-              href="#features"
-              className="inline-flex items-center justify-center bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-[15px] font-semibold px-7 py-3.5 rounded-md hover:bg-[var(--border-primary)] transition-colors no-underline max-sm:w-full"
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              disabled={demoLoading}
+              className="inline-flex items-center justify-center bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-[15px] font-semibold px-7 py-3.5 rounded-md hover:bg-[var(--border-primary)] transition-colors max-sm:w-full disabled:opacity-50"
             >
-              See How It Works
-            </a>
+              {demoLoading ? "Loading..." : "Try Demo"}
+            </button>
           </div>
         </div>
 
