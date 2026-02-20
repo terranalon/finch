@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { api, cn } from '../lib';
+import { api, cn, formatCurrency, formatDate, formatNumber } from '../lib';
 import { PageContainer } from '../components/Layout';
 import { SkeletonHero, SkeletonChart, SkeletonCard } from '../components/ui/Skeleton';
+import { Card } from '../components/ui/Card';
+import { NoTransactionsEmpty } from '../components/ui/EmptyState';
+import { TransactionBadge } from '../components/ui/Badge';
 import AssetHero from '../components/asset-detail/AssetHero';
 import PositionStrip from '../components/asset-detail/PositionStrip';
 import AssetChart from '../components/asset-detail/AssetChart';
@@ -107,6 +110,30 @@ export default function AssetDetail() {
     }
   }, [asset]);
 
+  const allTransactions = useMemo(() => {
+    const tradeRows = trades.map((t) => ({
+      date: t.date,
+      type: t.type,
+      quantity: t.quantity,
+      price: t.price,
+      total: t.amount,
+      account: t.account_name,
+    }));
+    const dividendRows = dividends.map((d) => ({
+      date: d.date,
+      type: d.type || 'DIVIDEND',
+      quantity: null,
+      price: null,
+      total: d.amount,
+      account: d.account_name,
+    }));
+    return [...tradeRows, ...dividendRows].sort((a, b) => {
+      if (a.date > b.date) return -1;
+      if (a.date < b.date) return 1;
+      return 0;
+    });
+  }, [trades, dividends]);
+
   if (loading) {
     return (
       <PageContainer>
@@ -191,9 +218,42 @@ export default function AssetDetail() {
       )}
 
       {activeTab === 'Transactions' && (
-        <div>
-          {/* Transactions table - Task 8 */}
-        </div>
+        <Card className="p-0 overflow-hidden">
+          {allTransactions.length === 0 ? (
+            <NoTransactionsEmpty />
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border-primary)]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)]">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)]">Type</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-[var(--text-secondary)]">Qty</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-[var(--text-secondary)]">Price</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-[var(--text-secondary)]">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary)]">Account</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-primary)]">
+                {allTransactions.map((txn, i) => (
+                  <tr key={i} className="hover:bg-[var(--bg-tertiary)] transition-colors">
+                    <td className="px-4 py-3 text-[var(--text-primary)]">{formatDate(txn.date)}</td>
+                    <td className="px-4 py-3"><TransactionBadge type={txn.type} /></td>
+                    <td className="px-4 py-3 text-right text-[var(--text-primary)]">
+                      {txn.quantity != null ? formatNumber(txn.quantity) : '--'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-[var(--text-primary)]">
+                      {txn.price != null ? formatCurrency(txn.price, asset.currency) : '--'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-[var(--text-primary)]">
+                      {txn.total != null ? formatCurrency(txn.total, asset.currency) : '--'}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{txn.account || '--'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       )}
     </PageContainer>
   );
