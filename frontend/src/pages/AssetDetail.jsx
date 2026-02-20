@@ -92,9 +92,12 @@ export default function AssetDetail() {
     loadAsset();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePeriodChange = useCallback((period) => {
+  const handlePeriodChange = useCallback(async (period) => {
     setChartPeriod(period);
-  }, []);
+    if (!asset) return;
+    const res = await api(`/prices/historical/${asset.symbol}?period=${period}`);
+    if (res.ok) setPriceHistory(await res.json());
+  }, [asset]);
 
   const handleToggleFavorite = useCallback(async () => {
     if (!asset) return;
