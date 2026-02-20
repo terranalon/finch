@@ -10,26 +10,26 @@ function MetricCell({ label, value }) {
 }
 
 export default function AssetDividend({ asset, position }) {
-  const m = asset.daily_metrics || {};
+  const metrics = asset.daily_metrics || {};
 
   const annualIncome = position != null
-    ? formatCurrency(position.total_quantity * m.dividend_rate, asset.currency)
+    ? formatCurrency(position.total_quantity * metrics.dividend_rate, asset.currency)
     : '--';
 
   const yieldOnCost = position != null && position.avg_cost_per_unit
-    ? formatPercent((m.dividend_rate / position.avg_cost_per_unit) * 100)
+    ? formatPercent((metrics.dividend_rate / position.avg_cost_per_unit) * 100)
     : '--';
 
-  const perShareYear = m.dividend_rate != null
-    ? formatCurrency(m.dividend_rate, asset.currency)
+  const perShareYear = metrics.dividend_rate != null
+    ? formatCurrency(metrics.dividend_rate, asset.currency)
     : '--';
 
-  const currentYield = m.dividend_yield != null
-    ? formatPercent(m.dividend_yield * 100)
+  const currentYield = metrics.dividend_yield != null
+    ? formatPercent(metrics.dividend_yield * 100)
     : '--';
 
-  const payoutRatio = m.payout_ratio != null
-    ? formatPercent(m.payout_ratio * 100)
+  const payoutRatio = metrics.payout_ratio != null
+    ? formatPercent(metrics.payout_ratio * 100)
     : '--';
 
   const exDivDate = asset.ex_dividend_date
@@ -42,7 +42,6 @@ export default function AssetDividend({ asset, position }) {
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Dividend Income</h3>
       </div>
       <div className="p-4">
-        {/* 2x2 metrics grid */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <MetricCell label="Annual Income" value={annualIncome} />
           <MetricCell label="Yield on Cost" value={yieldOnCost} />
@@ -50,7 +49,6 @@ export default function AssetDividend({ asset, position }) {
           <MetricCell label="Current Yield" value={currentYield} />
         </div>
 
-        {/* Meta rows */}
         <div className="border-t border-[var(--border-primary)] pt-3 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-[var(--text-secondary)]">Next Ex-Dividend</span>

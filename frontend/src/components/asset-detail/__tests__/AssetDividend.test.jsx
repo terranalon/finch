@@ -6,7 +6,6 @@ vi.mock('../../../lib/index.js', () => ({
   formatCurrency: (v) => (v != null ? `$${Number(v).toFixed(2)}` : '--'),
   formatPercent: (v) => (v != null ? `${Number(v).toFixed(2)}%` : '--'),
   formatDate: (d) => d || '--',
-  cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
 const assetWithDividend = {

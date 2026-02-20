@@ -11,19 +11,23 @@ function MetaRow({ label, children }) {
 }
 
 function getMetaRows(asset) {
-  const rows = [];
+  const candidates = [];
 
   if (asset.asset_class === 'Stock') {
-    if (asset.sector) rows.push({ label: 'Sector', value: asset.sector });
-    if (asset.industry) rows.push({ label: 'Industry', value: asset.industry });
-    if (asset.ceo) rows.push({ label: 'CEO', value: asset.ceo });
-    if (asset.employees) rows.push({ label: 'Employees', value: asset.employees.toLocaleString() });
+    candidates.push(
+      { label: 'Sector', value: asset.sector },
+      { label: 'Industry', value: asset.industry },
+      { label: 'CEO', value: asset.ceo },
+      { label: 'Employees', value: asset.employees ? asset.employees.toLocaleString() : null },
+    );
   } else if (asset.asset_class === 'ETF') {
-    if (asset.sector) rows.push({ label: 'Sector', value: asset.sector });
-    if (asset.fund_family) rows.push({ label: 'Fund Family', value: asset.fund_family });
+    candidates.push(
+      { label: 'Sector', value: asset.sector },
+      { label: 'Fund Family', value: asset.fund_family },
+    );
   }
 
-  return rows;
+  return candidates.filter(({ value }) => value);
 }
 
 export default function AssetAbout({ asset }) {
@@ -32,7 +36,11 @@ export default function AssetAbout({ asset }) {
 
   let hostname = '';
   if (asset.website) {
-    try { hostname = new URL(asset.website).hostname.replace(/^www\./, ''); } catch { hostname = asset.website; }
+    try {
+      hostname = new URL(asset.website).hostname.replace(/^www\./, '');
+    } catch {
+      hostname = asset.website;
+    }
   }
 
   return (

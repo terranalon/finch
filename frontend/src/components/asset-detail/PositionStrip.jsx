@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { formatCurrency, formatPercent, formatNumber, cn } from '../../lib';
 
+function StatCell({ label, value, className }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+      <span className={cn('text-sm font-semibold text-[var(--text-primary)]', className)}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function PositionStrip({ position, asset }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -9,7 +20,7 @@ export default function PositionStrip({ position, asset }) {
   const isCrypto = asset.asset_class === 'Crypto';
   const quantityDecimals = isCrypto ? 4 : 0;
   const qty = position.total_quantity;
-  const unitLabel = isCrypto ? asset.symbol : (qty === 1 ? 'share' : 'shares');
+  const unitLabel = isCrypto ? asset.symbol : qty === 1 ? 'share' : 'shares';
 
   const isPositive = position.total_return >= 0;
   const accentClass = isPositive ? 'border-positive' : 'border-negative';
@@ -22,39 +33,36 @@ export default function PositionStrip({ position, asset }) {
       {/* Main strip row */}
       <div className="flex items-center justify-between px-4 py-3 gap-4">
         <div className="flex items-center gap-6 flex-wrap flex-1">
-          {/* Quantity */}
-          <div className="flex flex-col">
-            <span className="text-xs text-[var(--text-secondary)]">Quantity</span>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              <span>{formatNumber(qty, { decimals: quantityDecimals })}</span>
-              {' '}
-              <span className="text-xs font-normal text-[var(--text-secondary)]">{unitLabel}</span>
-            </span>
-          </div>
-          {/* Avg Cost */}
-          <div className="flex flex-col">
-            <span className="text-xs text-[var(--text-secondary)]">Avg Cost</span>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              {formatCurrency(position.avg_cost_per_unit, asset.currency)}
-            </span>
-          </div>
-          {/* Market Value */}
-          <div className="flex flex-col">
-            <span className="text-xs text-[var(--text-secondary)]">Market Value</span>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              {formatCurrency(position.current_value, asset.currency)}
-            </span>
-          </div>
-          {/* Total Return */}
-          <div className="flex flex-col">
-            <span className="text-xs text-[var(--text-secondary)]">Total Return</span>
-            <span className={cn('text-sm font-semibold', returnColorClass)}>
-              {formatCurrency(position.total_return, asset.currency)}{' '}
-              <span className="text-xs font-normal">
-                ({formatPercent(position.total_return_percent)})
-              </span>
-            </span>
-          </div>
+          <StatCell
+            label="Quantity"
+            value={
+              <>
+                <span>{formatNumber(qty, { decimals: quantityDecimals })}</span>
+                {' '}
+                <span className="text-xs font-normal text-[var(--text-secondary)]">{unitLabel}</span>
+              </>
+            }
+          />
+          <StatCell
+            label="Avg Cost"
+            value={formatCurrency(position.avg_cost_per_unit, asset.currency)}
+          />
+          <StatCell
+            label="Market Value"
+            value={formatCurrency(position.current_value, asset.currency)}
+          />
+          <StatCell
+            label="Total Return"
+            className={returnColorClass}
+            value={
+              <>
+                {formatCurrency(position.total_return, asset.currency)}{' '}
+                <span className="text-xs font-normal">
+                  ({formatPercent(position.total_return_percent)})
+                </span>
+              </>
+            }
+          />
         </div>
 
         {/* Expand chevron for multi-account */}
@@ -65,7 +73,7 @@ export default function PositionStrip({ position, asset }) {
             className="flex-shrink-0 p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] transition-colors"
           >
             <svg
-              className={cn('size-4 transition-transform', expanded ? 'rotate-180' : '')}
+              className={cn('size-4 transition-transform', expanded && 'rotate-180')}
               fill="none"
               stroke="currentColor"
               strokeWidth={2}
@@ -92,26 +100,23 @@ export default function PositionStrip({ position, asset }) {
               </tr>
             </thead>
             <tbody>
-              {position.accounts.map((acc) => {
-                const accPositive = acc.return_value >= 0;
-                return (
-                  <tr key={acc.name} className="border-t border-[var(--border-primary)]">
-                    <td className="py-2 text-[var(--text-primary)] font-medium">{acc.name}</td>
-                    <td className="py-2 text-right text-[var(--text-secondary)]">
-                      {formatNumber(acc.quantity, { decimals: quantityDecimals })}
-                    </td>
-                    <td className="py-2 text-right text-[var(--text-secondary)]">
-                      {formatCurrency(acc.avg_cost, asset.currency)}
-                    </td>
-                    <td className="py-2 text-right text-[var(--text-secondary)]">
-                      {formatCurrency(acc.current_value, asset.currency)}
-                    </td>
-                    <td className={cn('py-2 text-right font-medium', accPositive ? 'text-positive' : 'text-negative')}>
-                      {formatCurrency(acc.return_value, asset.currency)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {position.accounts.map((acc) => (
+                <tr key={acc.name} className="border-t border-[var(--border-primary)]">
+                  <td className="py-2 text-[var(--text-primary)] font-medium">{acc.name}</td>
+                  <td className="py-2 text-right text-[var(--text-secondary)]">
+                    {formatNumber(acc.quantity, { decimals: quantityDecimals })}
+                  </td>
+                  <td className="py-2 text-right text-[var(--text-secondary)]">
+                    {formatCurrency(acc.avg_cost, asset.currency)}
+                  </td>
+                  <td className="py-2 text-right text-[var(--text-secondary)]">
+                    {formatCurrency(acc.current_value, asset.currency)}
+                  </td>
+                  <td className={cn('py-2 text-right font-medium', acc.return_value >= 0 ? 'text-positive' : 'text-negative')}>
+                    {formatCurrency(acc.return_value, asset.currency)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

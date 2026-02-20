@@ -75,7 +75,6 @@ export default function AssetChart({ priceHistory, activePeriod, onPeriodChange,
         </AreaChart>
       </ResponsiveContainer>
 
-      {/* Period selector */}
       <div className="flex justify-center gap-1 mt-3">
         {PERIODS.map(({ label, value }) => (
           <button

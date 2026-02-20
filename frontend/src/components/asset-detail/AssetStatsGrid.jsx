@@ -2,16 +2,22 @@ import { formatCurrency, formatNumber, formatPercent, formatDate, cn } from '../
 
 const fmt = (v, formatter) => (v != null ? formatter(v) : '--');
 
+function fmtRange(low, high, currency) {
+  if (low == null || high == null) return '--';
+  return `${formatCurrency(low, currency)} – ${formatCurrency(high, currency)}`;
+}
+
 function getStatsItems(asset) {
   const m = asset.daily_metrics || {};
+  const cur = asset.currency;
 
   if (asset.asset_class === 'ETF') {
     return [
-      { label: 'NAV', value: fmt(asset.nav, (v) => formatCurrency(v, asset.currency)) },
+      { label: 'NAV', value: fmt(asset.nav, (v) => formatCurrency(v, cur)) },
       { label: 'Expense Ratio', value: fmt(asset.expense_ratio, (v) => formatPercent(v * 100)) },
       { label: 'Fund Family', value: asset.fund_family || '--' },
-      { label: 'Day Range', value: m.low != null && m.high != null ? `${formatCurrency(m.low, asset.currency)} – ${formatCurrency(m.high, asset.currency)}` : '--' },
-      { label: '52W Range', value: asset.week_52_low != null && asset.week_52_high != null ? `${formatCurrency(asset.week_52_low, asset.currency)} – ${formatCurrency(asset.week_52_high, asset.currency)}` : '--' },
+      { label: 'Day Range', value: fmtRange(m.low, m.high, cur) },
+      { label: '52W Range', value: fmtRange(asset.week_52_low, asset.week_52_high, cur) },
       { label: 'Volume', value: fmt(m.volume, (v) => formatNumber(v, { compact: true })) },
       { label: 'Avg Volume', value: fmt(asset.avg_volume, (v) => formatNumber(v, { compact: true })) },
       { label: 'Div Yield', value: fmt(m.dividend_yield, (v) => formatPercent(v * 100)) },
@@ -20,36 +26,36 @@ function getStatsItems(asset) {
 
   if (asset.asset_class === 'Crypto') {
     return [
-      { label: 'Market Cap', value: fmt(m.market_cap, (v) => formatCurrency(v, asset.currency, { compact: true })) },
+      { label: 'Market Cap', value: fmt(m.market_cap, (v) => formatCurrency(v, cur, { compact: true })) },
       { label: 'Rank', value: fmt(m.market_cap_rank, (v) => `#${v}`) },
-      { label: '24h Volume', value: fmt(m.volume, (v) => formatCurrency(v, asset.currency, { compact: true })) },
+      { label: '24h Volume', value: fmt(m.volume, (v) => formatCurrency(v, cur, { compact: true })) },
       { label: 'Circulating Supply', value: fmt(m.circulating_supply, (v) => formatNumber(v, { compact: true, decimals: 0 })) },
       { label: 'Max Supply', value: fmt(asset.max_supply, (v) => formatNumber(v, { compact: true, decimals: 0 })) },
       { label: 'Dominance', value: fmt(m.dominance, (v) => formatPercent(v)) },
-      { label: 'ATH', value: fmt(asset.ath, (v) => formatCurrency(v, asset.currency)) },
+      { label: 'ATH', value: fmt(asset.ath, (v) => formatCurrency(v, cur)) },
       { label: 'ATH Date', value: fmt(asset.ath_date, formatDate) },
-      { label: 'ATL', value: fmt(asset.atl, (v) => formatCurrency(v, asset.currency)) },
+      { label: 'ATL', value: fmt(asset.atl, (v) => formatCurrency(v, cur)) },
       { label: 'ATL Date', value: fmt(asset.atl_date, formatDate) },
     ];
   }
 
   // Stock (default)
   return [
-    { label: 'Prev Close', value: fmt(m.open, (v) => formatCurrency(v, asset.currency)) },
-    { label: 'Open', value: fmt(m.open, (v) => formatCurrency(v, asset.currency)) },
-    { label: 'Day Range', value: m.low != null && m.high != null ? `${formatCurrency(m.low, asset.currency)} – ${formatCurrency(m.high, asset.currency)}` : '--' },
-    { label: '52W Range', value: asset.week_52_low != null && asset.week_52_high != null ? `${formatCurrency(asset.week_52_low, asset.currency)} – ${formatCurrency(asset.week_52_high, asset.currency)}` : '--' },
-    { label: 'Market Cap', value: fmt(m.market_cap, (v) => formatCurrency(v, asset.currency, { compact: true })) },
+    { label: 'Prev Close', value: fmt(m.open, (v) => formatCurrency(v, cur)) },
+    { label: 'Open', value: fmt(m.open, (v) => formatCurrency(v, cur)) },
+    { label: 'Day Range', value: fmtRange(m.low, m.high, cur) },
+    { label: '52W Range', value: fmtRange(asset.week_52_low, asset.week_52_high, cur) },
+    { label: 'Market Cap', value: fmt(m.market_cap, (v) => formatCurrency(v, cur, { compact: true })) },
     { label: 'Volume', value: fmt(m.volume, (v) => formatNumber(v, { compact: true })) },
     { label: 'Avg Volume', value: fmt(asset.avg_volume, (v) => formatNumber(v, { compact: true })) },
     { label: 'Beta', value: fmt(asset.beta, (v) => v.toFixed(2)) },
     { label: 'P/E (TTM)', value: fmt(m.pe_ratio, (v) => v.toFixed(2)) },
     { label: 'Forward P/E', value: fmt(m.forward_pe, (v) => v.toFixed(2)) },
-    { label: 'EPS (TTM)', value: fmt(m.eps, (v) => formatCurrency(v, asset.currency)) },
+    { label: 'EPS (TTM)', value: fmt(m.eps, (v) => formatCurrency(v, cur)) },
     { label: 'Earnings Date', value: fmt(asset.earnings_date, formatDate) },
     { label: 'Div Yield', value: fmt(m.dividend_yield, (v) => formatPercent(v * 100)) },
     { label: 'Ex-Div Date', value: fmt(asset.ex_dividend_date, formatDate) },
-    { label: '1Y Target Est', value: fmt(asset.target_est, (v) => formatCurrency(v, asset.currency)) },
+    { label: '1Y Target Est', value: fmt(asset.target_est, (v) => formatCurrency(v, cur)) },
     { label: 'PEG Ratio', value: fmt(asset.peg_ratio, (v) => v.toFixed(2)) },
   ];
 }

@@ -9,8 +9,8 @@ vi.mock('../../../lib/index.js', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-const stockAsset = { id: 1, symbol: 'AAPL', asset_class: 'Stock' };
-const cryptoAsset = { id: 2, symbol: 'BTC', asset_class: 'Crypto' };
+const stockAsset = { id: 1, symbol: 'AAPL', asset_class: 'Stock', currency: 'USD' };
+const cryptoAsset = { id: 2, symbol: 'BTC', asset_class: 'Crypto', currency: 'USD' };
 
 const singleAccountPosition = {
   asset_id: 1,
@@ -40,46 +40,48 @@ const negativePosition = {
   accounts: [singleAccountPosition.accounts[0]],
 };
 
+function renderStrip(position, asset = stockAsset) {
+  return render(<PositionStrip position={position} asset={asset} />);
+}
+
 describe('PositionStrip', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('renders nothing when position is null', () => {
-    const { container } = render(<PositionStrip position={null} asset={stockAsset} />);
+    const { container } = renderStrip(null);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders quantity, avg cost, market value, and total return', () => {
-    render(<PositionStrip position={singleAccountPosition} asset={stockAsset} />);
-    expect(screen.getByText('10')).toBeInTheDocument(); // quantity (0 decimals for stocks)
-    expect(screen.getByText('$180.00')).toBeInTheDocument(); // avg cost
-    expect(screen.getByText('$2374.20')).toBeInTheDocument(); // market value
-    expect(screen.getByText('$574.20')).toBeInTheDocument(); // total return
+    renderStrip(singleAccountPosition);
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByText('$180.00')).toBeInTheDocument();
+    expect(screen.getByText('$2374.20')).toBeInTheDocument();
+    expect(screen.getByText('$574.20')).toBeInTheDocument();
   });
 
   it('applies green accent border for positive P&L', () => {
-    const { container } = render(<PositionStrip position={singleAccountPosition} asset={stockAsset} />);
-    const strip = container.firstChild;
-    expect(strip.className).toContain('border-positive');
+    const { container } = renderStrip(singleAccountPosition);
+    expect(container.firstChild.className).toContain('border-positive');
   });
 
   it('applies red accent border for negative P&L', () => {
-    const { container } = render(<PositionStrip position={negativePosition} asset={stockAsset} />);
-    const strip = container.firstChild;
-    expect(strip.className).toContain('border-negative');
+    const { container } = renderStrip(negativePosition);
+    expect(container.firstChild.className).toContain('border-negative');
   });
 
   it('shows expand chevron when position has multiple accounts', () => {
-    render(<PositionStrip position={multiAccountPosition} asset={stockAsset} />);
+    renderStrip(multiAccountPosition);
     expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
 
   it('hides chevron when single account', () => {
-    render(<PositionStrip position={singleAccountPosition} asset={stockAsset} />);
+    renderStrip(singleAccountPosition);
     expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
   });
 
   it('toggles account breakdown table on chevron click', () => {
-    render(<PositionStrip position={multiAccountPosition} asset={stockAsset} />);
+    renderStrip(multiAccountPosition);
     expect(screen.queryByText('IBKR Main')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     expect(screen.getByText('IBKR Main')).toBeInTheDocument();
@@ -87,7 +89,7 @@ describe('PositionStrip', () => {
   });
 
   it('shows account name, quantity, avg cost, market value, P&L per account row', () => {
-    render(<PositionStrip position={multiAccountPosition} asset={stockAsset} />);
+    renderStrip(multiAccountPosition);
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     expect(screen.getByText('IBKR Main')).toBeInTheDocument();
     expect(screen.getByText('$175.00')).toBeInTheDocument();
@@ -100,13 +102,12 @@ describe('PositionStrip', () => {
       total_quantity: 0.5432,
       accounts: [{ ...singleAccountPosition.accounts[0], quantity: 0.5432 }],
     };
-    render(<PositionStrip position={cryptoPosition} asset={cryptoAsset} />);
+    renderStrip(cryptoPosition, cryptoAsset);
     expect(screen.getByText('0.5432')).toBeInTheDocument();
   });
 
   it('formats stock quantities with 0 decimal places', () => {
-    render(<PositionStrip position={singleAccountPosition} asset={stockAsset} />);
-    // 10 shares -> "10" not "10.00" is the stock format (0 decimals)
+    renderStrip(singleAccountPosition);
     expect(screen.getByText('10')).toBeInTheDocument();
   });
 });

@@ -24,80 +24,80 @@ const mockAsset = {
   daily_metrics: { open: 234.80, close: 237.42, high: 238.10, low: 234.15 },
 };
 
-describe('AssetHero', () => {
-  const onToggleFavorite = vi.fn();
-  const onRefreshPrice = vi.fn();
+const onToggleFavorite = vi.fn();
+const onRefreshPrice = vi.fn();
 
+function renderHero(assetOverrides = {}) {
+  const asset = { ...mockAsset, ...assetOverrides };
+  return render(
+    <AssetHero asset={asset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />
+  );
+}
+
+describe('AssetHero', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('renders symbol and name', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     expect(screen.getByText('AAPL')).toBeInTheDocument();
     expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
   });
 
   it('renders asset type in a badge', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     expect(screen.getByText('Stock')).toBeInTheDocument();
   });
 
   it('shows exchange and currency', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     expect(screen.getByText('NASDAQ')).toBeInTheDocument();
     expect(screen.getByText('USD')).toBeInTheDocument();
   });
 
   it('displays formatted price', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     expect(screen.getByText('$237.42')).toBeInTheDocument();
   });
 
   it('shows positive change with up indicator when close > open', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
-    // close (237.42) > open (234.80) => positive change
-    expect(screen.getByText(/▲/)).toBeInTheDocument();
-    const changeEl = screen.getByText(/▲/);
+    renderHero();
+    const changeEl = screen.getByText(/\u25B2/);
+    expect(changeEl).toBeInTheDocument();
     expect(changeEl.className).toContain('text-positive');
   });
 
   it('shows negative change with down indicator when close < open', () => {
-    const negAsset = {
-      ...mockAsset,
-      daily_metrics: { open: 240.00, close: 237.42, high: 241.00, low: 236.00 },
-    };
-    render(<AssetHero asset={negAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
-    expect(screen.getByText(/▼/)).toBeInTheDocument();
-    const changeEl = screen.getByText(/▼/);
+    renderHero({ daily_metrics: { open: 240.00, close: 237.42, high: 241.00, low: 236.00 } });
+    const changeEl = screen.getByText(/\u25BC/);
+    expect(changeEl).toBeInTheDocument();
     expect(changeEl.className).toContain('text-negative');
   });
 
   it('renders filled star when is_favorite is true', () => {
-    render(<AssetHero asset={{ ...mockAsset, is_favorite: true }} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero({ is_favorite: true });
     expect(screen.getByRole('button', { name: /remove from favorites/i })).toBeInTheDocument();
   });
 
   it('renders outline star when is_favorite is false', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     expect(screen.getByRole('button', { name: /add to favorites/i })).toBeInTheDocument();
   });
 
   it('calls onToggleFavorite when star button clicked', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     fireEvent.click(screen.getByRole('button', { name: /add to favorites/i }));
     expect(onToggleFavorite).toHaveBeenCalledOnce();
   });
 
   it('calls onRefreshPrice when refresh button clicked', () => {
-    render(<AssetHero asset={mockAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero();
     fireEvent.click(screen.getByRole('button', { name: /refresh price/i }));
     expect(onRefreshPrice).toHaveBeenCalledOnce();
   });
 
   it('handles null daily_metrics gracefully (shows last_fetched_price, no change)', () => {
-    const noMetricsAsset = { ...mockAsset, daily_metrics: null };
-    render(<AssetHero asset={noMetricsAsset} onToggleFavorite={onToggleFavorite} onRefreshPrice={onRefreshPrice} />);
+    renderHero({ daily_metrics: null });
     expect(screen.getByText('$237.42')).toBeInTheDocument();
-    // no change indicator
-    expect(screen.queryByText(/▲|▼/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\u25B2|\u25BC/)).not.toBeInTheDocument();
   });
 });

@@ -9,12 +9,12 @@ const ASSET_CLASS_VARIANTS = {
 
 export default function AssetHero({ asset, onToggleFavorite, onRefreshPrice }) {
   const currentPrice = asset.daily_metrics?.close ?? asset.last_fetched_price;
-  const open = asset.daily_metrics?.open ?? null;
-  const change = open !== null ? currentPrice - open : null;
-  const changePercent = open !== null && open !== 0 ? (change / open) * 100 : null;
+  const open = asset.daily_metrics?.open;
+  const change = open != null ? currentPrice - open : null;
+  const changePercent = open != null && open !== 0 ? (change / open) * 100 : null;
 
-  const colorClass = change !== null ? getChangeColor(change) : '';
-  const indicator = change !== null ? getChangeIndicator(change) : '';
+  const colorClass = change != null ? getChangeColor(change) : '';
+  const indicator = change != null ? getChangeIndicator(change) : '';
 
   const badgeVariant = ASSET_CLASS_VARIANTS[asset.asset_class] || 'default';
 
@@ -60,9 +60,9 @@ export default function AssetHero({ asset, onToggleFavorite, onRefreshPrice }) {
         <span className="font-mono text-4xl font-bold text-[var(--text-primary)]">
           {formatCurrency(currentPrice, asset.currency)}
         </span>
-        {change !== null && indicator && (
+        {change != null && indicator && (
           <span className={cn('text-base font-medium', colorClass)}>
-            {indicator} {formatCurrency(Math.abs(change), asset.currency)} ({changePercent !== null ? changePercent.toFixed(2) : '0.00'}%)
+            {indicator} {formatCurrency(Math.abs(change), asset.currency)} ({changePercent?.toFixed(2) ?? '0.00'}%)
           </span>
         )}
       </div>

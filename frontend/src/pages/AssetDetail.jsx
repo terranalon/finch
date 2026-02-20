@@ -15,6 +15,19 @@ import AssetDividend from '../components/asset-detail/AssetDividend';
 
 const TABS = ['Overview', 'Transactions'];
 
+function OverviewTab({ asset, position }) {
+  const hasDividend = asset.daily_metrics?.dividend_yield != null && asset.asset_class !== 'Crypto';
+  return (
+    <div>
+      <AssetStatsGrid asset={asset} />
+      <div className={`grid gap-6 items-start ${hasDividend ? 'lg:grid-cols-2' : ''}`}>
+        <AssetAbout asset={asset} />
+        {hasDividend && <AssetDividend asset={asset} position={position} />}
+      </div>
+    </div>
+  );
+}
+
 export default function AssetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -34,16 +47,11 @@ export default function AssetDetail() {
       setLoading(true);
       setError(null);
 
-      // Step 1: fetch asset detail (gates all subsequent calls)
       let assetData;
       try {
         const res = await api(`/assets/${id}/detail`);
         if (!res.ok) {
-          if (res.status === 404) {
-            setError('Asset not found');
-          } else {
-            setError('Failed to load asset');
-          }
+          setError(res.status === 404 ? 'Asset not found' : 'Failed to load asset');
           setLoading(false);
           return;
         }
@@ -55,7 +63,6 @@ export default function AssetDetail() {
         return;
       }
 
-      // Step 2: fan out to secondary endpoints in parallel
       const symbol = assetData.symbol;
       const [posRes, tradesRes, dividendsRes, pricesRes] = await Promise.allSettled([
         api(`/positions?limit=100&display_currency=USD`).then((r) => r.json()),
@@ -127,11 +134,7 @@ export default function AssetDetail() {
       total: d.amount,
       account: d.account_name,
     }));
-    return [...tradeRows, ...dividendRows].sort((a, b) => {
-      if (a.date > b.date) return -1;
-      if (a.date < b.date) return 1;
-      return 0;
-    });
+    return [...tradeRows, ...dividendRows].sort((a, b) => b.date.localeCompare(a.date));
   }, [trades, dividends]);
 
   if (loading) {
@@ -165,7 +168,6 @@ export default function AssetDetail() {
 
   return (
     <PageContainer>
-      {/* Breadcrumb */}
       <nav className="mb-4 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
         <Link to="/assets" className="hover:text-[var(--text-primary)]">Assets</Link>
         <span>/</span>
@@ -176,7 +178,6 @@ export default function AssetDetail() {
 
       {position && <PositionStrip position={position} asset={asset} />}
 
-      {/* Content tabs */}
       <div className="flex gap-6 border-b border-[var(--border-primary)] mb-6">
         {TABS.map((tab) => (
           <button
@@ -201,20 +202,8 @@ export default function AssetDetail() {
         currency={asset.currency}
       />
 
-      {/* Tab content */}
       {activeTab === 'Overview' && (
-        <div>
-          <AssetStatsGrid asset={asset} />
-          {(() => {
-            const hasDividend = asset.daily_metrics?.dividend_yield != null && asset.asset_class !== 'Crypto';
-            return (
-              <div className={`grid gap-6 items-start ${hasDividend ? 'lg:grid-cols-2' : ''}`}>
-                <AssetAbout asset={asset} />
-                {hasDividend && <AssetDividend asset={asset} position={position} />}
-              </div>
-            );
-          })()}
-        </div>
+        <OverviewTab asset={asset} position={position} />
       )}
 
       {activeTab === 'Transactions' && (
