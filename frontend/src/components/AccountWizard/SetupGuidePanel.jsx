@@ -145,7 +145,7 @@ function TroubleshootingItem({ item }) {
     <div className="border border-[var(--border-primary)] rounded-lg overflow-hidden">
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen((prev) => !prev)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
       >
         <ExclamationTriangleIcon className="size-5 text-amber-500 flex-shrink-0" />
@@ -161,10 +161,25 @@ function TroubleshootingItem({ item }) {
   );
 }
 
+function SecurityList({ icon: Icon, label, items, colorClass }) {
+  return (
+    <div>
+      <p className={`text-xs font-semibold ${colorClass} uppercase tracking-wide mb-2`}>{label}</p>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
+            <Icon className={`size-4 ${colorClass} flex-shrink-0 mt-0.5`} />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function RichGuideContent({ guide }) {
   return (
     <div className="space-y-8">
-      {/* Overview */}
       <div className="p-5 rounded-xl bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800">
         <p className="text-sm text-accent-800 dark:text-accent-300">{guide.overview}</p>
         {guide.estimatedTime && (
@@ -175,7 +190,6 @@ function RichGuideContent({ guide }) {
         )}
       </div>
 
-      {/* Prerequisites */}
       {guide.prerequisites?.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-3">
@@ -192,7 +206,6 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {/* Steps */}
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-4">
           Steps
@@ -204,7 +217,6 @@ function RichGuideContent({ guide }) {
         </div>
       </div>
 
-      {/* Security */}
       {guide.security && (
         <div>
           <SectionHeading
@@ -213,28 +225,8 @@ function RichGuideContent({ guide }) {
             iconColor="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
           />
           <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-positive uppercase tracking-wide mb-2">Recommended</p>
-              <ul className="space-y-1.5">
-                {guide.security.recommended.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
-                    <CheckIcon className="size-4 text-positive flex-shrink-0 mt-0.5" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-negative uppercase tracking-wide mb-2">Avoid</p>
-              <ul className="space-y-1.5">
-                {guide.security.avoid.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
-                    <XIcon className="size-4 text-negative flex-shrink-0 mt-0.5" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <SecurityList icon={CheckIcon} label="Recommended" items={guide.security.recommended} colorClass="text-positive" />
+            <SecurityList icon={XIcon} label="Avoid" items={guide.security.avoid} colorClass="text-negative" />
             {guide.security.note && (
               <p className="text-xs text-[var(--text-tertiary)] italic">{guide.security.note}</p>
             )}
@@ -242,7 +234,6 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {/* Data Scope */}
       {guide.dataScope?.length > 0 && (
         <div>
           <SectionHeading
@@ -254,7 +245,6 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {/* Limitations */}
       {guide.limitations?.length > 0 && (
         <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
           <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">Limitations</h4>
@@ -269,7 +259,6 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {/* Troubleshooting */}
       {guide.troubleshooting?.length > 0 && (
         <div>
           <SectionHeading
@@ -285,7 +274,6 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {/* After Setup */}
       {guide.afterSetup && (
         <div className="p-5 rounded-xl bg-positive-light dark:bg-positive-bg-dark/20 border border-positive-light dark:border-positive-dark/30">
           <h4 className="font-semibold text-positive dark:text-positive-dark mb-2">After setup</h4>
@@ -299,7 +287,6 @@ function RichGuideContent({ guide }) {
 function SimpleGuideContent({ instructions }) {
   return (
     <div className="space-y-8">
-      {/* Steps */}
       <div className="space-y-6">
         {instructions.steps.map((step, idx) => (
           <div key={idx} className="flex gap-4">
@@ -313,7 +300,6 @@ function SimpleGuideContent({ instructions }) {
         ))}
       </div>
 
-      {/* Note */}
       {instructions.note && (
         <div className="p-5 rounded-xl bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800">
           <h4 className="font-semibold text-accent-900 dark:text-accent-300 mb-2">Note</h4>
@@ -336,12 +322,9 @@ export function SetupGuidePanel({ broker, guideType, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex justify-end">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      {/* Panel */}
       <div className="relative w-full max-w-2xl bg-[var(--bg-primary)] shadow-2xl overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-[var(--bg-primary)] border-b border-[var(--border-primary)] px-6 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl font-bold text-[var(--text-primary)]">{title}</h2>
@@ -362,7 +345,6 @@ export function SetupGuidePanel({ broker, guideType, onClose }) {
             <SimpleGuideContent instructions={instructions} />
           )}
 
-          {/* Help section */}
           <div className="mt-8 p-5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-primary)]">
             <h4 className="font-semibold text-[var(--text-primary)] mb-2">Need help?</h4>
             <p className="text-sm text-[var(--text-secondary)]">

@@ -1,8 +1,3 @@
-/**
- * Rich setup guide content for Kraken.
- * Covers both API connection and CSV file upload.
- */
-
 export const krakenGuide = {
   api: {
     title: 'Connect Kraken API',
@@ -69,7 +64,6 @@ export const krakenGuide = {
         title: 'Enter Credentials in Finch',
         description:
           'Paste your API Key and Private Key into the fields below, then click "Test Connection" to verify everything works.',
-        screenshot: null,
       },
     ],
     security: {
@@ -169,7 +163,6 @@ export const krakenGuide = {
         title: 'Upload to Finch',
         description:
           'Switch to the "Upload File" tab in Finch and drag the downloaded CSV file into the upload area, or click to browse for it.',
-        screenshot: null,
       },
     ],
     dataScope: [

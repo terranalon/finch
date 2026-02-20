@@ -1,8 +1,3 @@
-/**
- * Shared icon components for AccountWizard.
- * All icons use Heroicons outline style with consistent props pattern.
- */
-
 export function XIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
