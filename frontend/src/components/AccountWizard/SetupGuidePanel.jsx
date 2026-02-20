@@ -177,34 +177,81 @@ function SecurityList({ icon: Icon, label, items, colorClass }) {
   );
 }
 
+function GuideOverview({ overview, estimatedTime }) {
+  return (
+    <div className="p-5 rounded-xl bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800">
+      <p className="text-sm text-accent-800 dark:text-accent-300">{overview}</p>
+      {estimatedTime && (
+        <div className="flex items-center gap-2 mt-3 text-xs text-accent-600 dark:text-accent-400">
+          <ClockIcon className="size-4" />
+          <span>Estimated time: {estimatedTime}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GuidePrerequisites({ prerequisites }) {
+  if (!prerequisites?.length) return null;
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-3">
+        Before you start
+      </h3>
+      <ul className="space-y-2">
+        {prerequisites.map((prereq) => (
+          <li key={prereq} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
+            <CheckIcon className="size-4 text-accent flex-shrink-0 mt-0.5" />
+            {prereq}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function GuideSecuritySection({ security }) {
+  if (!security) return null;
+  return (
+    <div>
+      <SectionHeading
+        icon={ShieldCheckIcon}
+        title="Security Best Practices"
+        iconColor="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+      />
+      <div className="space-y-4">
+        <SecurityList icon={CheckIcon} label="Recommended" items={security.recommended} colorClass="text-positive" />
+        <SecurityList icon={XIcon} label="Avoid" items={security.avoid} colorClass="text-negative" />
+        {security.note && (
+          <p className="text-xs text-[var(--text-tertiary)] italic">{security.note}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GuideLimitations({ limitations }) {
+  if (!limitations?.length) return null;
+  return (
+    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+      <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">Limitations</h4>
+      <ul className="space-y-1.5">
+        {limitations.map((limit) => (
+          <li key={limit} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+            <span className="text-amber-500 mt-1">-</span>
+            {limit}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function RichGuideContent({ guide }) {
   return (
     <div className="space-y-8">
-      <div className="p-5 rounded-xl bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800">
-        <p className="text-sm text-accent-800 dark:text-accent-300">{guide.overview}</p>
-        {guide.estimatedTime && (
-          <div className="flex items-center gap-2 mt-3 text-xs text-accent-600 dark:text-accent-400">
-            <ClockIcon className="size-4" />
-            <span>Estimated time: {guide.estimatedTime}</span>
-          </div>
-        )}
-      </div>
-
-      {guide.prerequisites?.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-3">
-            Before you start
-          </h3>
-          <ul className="space-y-2">
-            {guide.prerequisites.map((prereq) => (
-              <li key={prereq} className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
-                <CheckIcon className="size-4 text-accent flex-shrink-0 mt-0.5" />
-                {prereq}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <GuideOverview overview={guide.overview} estimatedTime={guide.estimatedTime} />
+      <GuidePrerequisites prerequisites={guide.prerequisites} />
 
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-4">
@@ -217,22 +264,7 @@ function RichGuideContent({ guide }) {
         </div>
       </div>
 
-      {guide.security && (
-        <div>
-          <SectionHeading
-            icon={ShieldCheckIcon}
-            title="Security Best Practices"
-            iconColor="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-          />
-          <div className="space-y-4">
-            <SecurityList icon={CheckIcon} label="Recommended" items={guide.security.recommended} colorClass="text-positive" />
-            <SecurityList icon={XIcon} label="Avoid" items={guide.security.avoid} colorClass="text-negative" />
-            {guide.security.note && (
-              <p className="text-xs text-[var(--text-tertiary)] italic">{guide.security.note}</p>
-            )}
-          </div>
-        </div>
-      )}
+      <GuideSecuritySection security={guide.security} />
 
       {guide.dataScope?.length > 0 && (
         <div>
@@ -245,19 +277,7 @@ function RichGuideContent({ guide }) {
         </div>
       )}
 
-      {guide.limitations?.length > 0 && (
-        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-          <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">Limitations</h4>
-          <ul className="space-y-1.5">
-            {guide.limitations.map((limit) => (
-              <li key={limit} className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-                <span className="text-amber-500 mt-1">-</span>
-                {limit}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <GuideLimitations limitations={guide.limitations} />
 
       {guide.troubleshooting?.length > 0 && (
         <div>

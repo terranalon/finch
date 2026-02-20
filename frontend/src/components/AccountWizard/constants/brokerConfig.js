@@ -158,34 +158,7 @@ export const BROKERS = {
     hasApi: true,
     supportedFormats: ['.csv'],
     apiType: 'standard', // Uses api_key and api_secret
-    instructions: {
-      api: {
-        title: 'Connect Kraken API',
-        steps: [
-          'Log into your Kraken account',
-          'Click the profile icon (top right) > Settings > Connections & API tab',
-          'Click "Create API key" to open the key configuration form',
-          'Enable permissions: "Query Funds", "Query Closed Orders & Trades", and "Query Ledger Entries"',
-          'Do NOT enable withdrawal or order modification permissions',
-          'Click "Generate key" and confirm with 2FA if prompted',
-          'Copy both the API Key and Private Key (Private Key is shown only once)',
-        ],
-        note: 'Keep your Private Key secret. We only need read access to import your data.',
-      },
-      file: {
-        title: 'Export from Kraken',
-        steps: [
-          'Log into your Kraken account',
-          'Click "History" in the left navigation bar',
-          'Click "View statements" (top right), then "Export statement"',
-          'Select "Ledger" as the export type',
-          'Set date range to cover your full history, leave Assets on "All", change format to CSV',
-          'Click "Submit", then download the CSV file when ready',
-          'Upload the CSV file to Finch',
-        ],
-        formats: 'CSV only',
-      },
-    },
+    instructions: {},
     fields: {
       api: [
         { key: 'api_key', label: 'API Key', type: 'text', placeholder: 'Enter your Kraken API Key' },

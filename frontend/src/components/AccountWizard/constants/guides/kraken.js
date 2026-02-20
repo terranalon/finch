@@ -131,7 +131,7 @@ export const krakenGuide = {
         title: 'View Statements',
         description:
           'On the History page, click the "View statements" link in the top-right corner. This opens the Statements page where you can export data.',
-        screenshot: '/guides/kraken/file/history.png',
+        screenshot: '/guides/kraken/file/statements.png',
       },
       {
         title: 'Export Statement',
