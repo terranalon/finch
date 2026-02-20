@@ -32,7 +32,7 @@ export default function PositionStrip({ position, asset }) {
     <div className={cn('bg-[var(--bg-secondary)] border border-[var(--border-primary)] border-t-2 rounded-lg mb-6', accentClass)}>
       {/* Main strip row */}
       <div className="flex items-center justify-between px-4 py-3 gap-4">
-        <div className="flex items-center gap-6 flex-wrap flex-1">
+        <div className="flex items-center justify-between flex-1">
           <StatCell
             label="Quantity"
             value={
