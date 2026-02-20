@@ -32,13 +32,13 @@ export default function LandingFooter() {
     <footer className="border-t border-[var(--border-primary)] py-8 px-8">
       <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-col md:flex-row items-center gap-4">
-          <a href="/" className="flex items-center gap-2 no-underline">
+          <Link to="/" className="flex items-center gap-2 no-underline">
             <FinchLogo size={24} />
             <span className="text-base font-bold leading-none">
               <span className="text-[var(--accent-primary)]">Fin</span>
               <span className="text-[var(--text-primary)]">ch</span>
             </span>
-          </a>
+          </Link>
           <span className="text-[13px] text-[var(--text-tertiary)]">
             2026 Finch. All rights reserved.
           </span>

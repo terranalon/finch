@@ -23,13 +23,13 @@ export default function LandingNavbar() {
   return (
     <nav className="lp-glass-nav sticky top-0 z-50 border-b border-[var(--border-primary)] px-4 sm:px-6 lg:px-8">
       <div className="max-w-[1200px] mx-auto flex items-center justify-between h-16">
-        <a href="/" className="flex items-center gap-2 no-underline">
+        <Link to="/" className="flex items-center gap-2 no-underline">
           <FinchLogo size={32} />
           <span className="text-[22px] font-bold leading-none">
             <span className="text-[var(--accent-primary)]">Fin</span>
             <span className="text-[var(--text-primary)]">ch</span>
           </span>
-        </a>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
           {NAV_LINKS.map((link) => (

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTheme } from "../contexts";
 
 import "../components/landing/landing.css";
 import LandingNavbar from "../components/landing/LandingNavbar";
@@ -11,13 +12,16 @@ import CtaSection from "../components/landing/CtaSection";
 import LandingFooter from "../components/landing/LandingFooter";
 
 export default function LandingPage() {
-  // Force light mode -- marketing page is light-only
+  const { theme, setTheme } = useTheme();
+
+  // Force light mode -- marketing page is light-only. Restore on unmount.
   useEffect(() => {
-    const hadDark = document.documentElement.classList.contains("dark");
-    document.documentElement.classList.remove("dark");
+    const prev = theme;
+    if (prev !== "light") setTheme("light");
     return () => {
-      if (hadDark) document.documentElement.classList.add("dark");
+      if (prev !== "light") setTheme(prev);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fade-in animations: IntersectionObserver for scroll reveal,
