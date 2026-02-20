@@ -543,6 +543,71 @@ async def onboard_ibkr(
     )
 
 
+@router.post("/kucoin/onboard/{account_id}", response_model=OnboardingImportResponse)
+async def onboard_kucoin(
+    account_id: int,
+    background_tasks: BackgroundTasks = None,  # ty: ignore[invalid-parameter-default] -- FastAPI injects BackgroundTasks
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OnboardingImportResponse:
+    """KuCoin onboarding import: probes API history, then imports based on coverage.
+
+    For accounts with < 6 months of fill history, fetches full transaction history.
+    For older accounts where the fill history is truncated, creates a synthetic snapshot
+    of current positions. The user can then upload CSV files for full historical data.
+    """
+    from app.dependencies.user_scope import get_broker_credentials_with_passphrase
+    from app.services.brokers.kucoin.import_orchestrator import KuCoinImportOrchestrator
+
+    config = _get_broker_config(BrokerType.KUCOIN)
+    account = _get_validated_account(account_id, current_user, db)
+
+    api_key, api_secret, api_passphrase = get_broker_credentials_with_passphrase(
+        account, config.key
+    )
+    if not api_key or not api_secret or not api_passphrase:
+        raise BadRequestError(
+            f"No {config.name} credentials configured. "
+            f"Please add {config.key}.api_key, {config.key}.api_secret, "
+            f"and {config.key}.api_passphrase to account metadata.",
+        )
+
+    client = config.create_client(api_key, api_secret, api_passphrase=api_passphrase)
+
+    try:
+        result = KuCoinImportOrchestrator.execute(db, account_id, client)
+    except Exception as e:
+        logger.exception("KuCoin onboarding failed for account %d", account_id)
+        raise AppError(f"KuCoin onboarding failed: {e}")
+
+    if result.stats.get("status") == "failed":
+        raise AppError(
+            f"KuCoin import failed: {result.stats.get('errors', ['Unknown error'])}",
+        )
+
+    _update_last_import(account, config.key, db)
+
+    if background_tasks:
+        update_snapshot_status(db, account_id, "generating")
+        background_tasks.add_task(generate_snapshots_background, account_id, result.snapshot_start)
+
+    if result.import_mode == "full_history":
+        message = f"Full transaction history imported for account {account.name}"
+    else:
+        message = (
+            f"Synthetic snapshot created for account {account.name}. "
+            f"Upload CSV files from KuCoin for full historical data."
+        )
+
+    return OnboardingImportResponse(
+        status="completed",
+        message=message,
+        account_id=account_id,
+        import_mode=result.import_mode,
+        stats=result.stats,
+    )
+
+
 @router.post("/ibkr/snapshot/{account_id}", response_model=SnapshotImportResponse)
 async def import_ibkr_snapshot(
     account_id: int,
