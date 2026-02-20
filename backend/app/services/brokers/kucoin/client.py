@@ -97,15 +97,13 @@ class KuCoinClient:
         """Make authenticated signed API request."""
         timestamp = str(int(time.time() * 1000))
 
-        # Build query string for GET requests
         query_string = ""
         if params and method == "GET":
             query_string = "?" + "&".join(f"{k}={v}" for k, v in params.items())
 
         full_endpoint = endpoint + query_string
-        body = ""
 
-        signature = self._generate_signature(timestamp, method, full_endpoint, body)
+        signature = self._generate_signature(timestamp, method, full_endpoint, "")
         encrypted_passphrase = self._encrypt_passphrase()
 
         headers = {
@@ -132,12 +130,12 @@ class KuCoinClient:
             logger.error("KuCoin API HTTP error: %s", e)
             raise KuCoinAPIError(f"HTTP error: {e}") from e
 
-        # KuCoin returns "200000" for success
+        # KuCoin uses "200000" as its success code
         code = result.get("code", "")
         if str(code) != "200000":
-            error_msg = result.get("msg", "Unknown error")
-            logger.error("KuCoin API error: %s - %s", code, error_msg)
-            raise KuCoinAPIError(error_msg, code)
+            msg = result.get("msg", "Unknown error")
+            logger.error("KuCoin API error: %s - %s", code, msg)
+            raise KuCoinAPIError(msg, code)
 
         return result
 
@@ -276,11 +274,7 @@ class KuCoinClient:
             end_ms = int(current_end.timestamp() * 1000)
 
             fills = self._fetch_paginated("/api/v1/fills", start_at=start_ms, end_at=end_ms)
-
-            for fill in fills:
-                parsed = self._parse_fill(fill)
-                if parsed:
-                    transactions.append(parsed)
+            transactions.extend(p for f in fills if (p := self._parse_fill(f)))
 
             current_start = current_end
             time.sleep(_REQUEST_DELAY)
@@ -295,13 +289,8 @@ class KuCoinClient:
         start_at = int(start.timestamp() * 1000) if start else None
         end_at = int(end.timestamp() * 1000) if end else None
 
-        deposits = self._fetch_paginated("/api/v1/deposits", start_at=start_at, end_at=end_at)
-
-        results: list[ParsedCashTransaction] = []
-        for dep in deposits:
-            parsed = self._parse_deposit(dep)
-            if parsed:
-                results.append(parsed)
+        raw = self._fetch_paginated("/api/v1/deposits", start_at=start_at, end_at=end_at)
+        results = [p for dep in raw if (p := self._parse_deposit(dep))]
 
         logger.info("Fetched %d KuCoin deposits", len(results))
         return results
@@ -313,13 +302,8 @@ class KuCoinClient:
         start_at = int(start.timestamp() * 1000) if start else None
         end_at = int(end.timestamp() * 1000) if end else None
 
-        withdrawals = self._fetch_paginated("/api/v1/withdrawals", start_at=start_at, end_at=end_at)
-
-        results: list[ParsedCashTransaction] = []
-        for w in withdrawals:
-            parsed = self._parse_withdrawal(w)
-            if parsed:
-                results.append(parsed)
+        raw = self._fetch_paginated("/api/v1/withdrawals", start_at=start_at, end_at=end_at)
+        results = [p for w in raw if (p := self._parse_withdrawal(w))]
 
         logger.info("Fetched %d KuCoin withdrawals", len(results))
         return results
@@ -351,10 +335,7 @@ class KuCoinClient:
                     end_at=end_at,
                     extra_params={"bizType": biz_type},
                 )
-                for entry in entries:
-                    parsed = self._parse_ledger_staking(entry)
-                    if parsed:
-                        results.append(parsed)
+                results.extend(p for e in entries if (p := self._parse_ledger_staking(e)))
             except KuCoinAPIError:
                 logger.warning("Failed to fetch KuCoin %s ledger entries", biz_type)
 
@@ -378,19 +359,18 @@ class KuCoinClient:
             else None
         )
 
-        # Fetch balances for positions
         positions: list[ParsedPosition] = []
         try:
             balances = self.get_account_balances()
-            for currency, quantity in balances.items():
-                positions.append(
-                    ParsedPosition(
-                        symbol=currency,
-                        quantity=quantity,
-                        currency=currency,
-                        asset_class="Crypto",
-                    )
+            positions = [
+                ParsedPosition(
+                    symbol=currency,
+                    quantity=quantity,
+                    currency=currency,
+                    asset_class="Crypto",
                 )
+                for currency, quantity in balances.items()
+            ]
             logger.info("Fetched %d KuCoin positions", len(positions))
         except KuCoinAPIError as e:
             logger.error("Failed to fetch KuCoin balances: %s", e)
@@ -404,7 +384,6 @@ class KuCoinClient:
 
         dividends = self._fetch_staking_rewards(start, end)
 
-        # Determine date range from all data
         all_dates: list[date] = [
             *[t.trade_date for t in transactions],
             *[c.date for c in cash_transactions],

@@ -576,6 +576,8 @@ async def onboard_kucoin(
 
     try:
         result = KuCoinImportOrchestrator.execute(db, account_id, client)
+    except AppError:
+        raise
     except Exception as e:
         logger.exception("KuCoin onboarding failed for account %d", account_id)
         raise AppError(f"KuCoin onboarding failed: {e}")
