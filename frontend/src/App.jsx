@@ -13,6 +13,7 @@ import Accounts from './pages/Accounts'
 import AccountDetail from './pages/AccountDetail'
 import Insights from './pages/Insights'
 import Assets from './pages/Assets'
+import AssetDetail from './pages/AssetDetail'
 import Settings from './pages/Settings'
 import Portfolios from './pages/Portfolios'
 import Login from './pages/Login'
@@ -126,6 +127,13 @@ function App() {
                   <ProtectedRoute>
                     <AppLayout>
                       <Assets />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/assets/:id" element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <AssetDetail />
                     </AppLayout>
                   </ProtectedRoute>
                 } />
