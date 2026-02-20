@@ -271,6 +271,52 @@ export const BROKERS = {
       ],
     },
   },
+
+  kucoin: {
+    type: 'kucoin',
+    name: 'KuCoin',
+    shortName: 'KuCoin',
+    category: 'crypto',
+    defaultCurrency: 'USD',
+    defaultAccountType: 'Crypto',
+    hasApi: true,
+    supportsSmartOnboarding: true,
+    supportedFormats: ['.csv'],
+    apiType: 'passphrase',
+    instructions: {
+      api: {
+        title: 'Connect KuCoin API',
+        steps: [
+          'Log into your KuCoin account',
+          'Click your avatar (top right) > API Management',
+          'Click "Create API"',
+          'Choose a name and set a passphrase -- save it somewhere safe',
+          'Enable "General" permission only (no Trading or Withdrawal needed)',
+          'Complete 2FA verification',
+          'Copy your API Key, Secret, and the passphrase you set',
+        ],
+        note: 'KuCoin retains ~6 months of trade history via API. For older accounts we create a snapshot of your current positions -- you can upload a full CSV export later.',
+      },
+      file: {
+        title: 'Export from KuCoin',
+        steps: [
+          'Log into your KuCoin account',
+          'Go to Orders > Spot Orders > Trade History',
+          'Click "Export" and select your date range',
+          'Repeat for Deposit History under Assets > Deposit',
+          'Download each file as CSV',
+        ],
+        formats: 'CSV only',
+      },
+    },
+    fields: {
+      api: [
+        { key: 'api_key', label: 'API Key', type: 'text', placeholder: 'Enter your KuCoin API Key' },
+        { key: 'api_secret', label: 'API Secret', type: 'password', placeholder: 'Enter your API Secret' },
+        { key: 'api_passphrase', label: 'API Passphrase', type: 'password', placeholder: 'Enter the passphrase you set when creating the key' },
+      ],
+    },
+  },
 };
 
 /**

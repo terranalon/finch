@@ -16,6 +16,7 @@ class BrokerType(str, Enum):
     KRAKEN = "kraken"
     BIT2C = "bit2c"
     BINANCE = "binance"
+    KUCOIN = "kucoin"
 
 
 class CredentialType(str, Enum):
@@ -23,26 +24,30 @@ class CredentialType(str, Enum):
 
     API_KEY_SECRET = "api_key_secret"  # api_key + api_secret (Kraken, Bit2C)
     FLEX_QUERY = "flex_query"  # flex_token + flex_query_id (IBKR)
+    API_KEY_SECRET_PASSPHRASE = (
+        "api_key_secret_passphrase"  # api_key + api_secret + api_passphrase (KuCoin)
+    )
 
 
-def get_credential_fields(credential_type: CredentialType) -> tuple[str, str]:
+def get_credential_fields(credential_type: CredentialType) -> tuple[str, ...]:
     """Get the field names for a credential type."""
     if credential_type == CredentialType.API_KEY_SECRET:
         return ("api_key", "api_secret")
+    if credential_type == CredentialType.API_KEY_SECRET_PASSPHRASE:
+        return ("api_key", "api_secret", "api_passphrase")
     return ("flex_token", "flex_query_id")
 
 
 def has_credentials(broker_data: dict, credential_type: CredentialType) -> bool:
     """Check if credential fields are present and non-empty."""
-    field1, field2 = get_credential_fields(credential_type)
-    return bool(broker_data.get(field1) and broker_data.get(field2))
+    fields = get_credential_fields(credential_type)
+    return all(bool(broker_data.get(f)) for f in fields)
 
 
 def remove_credential_fields(broker_data: dict, credential_type: CredentialType) -> None:
     """Remove credential fields from broker data dict (in place)."""
-    field1, field2 = get_credential_fields(credential_type)
-    broker_data.pop(field1, None)
-    broker_data.pop(field2, None)
+    for f in get_credential_fields(credential_type):
+        broker_data.pop(f, None)
     broker_data.pop("updated_at", None)
 
 
@@ -60,11 +65,16 @@ class BrokerConfig:
     credentials_class: type | None = None
     balance_method: str = "get_balance"  # Method name to call for balance
 
-    def create_client(self, api_key: str, api_secret: str):
+    def create_client(self, api_key: str, api_secret: str, api_passphrase: str | None = None):
         """Create an authenticated broker API client."""
         if not self.client_class or not self.credentials_class:
             raise ValueError(f"Broker {self.key} missing client_class or credentials_class")
-        credentials = self.credentials_class(api_key=api_key, api_secret=api_secret)
+        if api_passphrase is not None:
+            credentials = self.credentials_class(
+                api_key=api_key, api_secret=api_secret, api_passphrase=api_passphrase
+            )
+        else:
+            credentials = self.credentials_class(api_key=api_key, api_secret=api_secret)
         return self.client_class(credentials)
 
 
@@ -81,6 +91,7 @@ def _ensure_registry_initialized() -> None:
     from app.services.brokers.binance.client import BinanceClient, BinanceCredentials
     from app.services.brokers.bit2c.client import Bit2CClient, Bit2CCredentials
     from app.services.brokers.kraken.client import KrakenClient, KrakenCredentials
+    from app.services.brokers.kucoin.client import KuCoinClient, KuCoinCredentials
 
     BROKER_REGISTRY.update(
         {
@@ -111,6 +122,14 @@ def _ensure_registry_initialized() -> None:
                 credential_type=CredentialType.API_KEY_SECRET,
                 client_class=BinanceClient,
                 credentials_class=BinanceCredentials,
+                balance_method="get_account_balances",
+            ),
+            BrokerType.KUCOIN: BrokerConfig(
+                key="kucoin",
+                name="KuCoin",
+                credential_type=CredentialType.API_KEY_SECRET_PASSPHRASE,
+                client_class=KuCoinClient,
+                credentials_class=KuCoinCredentials,
                 balance_method="get_account_balances",
             ),
         }

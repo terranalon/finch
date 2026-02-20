@@ -8,6 +8,7 @@ const BROKER_LOGOS = {
   kraken: 'https://cdn.brandfetch.io/idYQrXoH-Q/w/400/h/400/theme/dark/symbol.png',
   bit2c: 'https://cdn.brandfetch.io/idatfQiwS7/w/400/h/400/theme/dark/icon.jpeg',
   binance: 'https://cdn.brandfetch.io/id-pjrLx_q/w/400/h/400/theme/dark/symbol.png',
+  kucoin: 'https://cdn.brandfetch.io/idvPAcDzGi/w/400/h/400/theme/dark/symbol.png',
 };
 
 export function BrokerLogo({ type, className = 'size-12' }) {

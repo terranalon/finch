@@ -31,7 +31,7 @@ class TestImportDataReturnsDateRange:
             # Mock all internal methods that touch the DB
             mock_holding = MagicMock()
             mock_holding.id = 1
-            service._get_or_create_holding = MagicMock(return_value=mock_holding)  # ty: ignore[invalid-assignment] — mock patching
+            service.get_or_create_holding = MagicMock(return_value=mock_holding)  # ty: ignore[invalid-assignment] — mock patching
             service._import_transactions = MagicMock(return_value={"imported": 0})  # ty: ignore[invalid-assignment] — mock patching
             service._import_cash_transactions = MagicMock(return_value={"imported": 0})  # ty: ignore[invalid-assignment] — mock patching
             service._import_dividends = MagicMock(return_value={"imported": 0})  # ty: ignore[invalid-assignment] — mock patching

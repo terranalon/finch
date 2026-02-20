@@ -32,7 +32,7 @@ class CryptoImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         """Return list of broker types this service handles."""
-        return ["kraken", "bit2c", "binance"]
+        return ["kraken", "bit2c", "binance", "kucoin"]
 
     def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.
@@ -133,7 +133,7 @@ class CryptoImportService(BaseBrokerImportService):
         stats["end_time"] = datetime.now().isoformat()
         return stats
 
-    def _get_or_create_holding(
+    def get_or_create_holding(
         self, account_id: int, symbol: str, asset_class: str, currency: str
     ) -> tuple[Holding, bool]:
         """Get existing holding or create new one with its asset."""
@@ -227,7 +227,7 @@ class CryptoImportService(BaseBrokerImportService):
 
         for txn in transactions:
             try:
-                holding, asset_created = self._get_or_create_holding(
+                holding, asset_created = self.get_or_create_holding(
                     account_id, txn.symbol, "Crypto", txn.currency
                 )
                 if asset_created:
@@ -276,9 +276,7 @@ class CryptoImportService(BaseBrokerImportService):
             try:
                 currency = cash_txn.currency
                 asset_class = "Cash" if currency in FIAT_CURRENCIES else "Crypto"
-                holding, _ = self._get_or_create_holding(
-                    account_id, currency, asset_class, currency
-                )
+                holding, _ = self.get_or_create_holding(account_id, currency, asset_class, currency)
 
                 # Create or transfer transaction with automatic deduplication
                 result, _ = create_or_transfer_transaction(
@@ -315,7 +313,7 @@ class CryptoImportService(BaseBrokerImportService):
 
         for div in dividends:
             try:
-                holding, _ = self._get_or_create_holding(
+                holding, _ = self.get_or_create_holding(
                     account_id, div.symbol, "Crypto", div.currency
                 )
 

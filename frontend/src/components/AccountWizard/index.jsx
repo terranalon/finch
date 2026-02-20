@@ -222,6 +222,23 @@ export function AccountWizard({ isOpen, onClose, portfolioId, linkableAccounts =
             isFullHistory ? transformImportResults(results) : transformSnapshotResults(results)
           );
           setHasSnapshotData(!isFullHistory);
+        } else if (broker.supportsSmartOnboarding) {
+          // Smart onboarding: probes API history and imports full history or snapshot
+          const onboardResponse = await api(`/brokers/${broker.type}/onboard/${accountId}`, {
+            method: 'POST',
+          });
+
+          if (!onboardResponse.ok) {
+            const error = await onboardResponse.json();
+            throw new Error(error.message || 'Failed to import data');
+          }
+
+          const results = await onboardResponse.json();
+          const isFullHistory = results.import_mode === 'full_history';
+          setImportResults(
+            isFullHistory ? transformImportResults(results) : transformSnapshotResults(results)
+          );
+          setHasSnapshotData(!isFullHistory);
         } else if (broker.supportsSnapshot) {
           // Other snapshot-capable brokers (future)
           const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${accountId}`, {

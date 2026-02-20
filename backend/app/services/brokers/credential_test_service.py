@@ -12,13 +12,17 @@ from app.services.brokers.ibkr.flex_client import IBKRFlexClient
 logger = logging.getLogger(__name__)
 
 
-def test_credentials(config: BrokerConfig, cred_field1: str, cred_field2: str) -> dict[str, Any]:
+def test_credentials(
+    config: BrokerConfig,
+    cred_field1: str,
+    cred_field2: str,
+    api_passphrase: str | None = None,
+) -> dict[str, Any]:
     """Test credentials by calling the broker API.
 
     For FLEX_QUERY brokers (cred_field1=flex_token, cred_field2=flex_query_id),
     initiates a Flex Query request.
-    For API_KEY_SECRET brokers (cred_field1=api_key, cred_field2=api_secret),
-    fetches account balances.
+    For API_KEY_SECRET / API_KEY_SECRET_PASSPHRASE brokers, fetches account balances.
 
     Returns a result dict with 'status' ('success'/'failed') and broker-specific fields.
     """
@@ -35,7 +39,7 @@ def test_credentials(config: BrokerConfig, cred_field1: str, cred_field2: str) -
             "message": f"{config.name} credential test failed: invalid token or query ID",
         }
 
-    client = config.create_client(cred_field1, cred_field2)
+    client = config.create_client(cred_field1, cred_field2, api_passphrase=api_passphrase)
     balance_method = getattr(client, config.balance_method)
     balances = balance_method()
 
