@@ -272,7 +272,7 @@ export function OnboardingFlow() {
 
   const handleGoToDashboard = useCallback(async (portfolioName) => {
     if (portfolioIdRef.current && portfolioName && portfolioName !== 'My Portfolio') {
-      api(`/portfolios/${portfolioIdRef.current}`, {
+      await api(`/portfolios/${portfolioIdRef.current}`, {
         method: 'PUT',
         body: JSON.stringify({ name: portfolioName }),
       }).catch(() => {});
@@ -360,7 +360,7 @@ export function OnboardingFlow() {
         </div>
       </div>
 
-      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} onStepClick={handleStepClick} />
+      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} onStepClick={accountIdRef.current || isImporting ? undefined : handleStepClick} />
 
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
         <div className="w-full max-w-4xl px-6 py-10">

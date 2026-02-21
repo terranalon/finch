@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../contexts', () => ({
@@ -14,10 +15,15 @@ import { api } from '../../lib/api';
 import { OnboardingGuard } from '../OnboardingGuard';
 
 function renderWithRouter(initialPath, routes) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>{routes}</Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>{routes}</Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

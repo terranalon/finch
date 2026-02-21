@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import { api } from '../lib/api'
 
@@ -9,24 +9,19 @@ import { api } from '../lib/api'
  * @param {boolean} fallbackOnError - value to use when the API call fails
  */
 export function useHasAccounts(fallbackOnError) {
-  const [hasAccounts, setHasAccounts] = useState(null)
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['accounts', 'hasAny'],
+    queryFn: async () => {
+      const response = await api('/accounts')
+      if (!response.ok) throw new Error('Failed to fetch accounts')
+      const json = await response.json()
+      return json.total > 0
+    },
+    staleTime: 30000,
+    retry: false,
+  })
 
-  useEffect(() => {
-    async function checkAccounts() {
-      try {
-        const response = await api('/accounts')
-        if (response.ok) {
-          const data = await response.json()
-          setHasAccounts(data.total > 0)
-        } else {
-          setHasAccounts(fallbackOnError)
-        }
-      } catch {
-        setHasAccounts(fallbackOnError)
-      }
-    }
-    checkAccounts()
-  }, [fallbackOnError])
-
-  return hasAccounts
+  if (isPending) return null
+  if (isError) return fallbackOnError
+  return data
 }
