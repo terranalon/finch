@@ -8,7 +8,6 @@ import { OnboardingStepIndicator } from './OnboardingStepIndicator';
 import { WelcomeStep } from './WelcomeStep';
 import { FinishStep } from './FinishStep';
 
-// Reuse existing AccountWizard step components as-is
 import { AccountTypeStep } from '../AccountWizard/steps/AccountTypeStep';
 import { BrokerSelectionStep } from '../AccountWizard/steps/BrokerSelectionStep';
 import { DataConnectionStep } from '../AccountWizard/steps/DataConnectionStep';
@@ -28,23 +27,32 @@ function FinchLogo() {
   );
 }
 
-function transformImportResults(backendResults) {
-  const stats = backendResults.stats || {};
-  const transactionsImported = (stats.transactions?.imported || 0)
+function formatDate(dateStr) {
+  return dateStr ? new Date(dateStr).toLocaleDateString() : 'N/A';
+}
+
+function countTransactions(stats) {
+  return (stats.transactions?.imported || 0)
     + (stats.cash_transactions?.imported || 0)
     + (stats.dividends?.imported || 0);
+}
+
+function formatDateRange(dateRange) {
+  return { start: formatDate(dateRange.start_date), end: formatDate(dateRange.end_date) };
+}
+
+function transformImportResults(backendResults) {
+  const stats = backendResults.stats || {};
   const assetsCreated = (stats.transactions?.assets_created || 0)
     + (stats.positions?.assets_created || 0);
   const holdingsCount = stats.holdings_reconstruction?.holdings_updated || 0;
-  const dateRange = stats.date_range || {};
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
 
   return {
     assets: [],
     summary: {
       totalAssets: holdingsCount || assetsCreated,
-      totalTransactions: transactionsImported,
-      dateRange: { start: formatDate(dateRange.start_date), end: formatDate(dateRange.end_date) },
+      totalTransactions: countTransactions(stats),
+      dateRange: formatDateRange(stats.date_range || {}),
     },
     message: backendResults.message,
   };
@@ -70,19 +78,13 @@ function transformSnapshotResults(backendResults) {
 
 function transformFileUploadResults(results) {
   const stats = results.stats || {};
-  const transactionsImported = (stats.transactions?.imported || 0)
-    + (stats.cash_transactions?.imported || 0)
-    + (stats.dividends?.imported || 0);
-  const uniqueAssets = stats.unique_assets_in_file || 0;
-  const dateRange = results.date_range || {};
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : 'N/A';
 
   return {
     assets: [],
     summary: {
-      totalAssets: uniqueAssets,
-      totalTransactions: transactionsImported,
-      dateRange: { start: formatDate(dateRange.start_date), end: formatDate(dateRange.end_date) },
+      totalAssets: stats.unique_assets_in_file || 0,
+      totalTransactions: countTransactions(stats),
+      dateRange: formatDateRange(results.date_range || {}),
     },
     message: results.message,
   };
@@ -328,7 +330,7 @@ export function OnboardingFlow() {
             }}
             onShowGuide={() => {}}
             onTestCredentials={handleTestCredentials}
-            onError={(msg) => showNotification(msg)}
+            onError={showNotification}
             sectionValidation={sectionValidation}
             isImporting={isImporting}
           />

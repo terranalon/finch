@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export function OnboardingGuard({ children }) {
-  const [hasAccounts, setHasAccounts] = useState(null); // null = loading
+  const [hasAccounts, setHasAccounts] = useState(null);
 
   useEffect(() => {
     async function checkAccounts() {
