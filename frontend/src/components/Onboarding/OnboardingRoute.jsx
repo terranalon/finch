@@ -1,28 +1,10 @@
-import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { api } from '../../lib/api';
+import { useHasAccounts } from '../../hooks/useHasAccounts';
 import { OnboardingFlow } from './OnboardingFlow';
 
 export function OnboardingRoute() {
-  const [hasAccounts, setHasAccounts] = useState(null);
-
-  useEffect(() => {
-    async function checkAccounts() {
-      try {
-        const response = await api('/accounts');
-        if (response.ok) {
-          const data = await response.json();
-          setHasAccounts(data.total > 0);
-        } else {
-          setHasAccounts(false);
-        }
-      } catch {
-        setHasAccounts(false);
-      }
-    }
-    checkAccounts();
-  }, []);
+  const hasAccounts = useHasAccounts(false);
 
   if (hasAccounts === null) {
     return (

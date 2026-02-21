@@ -1,27 +1,9 @@
-import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { api } from '../lib/api';
+import { useHasAccounts } from '../hooks/useHasAccounts';
 
 export function OnboardingGuard({ children }) {
-  const [hasAccounts, setHasAccounts] = useState(null);
-
-  useEffect(() => {
-    async function checkAccounts() {
-      try {
-        const response = await api('/accounts');
-        if (response.ok) {
-          const data = await response.json();
-          setHasAccounts(data.total > 0);
-        } else {
-          setHasAccounts(true); // On error, don't block dashboard
-        }
-      } catch {
-        setHasAccounts(true);
-      }
-    }
-    checkAccounts();
-  }, []);
+  const hasAccounts = useHasAccounts(true);
 
   if (hasAccounts === null) {
     return (

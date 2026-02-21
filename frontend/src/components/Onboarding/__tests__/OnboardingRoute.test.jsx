@@ -14,21 +14,23 @@ vi.mock('../../../lib/api', () => ({
 import { api } from '../../../lib/api';
 import { OnboardingRoute } from '../OnboardingRoute';
 
+function renderOnboardingRoute() {
+  return render(
+    <MemoryRouter initialEntries={['/onboarding']}>
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingRoute />} />
+        <Route path="/" element={<div>Dashboard</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
 describe('OnboardingRoute', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders onboarding when user has zero accounts', async () => {
     api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 0, items: [] }) });
-
-    render(
-      <MemoryRouter initialEntries={['/onboarding']}>
-        <Routes>
-          <Route path="/onboarding" element={<OnboardingRoute />} />
-          <Route path="/" element={<div>Dashboard</div>} />
-        </Routes>
-      </MemoryRouter>
-    );
-
+    renderOnboardingRoute();
     await waitFor(() => {
       expect(screen.getByText('Welcome to Finch!')).toBeInTheDocument();
     });
@@ -36,16 +38,7 @@ describe('OnboardingRoute', () => {
 
   it('redirects to dashboard when user has accounts', async () => {
     api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 1, items: [{ id: 1 }] }) });
-
-    render(
-      <MemoryRouter initialEntries={['/onboarding']}>
-        <Routes>
-          <Route path="/onboarding" element={<OnboardingRoute />} />
-          <Route path="/" element={<div>Dashboard</div>} />
-        </Routes>
-      </MemoryRouter>
-    );
-
+    renderOnboardingRoute();
     await waitFor(() => {
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });

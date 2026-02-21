@@ -44,10 +44,10 @@ export function FinishStep({ onGoToDashboard, onAddAnother, defaultPortfolioName
   return (
     <div className="max-w-2xl mx-auto text-center">
       <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-3">
-        {"You're all set!"}
+        You&apos;re all set!
       </h2>
       <p className="text-[var(--text-secondary)] text-lg mb-8 max-w-md mx-auto">
-        {"Your portfolio is ready. Rename it if you'd like, then explore your dashboard."}
+        Your portfolio is ready. Rename it if you&apos;d like, then explore your dashboard.
       </p>
 
       <div className="max-w-xs mx-auto mb-6">

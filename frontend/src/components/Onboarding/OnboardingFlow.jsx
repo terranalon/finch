@@ -28,6 +28,30 @@ function FinchLogo() {
   );
 }
 
+async function apiPost(endpoint, body) {
+  const options = { method: 'POST' };
+  if (body instanceof FormData) {
+    options.body = body;
+  } else if (body !== undefined) {
+    options.body = JSON.stringify(body);
+  }
+  const response = await api(endpoint, options);
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || 'Request failed');
+  }
+  return response.json();
+}
+
+function ensureOnce(idRef, promiseRef, createFn) {
+  if (idRef.current) return Promise.resolve(idRef.current);
+  if (promiseRef.current) return promiseRef.current;
+
+  const promise = createFn().finally(() => { promiseRef.current = null; });
+  promiseRef.current = promise;
+  return promise;
+}
+
 function formatDate(dateStr) {
   return dateStr ? new Date(dateStr).toLocaleDateString() : 'N/A';
 }
@@ -99,26 +123,21 @@ export function OnboardingFlow() {
   const [category, setCategory] = useState(null);
   const [broker, setBroker] = useState(null);
 
-  // Resource IDs (lazy creation)
   const portfolioIdRef = useRef(null);
   const createPortfolioPromiseRef = useRef(null);
   const accountIdRef = useRef(null);
-  const createPromiseRef = useRef(null);
+  const createAccountPromiseRef = useRef(null);
 
-  // Import state
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState(null);
   const [sectionValidation, setSectionValidation] = useState(null);
 
-  // UI
   const [notification, setNotification] = useState({ message: null, type: 'error' });
   const [showGuide, setShowGuide] = useState(null);
 
   const showNotification = useCallback((message, type = 'error') => {
     setNotification({ message, type });
   }, []);
-
-  // ---- Step handlers ----
 
   const handleCategorySelect = useCallback((cat) => {
     setCategory(cat);
@@ -135,158 +154,121 @@ export function OnboardingFlow() {
     setCurrentStep(4);
   }, []);
 
-  // ---- Lazy resource creation ----
-
   const ensurePortfolio = useCallback(async () => {
-    if (portfolioIdRef.current) return portfolioIdRef.current;
-    if (createPortfolioPromiseRef.current) return createPortfolioPromiseRef.current;
-
-    async function doCreate() {
-      const response = await api('/portfolios', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'My Portfolio' }),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create portfolio');
-      }
-      const portfolio = await response.json();
+    return ensureOnce(portfolioIdRef, createPortfolioPromiseRef, async () => {
+      const portfolio = await apiPost('/portfolios', { name: 'My Portfolio' });
       portfolioIdRef.current = portfolio.id;
       return portfolio.id;
-    }
-
-    const promise = doCreate().finally(() => { createPortfolioPromiseRef.current = null; });
-    createPortfolioPromiseRef.current = promise;
-    return promise;
+    });
   }, []);
 
-  const createAccount = useCallback(async (pId) => {
-    if (accountIdRef.current) return accountIdRef.current;
-    if (createPromiseRef.current) return createPromiseRef.current;
-
-    async function doCreate() {
-      const response = await api('/accounts', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: broker?.name || 'Manual Account',
-          account_type: broker?.defaultAccountType || 'Investment',
-          currency: broker?.defaultCurrency || 'USD',
-          institution: broker?.name || 'Manual',
-          broker_type: broker?.type || null,
-          portfolio_ids: [pId],
-        }),
+  const createAccount = useCallback(async (portfolioId) => {
+    return ensureOnce(accountIdRef, createAccountPromiseRef, async () => {
+      const account = await apiPost('/accounts', {
+        name: broker?.name || 'Manual Account',
+        account_type: broker?.defaultAccountType || 'Investment',
+        currency: broker?.defaultCurrency || 'USD',
+        institution: broker?.name || 'Manual',
+        broker_type: broker?.type || null,
+        portfolio_ids: [portfolioId],
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create account');
-      }
-      const account = await response.json();
       accountIdRef.current = account.id;
       return account.id;
-    }
-
-    const promise = doCreate().finally(() => { createPromiseRef.current = null; });
-    createPromiseRef.current = promise;
-    return promise;
+    });
   }, [broker]);
 
-  // ---- Import logic ----
+  const saveCredentials = useCallback(async (accountId, credentials) => {
+    const response = await api(`/brokers/${broker.type}/credentials/${accountId}`, {
+      method: 'PUT',
+      body: JSON.stringify(credentials),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Failed to save credentials');
+    }
+  }, [broker]);
+
+  const importViaOnboard = useCallback(async (accountId) => {
+    const response = await api(`/brokers/${broker.type}/onboard/${accountId}`, { method: 'POST' });
+
+    if (response.status === 422) {
+      const err = await response.json();
+      if (err.extra?.missing_sections) {
+        setSectionValidation({ missing: err.extra.missing_sections, required: err.extra.required_sections });
+        return null;
+      }
+      throw new Error(err.message || 'Import validation failed');
+    }
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Import failed');
+    }
+
+    const results = await response.json();
+    const isFullHistory = results.import_mode === 'full_history';
+    return isFullHistory ? transformImportResults(results) : transformSnapshotResults(results);
+  }, [broker]);
+
+  const importWithCredentials = useCallback(async (accountId, credentials) => {
+    await saveCredentials(accountId, credentials);
+
+    if (broker.type === 'ibkr' || broker.supportsSmartOnboarding) {
+      return await importViaOnboard(accountId);
+    }
+
+    if (broker.supportsSnapshot) {
+      const results = await apiPost(`/brokers/${broker.type}/snapshot/${accountId}`);
+      return transformSnapshotResults(results);
+    }
+
+    const results = await apiPost(`/brokers/${broker.type}/import/${accountId}`);
+    return transformImportResults(results);
+  }, [broker, saveCredentials, importViaOnboard]);
+
+  const importWithFile = useCallback(async (accountId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('broker_type', broker?.type || 'manual');
+
+    const results = await apiPost(`/broker-data/upload/${accountId}`, formData);
+    return transformFileUploadResults(results);
+  }, [broker]);
 
   const handleDataComplete = useCallback(async (data) => {
     setIsImporting(true);
 
     try {
-      const pId = await ensurePortfolio();
-      const accountId = await createAccount(pId);
+      const portfolioId = await ensurePortfolio();
+      const accountId = await createAccount(portfolioId);
 
+      let results = null;
       if (data.credentials) {
-        const credResponse = await api(`/brokers/${broker.type}/credentials/${accountId}`, {
-          method: 'PUT',
-          body: JSON.stringify(data.credentials),
-        });
-        if (!credResponse.ok) {
-          const err = await credResponse.json();
-          throw new Error(err.message || 'Failed to save credentials');
-        }
-
-        let results;
-        if (broker.type === 'ibkr' || broker.supportsSmartOnboarding) {
-          const importResponse = await api(`/brokers/${broker.type}/onboard/${accountId}`, { method: 'POST' });
-
-          if (importResponse.status === 422) {
-            const err = await importResponse.json();
-            if (err.extra?.missing_sections) {
-              setSectionValidation({ missing: err.extra.missing_sections, required: err.extra.required_sections });
-              setIsImporting(false);
-              return;
-            }
-            throw new Error(err.message || 'Import validation failed');
-          }
-          if (!importResponse.ok) {
-            const err = await importResponse.json();
-            throw new Error(err.message || 'Import failed');
-          }
-
-          results = await importResponse.json();
-          const isFullHistory = results.import_mode === 'full_history';
-          setImportResults(isFullHistory ? transformImportResults(results) : transformSnapshotResults(results));
-        } else if (broker.supportsSnapshot) {
-          const snapshotResponse = await api(`/brokers/${broker.type}/snapshot/${accountId}`, { method: 'POST' });
-          if (!snapshotResponse.ok) {
-            const err = await snapshotResponse.json();
-            throw new Error(err.message || 'Snapshot import failed');
-          }
-          results = await snapshotResponse.json();
-          setImportResults(transformSnapshotResults(results));
-        } else {
-          const importResponse = await api(`/brokers/${broker.type}/import/${accountId}`, { method: 'POST' });
-          if (!importResponse.ok) {
-            const err = await importResponse.json();
-            throw new Error(err.message || 'Import failed');
-          }
-          results = await importResponse.json();
-          setImportResults(transformImportResults(results));
-        }
-
-        setIsImporting(false);
-        setCurrentStep(5);
+        results = await importWithCredentials(accountId, data.credentials);
       } else if (data.file) {
-        const formData = new FormData();
-        formData.append('file', data.file);
-        formData.append('broker_type', broker?.type || 'manual');
-
-        const uploadResponse = await api(`/broker-data/upload/${accountId}`, {
-          method: 'POST',
-          body: formData,
-        });
-        if (!uploadResponse.ok) {
-          const err = await uploadResponse.json();
-          throw new Error(err.message || 'File upload failed');
-        }
-        const results = await uploadResponse.json();
-        setImportResults(transformFileUploadResults(results));
-        setIsImporting(false);
-        setCurrentStep(5);
+        results = await importWithFile(accountId, data.file);
       }
+
+      if (results === null) {
+        setIsImporting(false);
+        return;
+      }
+
+      setImportResults(results);
+      setIsImporting(false);
+      setCurrentStep(5);
     } catch (error) {
       setIsImporting(false);
       showNotification(`Import failed: ${error.message}`);
     }
-  }, [broker, ensurePortfolio, createAccount, showNotification]);
+  }, [ensurePortfolio, createAccount, importWithCredentials, importWithFile, showNotification]);
 
   const handleTestCredentials = useCallback(async (credentials) => {
-    const testResponse = await api(`/brokers/${broker.type}/test-credentials`, {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-    const result = await testResponse.json();
+    const result = await apiPost(`/brokers/${broker.type}/test-credentials`, credentials);
     if (result.status !== 'success') {
       throw new Error(result.message || 'Credential test failed');
     }
     return result;
   }, [broker]);
-
-  // ---- Finish handlers ----
 
   const handleGoToDashboard = useCallback(async (portfolioName) => {
     if (portfolioIdRef.current && portfolioName && portfolioName !== 'My Portfolio') {
@@ -308,13 +290,11 @@ export function OnboardingFlow() {
     setCategory(null);
     setBroker(null);
     accountIdRef.current = null;
-    createPromiseRef.current = null;
+    createAccountPromiseRef.current = null;
     setImportResults(null);
     setSectionValidation(null);
     setCurrentStep(2);
   }, []);
-
-  // ---- Render step content ----
 
   function renderStepContent() {
     if (isImporting) {

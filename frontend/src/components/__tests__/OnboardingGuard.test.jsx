@@ -22,20 +22,18 @@ function renderWithRouter(initialPath, routes) {
 }
 
 describe('OnboardingGuard', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
+
+  const ROUTES = [
+    <Route key="/" path="/" element={
+      <OnboardingGuard><div>Dashboard</div></OnboardingGuard>
+    } />,
+    <Route key="/onboarding" path="/onboarding" element={<div>Onboarding</div>} />,
+  ];
 
   it('renders children when user has accounts', async () => {
     api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 1, items: [{ id: 1 }] }) });
-
-    renderWithRouter('/', [
-      <Route key="/" path="/" element={
-        <OnboardingGuard><div>Dashboard</div></OnboardingGuard>
-      } />,
-      <Route key="/onboarding" path="/onboarding" element={<div>Onboarding</div>} />,
-    ]);
-
+    renderWithRouter('/', ROUTES);
     await waitFor(() => {
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
@@ -43,14 +41,7 @@ describe('OnboardingGuard', () => {
 
   it('redirects to /onboarding when user has zero accounts', async () => {
     api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 0, items: [] }) });
-
-    renderWithRouter('/', [
-      <Route key="/" path="/" element={
-        <OnboardingGuard><div>Dashboard</div></OnboardingGuard>
-      } />,
-      <Route key="/onboarding" path="/onboarding" element={<div>Onboarding</div>} />,
-    ]);
-
+    renderWithRouter('/', ROUTES);
     await waitFor(() => {
       expect(screen.getByText('Onboarding')).toBeInTheDocument();
     });

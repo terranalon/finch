@@ -66,6 +66,19 @@ function AppLayout({ children }) {
   );
 }
 
+// Protected route with onboarding guard and app layout
+function GuardedLayout({ children }) {
+  return (
+    <ProtectedRoute>
+      <OnboardingGuard>
+        <AppLayout>
+          {children}
+        </AppLayout>
+      </OnboardingGuard>
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -109,98 +122,22 @@ function App() {
                 <Route path="/" element={
                   <AuthSwitchRoute
                     authenticated={
-                      <ProtectedRoute>
-                        <OnboardingGuard>
-                          <AppLayout>
-                            <Overview />
-                          </AppLayout>
-                        </OnboardingGuard>
-                      </ProtectedRoute>
+                      <GuardedLayout>
+                        <Overview />
+                      </GuardedLayout>
                     }
                     unauthenticated={<LandingPage />}
                   />
                 } />
-                <Route path="/holdings" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Holdings />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/activity" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Activity />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Insights />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/assets" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Assets />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/assets/:id" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <AssetDetail />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/accounts" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Accounts />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/accounts/:id" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <AccountDetail />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/portfolios" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Portfolios />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute>
-                    <OnboardingGuard>
-                      <AppLayout>
-                        <Settings />
-                      </AppLayout>
-                    </OnboardingGuard>
-                  </ProtectedRoute>
-                } />
+                <Route path="/holdings" element={<GuardedLayout><Holdings /></GuardedLayout>} />
+                <Route path="/activity" element={<GuardedLayout><Activity /></GuardedLayout>} />
+                <Route path="/insights" element={<GuardedLayout><Insights /></GuardedLayout>} />
+                <Route path="/assets" element={<GuardedLayout><Assets /></GuardedLayout>} />
+                <Route path="/assets/:id" element={<GuardedLayout><AssetDetail /></GuardedLayout>} />
+                <Route path="/accounts" element={<GuardedLayout><Accounts /></GuardedLayout>} />
+                <Route path="/accounts/:id" element={<GuardedLayout><AccountDetail /></GuardedLayout>} />
+                <Route path="/portfolios" element={<GuardedLayout><Portfolios /></GuardedLayout>} />
+                <Route path="/settings" element={<GuardedLayout><Settings /></GuardedLayout>} />
 
                 {/* Catch-all redirect */}
                 <Route path="*" element={<Navigate to="/" replace />} />
