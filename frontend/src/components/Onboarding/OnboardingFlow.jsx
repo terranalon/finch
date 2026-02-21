@@ -100,7 +100,8 @@ export function OnboardingFlow() {
   const [broker, setBroker] = useState(null);
 
   // Resource IDs (lazy creation)
-  const [portfolioId, setPortfolioId] = useState(null);
+  const portfolioIdRef = useRef(null);
+  const createPortfolioPromiseRef = useRef(null);
   const accountIdRef = useRef(null);
   const createPromiseRef = useRef(null);
 
@@ -137,20 +138,27 @@ export function OnboardingFlow() {
   // ---- Lazy resource creation ----
 
   const ensurePortfolio = useCallback(async () => {
-    if (portfolioId) return portfolioId;
+    if (portfolioIdRef.current) return portfolioIdRef.current;
+    if (createPortfolioPromiseRef.current) return createPortfolioPromiseRef.current;
 
-    const response = await api('/portfolios', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'My Portfolio' }),
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create portfolio');
+    async function doCreate() {
+      const response = await api('/portfolios', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'My Portfolio' }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create portfolio');
+      }
+      const portfolio = await response.json();
+      portfolioIdRef.current = portfolio.id;
+      return portfolio.id;
     }
-    const portfolio = await response.json();
-    setPortfolioId(portfolio.id);
-    return portfolio.id;
-  }, [portfolioId]);
+
+    const promise = doCreate().finally(() => { createPortfolioPromiseRef.current = null; });
+    createPortfolioPromiseRef.current = promise;
+    return promise;
+  }, []);
 
   const createAccount = useCallback(async (pId) => {
     if (accountIdRef.current) return accountIdRef.current;
@@ -281,15 +289,15 @@ export function OnboardingFlow() {
   // ---- Finish handlers ----
 
   const handleGoToDashboard = useCallback(async (portfolioName) => {
-    if (portfolioId && portfolioName && portfolioName !== 'My Portfolio') {
-      api(`/portfolios/${portfolioId}`, {
+    if (portfolioIdRef.current && portfolioName && portfolioName !== 'My Portfolio') {
+      api(`/portfolios/${portfolioIdRef.current}`, {
         method: 'PUT',
         body: JSON.stringify({ name: portfolioName }),
       }).catch(() => {});
     }
     await refetchPortfolios();
     navigate('/');
-  }, [portfolioId, refetchPortfolios, navigate]);
+  }, [refetchPortfolios, navigate]);
 
   const handleStepClick = useCallback((stepNum) => {
     if (accountIdRef.current || isImporting) return;
