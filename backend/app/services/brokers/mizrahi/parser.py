@@ -91,9 +91,7 @@ class MizrahiParser(BaseBrokerParser):
             text = text[1:]
         return text
 
-    def _parse_html_tables(
-        self, file_content: bytes
-    ) -> tuple[str, list[dict[str, str]]]:
+    def _parse_html_tables(self, file_content: bytes) -> tuple[str, list[dict[str, str]]]:
         """Parse HTML tables from file content.
 
         Returns:
@@ -107,8 +105,7 @@ class MizrahiParser(BaseBrokerParser):
 
         if len(extractor.tables) < 2:
             raise ValueError(
-                "Mizrahi file must contain at least 2 tables "
-                "(header and transactions)"
+                "Mizrahi file must contain at least 2 tables (header and transactions)"
             )
 
         # Table 0: header with account info

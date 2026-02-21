@@ -159,9 +159,7 @@ class TestMizrahiFullParse:
     def test_ils_buy_continuous(self, parsed):
         """ILS continuous buy: El Al, price in Agorot -> ILS."""
         el_al = [
-            t
-            for t in parsed.transactions
-            if "1087824" in t.symbol and t.transaction_type == "Buy"
+            t for t in parsed.transactions if "1087824" in t.symbol and t.transaction_type == "Buy"
         ]
         assert len(el_al) == 1
         txn = el_al[0]
@@ -173,9 +171,7 @@ class TestMizrahiFullParse:
     def test_ils_sell_continuous(self, parsed):
         """ILS continuous sell: TA-35 tracker."""
         ta35 = [
-            t
-            for t in parsed.transactions
-            if "1143700" in t.symbol and t.transaction_type == "Sell"
+            t for t in parsed.transactions if "1143700" in t.symbol and t.transaction_type == "Sell"
         ]
         assert len(ta35) == 1
         txn = ta35[0]
@@ -186,9 +182,7 @@ class TestMizrahiFullParse:
     def test_usd_buy(self, parsed):
         """USD buy: NVIDIA, price in dollars (no conversion)."""
         nvda_buys = [
-            t
-            for t in parsed.transactions
-            if "0047241" in t.symbol and t.transaction_type == "Buy"
+            t for t in parsed.transactions if "0047241" in t.symbol and t.transaction_type == "Buy"
         ]
         assert len(nvda_buys) == 1
         txn = nvda_buys[0]
@@ -199,9 +193,7 @@ class TestMizrahiFullParse:
     def test_usd_sell(self, parsed):
         """USD sell: NVIDIA, quantity should be positive (abs)."""
         nvda_sells = [
-            t
-            for t in parsed.transactions
-            if "0047241" in t.symbol and t.transaction_type == "Sell"
+            t for t in parsed.transactions if "0047241" in t.symbol and t.transaction_type == "Sell"
         ]
         assert len(nvda_sells) == 1
         txn = nvda_sells[0]
@@ -210,9 +202,7 @@ class TestMizrahiFullParse:
     def test_usd_buy_fees_include_correspondent(self, parsed):
         """USD transactions should combine commission + correspondent fee."""
         nvda_buys = [
-            t
-            for t in parsed.transactions
-            if "0047241" in t.symbol and t.transaction_type == "Buy"
+            t for t in parsed.transactions if "0047241" in t.symbol and t.transaction_type == "Buy"
         ]
         txn = nvda_buys[0]
         # commission 44.06 + correspondent 4.00
@@ -249,9 +239,7 @@ class TestMizrahiFullParse:
     def test_all_symbols_use_tase_prefix(self, parsed):
         """All symbols should use TASE:{number} format."""
         for txn in parsed.transactions:
-            assert txn.symbol.startswith("TASE:"), (
-                f"Symbol {txn.symbol} missing TASE: prefix"
-            )
+            assert txn.symbol.startswith("TASE:"), f"Symbol {txn.symbol} missing TASE: prefix"
 
     def test_raw_data_preserved(self, parsed):
         """Raw data should contain original Hebrew action type."""
@@ -322,7 +310,7 @@ class TestMizrahiValidation:
             "<html><body>"
             "<table><tr><td>header</td></tr></table>"
             "<table>"
-            '<tr><td>תאריך פעולה</td><td>סוג פעולה</td><td>מספר נייר</td></tr>'
+            "<tr><td>תאריך פעולה</td><td>סוג פעולה</td><td>מספר נייר</td></tr>"
             "<tr><td>15/01/26</td><td></td><td>123</td></tr>"
             "</table>"
             "</body></html>"
