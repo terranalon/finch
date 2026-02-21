@@ -10,6 +10,16 @@
 
 const API_BASE = 'http://localhost:8000/api';
 
+class ApiError extends Error {
+  constructor(message, { errorCode, details, extra } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.errorCode = errorCode ?? null;
+    this.details = details ?? null;
+    this.extra = extra ?? null;
+  }
+}
+
 /**
  * Get stored auth token
  */
@@ -147,8 +157,12 @@ export async function api(endpoint, options = {}) {
  */
 async function handleResponse(response, defaultError) {
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || defaultError);
+    const body = await response.json();
+    throw new ApiError(body.message || defaultError, {
+      errorCode: body.error,
+      details: body.details,
+      extra: body.extra,
+    });
   }
   return response.json();
 }
@@ -473,4 +487,5 @@ export async function deleteDataSource(sourceId) {
   return handleResponse(response, 'Failed to delete data source');
 }
 
+export { ApiError };
 export default api;
