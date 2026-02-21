@@ -25,6 +25,8 @@ import ResetPassword from './pages/ResetPassword'
 import MfaVerify from './pages/MfaVerify'
 import LandingPage from './pages/LandingPage'
 import AuthSwitchRoute from './components/AuthSwitchRoute'
+import { OnboardingFlow } from './components/Onboarding'
+import { OnboardingGuard } from './components/OnboardingGuard'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -96,14 +98,23 @@ function App() {
                   <MfaVerify />
                 } />
 
+                {/* Onboarding: full-screen flow for new users, no navbar */}
+                <Route path="/onboarding" element={
+                  <ProtectedRoute>
+                    <OnboardingFlow />
+                  </ProtectedRoute>
+                } />
+
                 {/* Home: landing page for visitors, dashboard for authenticated users */}
                 <Route path="/" element={
                   <AuthSwitchRoute
                     authenticated={
                       <ProtectedRoute>
-                        <AppLayout>
-                          <Overview />
-                        </AppLayout>
+                        <OnboardingGuard>
+                          <AppLayout>
+                            <Overview />
+                          </AppLayout>
+                        </OnboardingGuard>
                       </ProtectedRoute>
                     }
                     unauthenticated={<LandingPage />}
@@ -111,65 +122,83 @@ function App() {
                 } />
                 <Route path="/holdings" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Holdings />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Holdings />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/activity" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Activity />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Activity />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/insights" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Insights />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Insights />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/assets" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Assets />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Assets />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/assets/:id" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <AssetDetail />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <AssetDetail />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/accounts" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Accounts />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Accounts />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/accounts/:id" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <AccountDetail />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <AccountDetail />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/portfolios" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Portfolios />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Portfolios />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={
                   <ProtectedRoute>
-                    <AppLayout>
-                      <Settings />
-                    </AppLayout>
+                    <OnboardingGuard>
+                      <AppLayout>
+                        <Settings />
+                      </AppLayout>
+                    </OnboardingGuard>
                   </ProtectedRoute>
                 } />
 
