@@ -59,10 +59,6 @@ class _TableExtractor(HTMLParser):
         if self._in_cell:
             self._current_cell += data
 
-    def handle_entityref(self, name: str) -> None:
-        if self._in_cell and name == "nbsp":
-            pass  # Treat &nbsp; as empty
-
 
 class MizrahiParser(BaseBrokerParser):
     """Parser for Mizrahi Tefahot .xls (HTML) broker exports."""
@@ -110,12 +106,7 @@ class MizrahiParser(BaseBrokerParser):
 
         # Table 0: header with account info
         header_table = extractor.tables[0]
-        account_info = ""
-        for row in header_table:
-            for cell in row:
-                if cell:
-                    account_info += " " + cell
-        account_info = account_info.strip()
+        account_info = " ".join(cell for row in header_table for cell in row if cell)
 
         # Table 1: transaction data
         data_table = extractor.tables[1]
@@ -156,12 +147,10 @@ class MizrahiParser(BaseBrokerParser):
         except InvalidOperation:
             return Decimal("0")
 
-    def _parse_row(self, row: dict[str, str]) -> tuple[str, ParsedTransaction] | None:
-        """Parse a single data row into a categorized ParsedTransaction.
+    def _parse_row(self, row: dict[str, str]) -> ParsedTransaction | None:
+        """Parse a single data row into a ParsedTransaction.
 
-        Returns:
-            Tuple of (category, transaction) where category is "trade",
-            or None if the row should be skipped.
+        Returns None if the row should be skipped (empty or unknown action type).
         """
         action_raw = row.get("סוג פעולה", "").strip()
         if not action_raw:
@@ -206,26 +195,21 @@ class MizrahiParser(BaseBrokerParser):
             "currency_code": currency_code,
         }
 
-        return (
-            "trade",
-            ParsedTransaction(
-                trade_date=trade_date,
-                symbol=symbol,
-                transaction_type=action_type,
-                quantity=abs(quantity_raw) if quantity_raw else None,
-                price_per_unit=price if price else None,
-                amount=amount,
-                fees=fees,
-                currency=currency,
-                notes=security_name,
-                raw_data=raw_data,
-            ),
+        return ParsedTransaction(
+            trade_date=trade_date,
+            symbol=symbol,
+            transaction_type=action_type,
+            quantity=abs(quantity_raw) if quantity_raw else None,
+            price_per_unit=price if price else None,
+            amount=amount,
+            fees=fees,
+            currency=currency,
+            notes=security_name,
+            raw_data=raw_data,
         )
 
-    def extract_date_range(self, file_content: bytes) -> tuple[date, date]:
-        """Extract date range from transaction dates."""
-        _header, rows = self._parse_html_tables(file_content)
-
+    def _date_range_from_rows(self, rows: list[dict[str, str]]) -> tuple[date, date]:
+        """Extract min/max trade dates from pre-parsed rows."""
         dates: list[date] = []
         for row in rows:
             parsed = self._parse_date(row.get("תאריך פעולה"))
@@ -237,20 +221,22 @@ class MizrahiParser(BaseBrokerParser):
 
         return min(dates), max(dates)
 
+    def extract_date_range(self, file_content: bytes) -> tuple[date, date]:
+        """Extract date range from transaction dates."""
+        _header, rows = self._parse_html_tables(file_content)
+        return self._date_range_from_rows(rows)
+
     def parse(self, file_content: bytes) -> BrokerImportData:
         """Parse Mizrahi .xls file into normalized import data."""
         _header, rows = self._parse_html_tables(file_content)
 
         transactions: list[ParsedTransaction] = []
-
         for row in rows:
-            result = self._parse_row(row)
-            if result is None:
-                continue
-            _category, txn = result
-            transactions = [*transactions, txn]
+            txn = self._parse_row(row)
+            if txn is not None:
+                transactions = [*transactions, txn]
 
-        start_date, end_date = self.extract_date_range(file_content)
+        start_date, end_date = self._date_range_from_rows(rows)
 
         logger.info("Parsed %d transactions from Mizrahi file", len(transactions))
 

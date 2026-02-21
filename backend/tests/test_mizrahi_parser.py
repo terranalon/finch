@@ -13,6 +13,22 @@ from app.services.brokers.mizrahi.constants import (
 from app.services.brokers.mizrahi.parser import MizrahiParser
 
 
+@pytest.fixture
+def parser():
+    return MizrahiParser()
+
+
+@pytest.fixture
+def sample_content():
+    fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
+    return fixture_path.read_bytes()
+
+
+@pytest.fixture
+def parsed(parser, sample_content):
+    return parser.parse(sample_content)
+
+
 class TestConstants:
     """Test constant mappings."""
 
@@ -60,15 +76,6 @@ class TestMizrahiParserMetadata:
 class TestMizrahiHTMLParsing:
     """Test HTML table extraction from UTF-16 LE encoded .xls files."""
 
-    @pytest.fixture
-    def parser(self):
-        return MizrahiParser()
-
-    @pytest.fixture
-    def sample_content(self):
-        fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
-        return fixture_path.read_bytes()
-
     def test_decode_utf16le(self, parser, sample_content):
         """File should decode as UTF-16 LE with BOM."""
         header, rows = parser._parse_html_tables(sample_content)
@@ -95,15 +102,6 @@ class TestMizrahiHTMLParsing:
 
 class TestMizrahiDateRange:
     """Test date range extraction."""
-
-    @pytest.fixture
-    def parser(self):
-        return MizrahiParser()
-
-    @pytest.fixture
-    def sample_content(self):
-        fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
-        return fixture_path.read_bytes()
 
     def test_extract_date_range(self, parser, sample_content):
         start_date, end_date = parser.extract_date_range(sample_content)
@@ -133,19 +131,6 @@ class TestMizrahiDateRange:
 
 class TestMizrahiFullParse:
     """Test full file parsing with fixture data."""
-
-    @pytest.fixture
-    def parser(self):
-        return MizrahiParser()
-
-    @pytest.fixture
-    def sample_content(self):
-        fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
-        return fixture_path.read_bytes()
-
-    @pytest.fixture
-    def parsed(self, parser, sample_content):
-        return parser.parse(sample_content)
 
     def test_returns_broker_import_data(self, parsed):
         from app.services.brokers.base_broker_parser import BrokerImportData
@@ -273,15 +258,6 @@ class TestMizrahiRegistry:
 
 class TestMizrahiValidation:
     """Test file validation and edge cases."""
-
-    @pytest.fixture
-    def parser(self):
-        return MizrahiParser()
-
-    @pytest.fixture
-    def sample_content(self):
-        fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
-        return fixture_path.read_bytes()
 
     def test_validate_file_accepts_xls(self, parser, sample_content):
         is_valid, error = parser.validate_file(sample_content, "report.xls")
