@@ -281,3 +281,52 @@ class TestMizrahiRegistry:
         )
 
         assert "mizrahi" in IsraeliSecuritiesImportService.supported_broker_types()
+
+
+class TestMizrahiValidation:
+    """Test file validation and edge cases."""
+
+    @pytest.fixture
+    def parser(self):
+        return MizrahiParser()
+
+    @pytest.fixture
+    def sample_content(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "mizrahi_sample.xls"
+        return fixture_path.read_bytes()
+
+    def test_validate_file_accepts_xls(self, parser, sample_content):
+        is_valid, error = parser.validate_file(sample_content, "report.xls")
+        assert is_valid is True
+        assert error is None
+
+    def test_validate_file_rejects_xlsx(self, parser, sample_content):
+        is_valid, error = parser.validate_file(sample_content, "report.xlsx")
+        assert is_valid is False
+        assert "Unsupported file type" in error
+
+    def test_validate_file_rejects_csv(self, parser, sample_content):
+        is_valid, error = parser.validate_file(sample_content, "report.csv")
+        assert is_valid is False
+
+    def test_parse_raises_on_too_few_tables(self, parser):
+        """File with only one table should raise ValueError."""
+        html = "<html><body><table><tr><td>only one</td></tr></table></body></html>"
+        content = b"\xff\xfe" + html.encode("utf-16-le")
+        with pytest.raises(ValueError, match="at least 2 tables"):
+            parser.parse(content)
+
+    def test_parse_empty_rows_skipped(self, parser):
+        """Rows with empty action type should be skipped, yielding 0 transactions."""
+        html = (
+            "<html><body>"
+            "<table><tr><td>header</td></tr></table>"
+            "<table>"
+            '<tr><td>תאריך פעולה</td><td>סוג פעולה</td><td>מספר נייר</td></tr>'
+            "<tr><td>15/01/26</td><td></td><td>123</td></tr>"
+            "</table>"
+            "</body></html>"
+        )
+        content = b"\xff\xfe" + html.encode("utf-16-le")
+        result = parser.parse(content)
+        assert len(result.transactions) == 0
