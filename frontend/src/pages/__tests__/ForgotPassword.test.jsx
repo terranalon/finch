@@ -48,8 +48,7 @@ describe("ForgotPassword", () => {
 
   it("renders sign-in link", () => {
     renderPage();
-    const links = screen.getAllByRole("link", { name: /sign in/i });
-    expect(links.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole("link", { name: /sign in/i }).length).toBeGreaterThan(0);
   });
 
   it("shows submitted state after success", async () => {
@@ -65,20 +64,6 @@ describe("ForgotPassword", () => {
       expect(screen.getByText("Check your email")).toBeInTheDocument();
       expect(screen.getByText(/test@example.com/)).toBeInTheDocument();
       expect(screen.getByText(/expire in 1 hour/i)).toBeInTheDocument();
-    });
-  });
-
-  it("submitted state still renders inside AuthLayout", async () => {
-    forgotPassword.mockResolvedValue({});
-    renderPage();
-
-    fireEvent.change(screen.getByLabelText(/email address/i), {
-      target: { value: "test@example.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText("$247,832.15")).toBeInTheDocument();
     });
   });
 

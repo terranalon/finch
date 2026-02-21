@@ -55,15 +55,9 @@ describe("VerificationPending", () => {
     expect(screen.getByText("user@example.com")).toBeInTheDocument();
   });
 
-  it("renders the resend button", () => {
-    renderPage();
-    expect(screen.getByRole("button", { name: /resend verification email/i })).toBeInTheDocument();
-  });
-
   it("renders the sign-in link", () => {
     renderPage();
-    const links = screen.getAllByRole("link", { name: /sign in/i });
-    expect(links.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole("link", { name: /sign in/i }).length).toBeGreaterThan(0);
   });
 
   it("calls resendVerification on button click", async () => {

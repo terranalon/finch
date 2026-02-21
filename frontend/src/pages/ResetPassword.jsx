@@ -6,8 +6,11 @@
 
 import { useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { AuthLayout } from '../components/auth';
+import { AuthLayout, AuthAlert, SuccessIcon, ErrorIcon } from '../components/auth';
 import { resetPassword } from '../lib/api';
+
+const INPUT_CLASS =
+  'w-full px-3 py-2 text-sm border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
@@ -55,20 +58,7 @@ export default function ResetPassword() {
       <AuthLayout page="reset-password">
         <div className="text-center">
           <div className="py-4">
-            <svg
-              className="mx-auto h-16 w-16 text-[var(--negative)]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <ErrorIcon />
           </div>
 
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -94,20 +84,7 @@ export default function ResetPassword() {
       <AuthLayout page="reset-password">
         <div className="text-center">
           <div className="py-4">
-            <svg
-              className="mx-auto h-16 w-16 text-[var(--positive)]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <SuccessIcon />
           </div>
 
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -138,11 +115,7 @@ export default function ResetPassword() {
       </p>
 
       <form onSubmit={handleSubmit}>
-        {error && (
-          <div className="rounded-md bg-[var(--negative-bg)] p-4 mb-4" role="alert">
-            <p className="text-sm text-[var(--negative)]">{error}</p>
-          </div>
-        )}
+        <AuthAlert message={error} />
 
         <div className="space-y-4">
           <div>
@@ -157,7 +130,7 @@ export default function ResetPassword() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              className={INPUT_CLASS}
               placeholder="At least 8 characters"
             />
             <p className="mt-1 text-xs text-[var(--text-tertiary)]">
@@ -177,7 +150,7 @@ export default function ResetPassword() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] placeholder-[var(--text-tertiary)] text-[var(--text-primary)] bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              className={INPUT_CLASS}
               placeholder="Confirm your password"
             />
           </div>

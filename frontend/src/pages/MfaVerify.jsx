@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts';
-import { AuthLayout } from '../components/auth';
+import { AuthLayout, AuthAlert } from '../components/auth';
 import { verifyMfa, sendMfaEmailCode } from '../lib/api';
 
 function getCodeLabel(method) {
@@ -180,11 +180,7 @@ export default function MfaVerify() {
       </p>
 
       <form onSubmit={handleSubmit}>
-        {error && (
-          <div className="rounded-md bg-[var(--negative-bg)] p-4 mb-4" role="alert">
-            <p className="text-sm text-[var(--negative)]">{error}</p>
-          </div>
-        )}
+        <AuthAlert message={error} />
 
         {/* Method selector - only show if user wants to switch */}
         {methods && methods.length > 1 && showMethodSelector && (

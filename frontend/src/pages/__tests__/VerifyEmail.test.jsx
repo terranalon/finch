@@ -26,23 +26,21 @@ describe("VerifyEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useTheme.mockReturnValue({ theme: "light", setTheme: vi.fn() });
+    verifyEmail.mockReturnValue(new Promise(() => {}));
   });
 
   it("renders inside AuthLayout with split-panel branding", () => {
-    verifyEmail.mockReturnValue(new Promise(() => {})); // never resolves
     renderPage();
     expect(screen.getByText("$247,832.15")).toBeInTheDocument();
   });
 
   it("does not render a ThemeToggle", () => {
-    verifyEmail.mockReturnValue(new Promise(() => {}));
     renderPage();
     expect(screen.queryByTitle(/toggle theme/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/toggle.*theme/i)).not.toBeInTheDocument();
   });
 
   it("shows verifying state initially", () => {
-    verifyEmail.mockReturnValue(new Promise(() => {}));
     renderPage();
     expect(screen.getByText(/verifying your email/i)).toBeInTheDocument();
   });
@@ -53,8 +51,7 @@ describe("VerifyEmail", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Email verified!")).toBeInTheDocument();
-      const links = screen.getAllByRole("link", { name: /sign in/i });
-      expect(links.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByRole("link", { name: /sign in/i }).length).toBeGreaterThan(0);
     });
   });
 

@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { AuthLayout } from '../components/auth';
+import { AuthLayout, SuccessIcon, ErrorIcon } from '../components/auth';
 import { verifyEmail } from '../lib/api';
 
 export default function VerifyEmail() {
@@ -51,20 +51,7 @@ export default function VerifyEmail() {
         {status === 'success' && (
           <div className="space-y-6">
             <div className="py-4">
-              <svg
-                className="mx-auto h-16 w-16 text-[var(--positive)]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <SuccessIcon />
             </div>
             <h2 className="text-xl font-semibold text-[var(--text-primary)]">
               Email verified!
@@ -84,20 +71,7 @@ export default function VerifyEmail() {
         {status === 'error' && (
           <div className="space-y-6">
             <div className="py-4">
-              <svg
-                className="mx-auto h-16 w-16 text-[var(--negative)]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <ErrorIcon />
             </div>
             <h2 className="text-xl font-semibold text-[var(--text-primary)]">
               Verification failed

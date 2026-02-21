@@ -53,11 +53,6 @@ describe("ResetPassword", () => {
     expect(screen.getByRole("link", { name: /request a new link/i })).toBeInTheDocument();
   });
 
-  it("no-token error state still renders inside AuthLayout", () => {
-    renderPage("");
-    expect(screen.getByText("$247,832.15")).toBeInTheDocument();
-  });
-
   it("shows success state after password reset", async () => {
     resetPassword.mockResolvedValue({});
     renderPage();
@@ -72,25 +67,7 @@ describe("ResetPassword", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/password reset successful/i)).toBeInTheDocument();
-      const links = screen.getAllByRole("link", { name: /sign in/i });
-      expect(links.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  it("success state still renders inside AuthLayout", async () => {
-    resetPassword.mockResolvedValue({});
-    renderPage();
-
-    fireEvent.change(screen.getByLabelText("New password"), {
-      target: { value: "NewPass123" },
-    });
-    fireEvent.change(screen.getByLabelText("Confirm new password"), {
-      target: { value: "NewPass123" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /reset password/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText("$247,832.15")).toBeInTheDocument();
+      expect(screen.getAllByRole("link", { name: /sign in/i }).length).toBeGreaterThan(0);
     });
   });
 

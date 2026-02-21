@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { AuthLayout } from '../components/auth';
+import { AuthLayout, AuthAlert, EmailIcon } from '../components/auth';
 import { resendVerification } from '../lib/api';
 
 export default function VerificationPending() {
@@ -54,33 +54,11 @@ export default function VerificationPending() {
         </p>
 
         <div className="py-6">
-          <svg
-            className="mx-auto h-16 w-16 text-accent"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+          <EmailIcon />
         </div>
 
-        {message && (
-          <div className="rounded-md bg-[var(--positive-bg)] p-4 mb-4">
-            <p className="text-sm text-[var(--positive)]">{message}</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-md bg-[var(--negative-bg)] p-4 mb-4">
-            <p className="text-sm text-[var(--negative)]">{error}</p>
-          </div>
-        )}
+        <AuthAlert message={message} variant="success" />
+        <AuthAlert message={error} />
 
         <button
           onClick={handleResend}
