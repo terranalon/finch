@@ -318,12 +318,7 @@ export async function verifyMfa(tempToken, code, method) {
     body: JSON.stringify({ temp_token: tempToken, code, method }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'MFA verification failed');
-  }
-
-  const data = await response.json();
+  const data = await handleResponse(response, 'MFA verification failed');
   setToken(data.access_token);
   setRefreshToken(data.refresh_token);
   return data;
