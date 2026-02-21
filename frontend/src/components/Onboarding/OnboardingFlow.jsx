@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { usePortfolio } from '../../contexts';
 import { api } from '../../lib/api';
@@ -18,6 +19,17 @@ import { SetupGuidePanel } from '../AccountWizard/SetupGuidePanel';
 import { CATEGORY_IDS } from '../AccountWizard/constants/index.js';
 
 const STEPS = ['Welcome', 'Type', 'Broker', 'Connect', 'Results', 'Finish'];
+
+// Placeholder broker for the manual account path — satisfies DataConnectionStep's
+// property reads (hasApi, supportedFormats) without a real broker selection.
+const MANUAL_BROKER = {
+  name: 'Manual',
+  type: null,
+  hasApi: false,
+  supportedFormats: ['.csv', '.xlsx'],
+  supportsSnapshot: false,
+  supportsSmartOnboarding: false,
+};
 
 function FinchLogo() {
   return (
@@ -117,6 +129,7 @@ function transformFileUploadResults(results) {
 
 export function OnboardingFlow() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { refetchPortfolios } = usePortfolio();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -142,7 +155,7 @@ export function OnboardingFlow() {
   const handleCategorySelect = useCallback((cat) => {
     setCategory(cat);
     if (cat.id === CATEGORY_IDS.MANUAL) {
-      setBroker(null);
+      setBroker(MANUAL_BROKER);
       setCurrentStep(4);
     } else {
       setCurrentStep(3);
@@ -278,8 +291,11 @@ export function OnboardingFlow() {
       }).catch(() => {});
     }
     await refetchPortfolios();
+    // Optimistically update the accounts guard cache so OnboardingGuard
+    // doesn't redirect back to /onboarding on the next render.
+    queryClient.setQueryData(['accounts', 'hasAny'], true);
     navigate('/');
-  }, [refetchPortfolios, navigate]);
+  }, [refetchPortfolios, navigate, queryClient]);
 
   const handleStepClick = useCallback((stepNum) => {
     if (accountIdRef.current || isImporting) return;
