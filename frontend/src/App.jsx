@@ -25,7 +25,7 @@ import ResetPassword from './pages/ResetPassword'
 import MfaVerify from './pages/MfaVerify'
 import LandingPage from './pages/LandingPage'
 import AuthSwitchRoute from './components/AuthSwitchRoute'
-import { OnboardingFlow } from './components/Onboarding'
+import { OnboardingRoute } from './components/Onboarding'
 import { OnboardingGuard } from './components/OnboardingGuard'
 
 const queryClient = new QueryClient({
@@ -101,7 +101,7 @@ function App() {
                 {/* Onboarding: full-screen flow for new users, no navbar */}
                 <Route path="/onboarding" element={
                   <ProtectedRoute>
-                    <OnboardingFlow />
+                    <OnboardingRoute />
                   </ProtectedRoute>
                 } />
 
