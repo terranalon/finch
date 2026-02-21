@@ -289,6 +289,11 @@ export function OnboardingFlow() {
     navigate('/');
   }, [portfolioId, refetchPortfolios, navigate]);
 
+  const handleStepClick = useCallback((stepNum) => {
+    if (accountIdRef.current || isImporting) return;
+    setCurrentStep(stepNum);
+  }, [isImporting]);
+
   const handleAddAnother = useCallback(() => {
     setCategory(null);
     setBroker(null);
@@ -365,7 +370,7 @@ export function OnboardingFlow() {
         </div>
       </div>
 
-      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} />
+      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} onStepClick={handleStepClick} />
 
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
         <div className="w-full max-w-4xl px-6 py-10">
