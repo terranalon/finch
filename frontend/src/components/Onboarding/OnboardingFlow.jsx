@@ -263,10 +263,6 @@ export function OnboardingFlow() {
       }
 
       if (results === null) {
-        // 422 missing-sections: reset account ref so Back button unlocks
-        // and a retry can create a fresh account if needed.
-        accountIdRef.current = null;
-        createAccountPromiseRef.current = null;
         setIsImporting(false);
         return;
       }
@@ -309,9 +305,9 @@ export function OnboardingFlow() {
   }, [refetchPortfolios, navigate, queryClient]);
 
   const handleStepClick = useCallback((stepNum) => {
-    if (accountIdRef.current || isImporting) return;
+    if ((accountIdRef.current && !sectionValidation) || isImporting) return;
     setCurrentStep(stepNum);
-  }, [isImporting]);
+  }, [isImporting, sectionValidation]);
 
   const handleAddAnother = useCallback(() => {
     setCategory(null);
@@ -347,7 +343,7 @@ export function OnboardingFlow() {
             broker={broker}
             onComplete={handleDataComplete}
             onBack={() => {
-              if (accountIdRef.current) return;
+              if (accountIdRef.current && !sectionValidation) return;
               setCurrentStep(category?.id === CATEGORY_IDS.MANUAL ? 2 : 3);
             }}
             onShowGuide={(type) => setShowGuide(type)}
@@ -387,7 +383,7 @@ export function OnboardingFlow() {
         </div>
       </div>
 
-      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} onStepClick={accountIdRef.current || isImporting ? undefined : handleStepClick} />
+      <OnboardingStepIndicator steps={STEPS} currentStep={currentStep} onStepClick={(accountIdRef.current && !sectionValidation) || isImporting ? undefined : handleStepClick} />
 
       <div className="flex-1 flex items-start justify-center overflow-y-auto">
         <div className="w-full max-w-4xl px-6 py-10">
