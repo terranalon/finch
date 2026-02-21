@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn, formatCurrency, formatPercent, formatNumber, getChangeColor, getChangeIndicator, api } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
@@ -103,6 +103,14 @@ function StarIcon({ className, filled }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+    </svg>
+  );
+}
+
+function ArrowTopRightIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25" />
     </svg>
   );
 }
@@ -434,6 +442,8 @@ function TransactionCard({ tx }) {
  * Asset detail slide-out panel
  */
 function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
+  const navigate = useNavigate();
+  const goToAssetDetail = useCallback(() => { onClose(); navigate(`/assets/${position.asset_id}`); }, [navigate, onClose, position.asset_id]);
   const [timeRange, setTimeRange] = useState('1M');
   const ranges = ['1W', '1M', '3M', '1Y'];
   const pnlColor = getChangeColor(position.total_pnl);
@@ -535,7 +545,12 @@ function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl font-semibold text-[var(--text-primary)]">{position.name}</h2>
+                <h2
+                  className="text-xl font-semibold text-[var(--text-primary)] hover:text-accent cursor-pointer transition-colors"
+                  onClick={goToAssetDetail}
+                >
+                  {position.name}
+                </h2>
                 <button
                   onClick={onToggleFavorite}
                   className="p-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
@@ -555,12 +570,21 @@ function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
                 {position.industry && ` · ${position.industry}`}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-            >
-              <XMarkIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goToAssetDetail}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
+              >
+                View Details
+                <ArrowTopRightIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+              >
+                <XMarkIcon className="w-5 h-5 text-[var(--text-secondary)]" />
+              </button>
+            </div>
           </div>
 
           {/* Price - show in native currency */}
