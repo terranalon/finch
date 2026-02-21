@@ -288,7 +288,9 @@ export function OnboardingFlow() {
       await api(`/portfolios/${portfolioIdRef.current}`, {
         method: 'PUT',
         body: JSON.stringify({ name: portfolioName }),
-      }).catch(() => {});
+      }).catch(() => {
+        showNotification('Portfolio rename failed. You can rename it from the Portfolios page.', 'error');
+      });
     }
     await refetchPortfolios();
     // Optimistically update the accounts guard cache so OnboardingGuard
@@ -337,7 +339,7 @@ export function OnboardingFlow() {
             onComplete={handleDataComplete}
             onBack={() => {
               if (accountIdRef.current) return;
-              setCurrentStep(broker ? 3 : 2);
+              setCurrentStep(category?.id === CATEGORY_IDS.MANUAL ? 2 : 3);
             }}
             onShowGuide={(type) => setShowGuide(type)}
             onTestCredentials={handleTestCredentials}
