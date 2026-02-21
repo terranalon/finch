@@ -443,6 +443,7 @@ function TransactionCard({ tx }) {
  */
 function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
   const navigate = useNavigate();
+  const goToAssetDetail = useCallback(() => navigate(`/assets/${position.asset_id}`), [navigate, position.asset_id]);
   const [timeRange, setTimeRange] = useState('1M');
   const ranges = ['1W', '1M', '3M', '1Y'];
   const pnlColor = getChangeColor(position.total_pnl);
@@ -546,8 +547,10 @@ function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
               <div className="flex items-center gap-2 mb-1">
                 <h2
                   className="text-xl font-semibold text-[var(--text-primary)] hover:text-accent cursor-pointer transition-colors"
-                  onClick={() => navigate(`/assets/${position.asset_id}`)}
-                >{position.name}</h2>
+                  onClick={goToAssetDetail}
+                >
+                  {position.name}
+                </h2>
                 <button
                   onClick={onToggleFavorite}
                   className="p-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
@@ -569,7 +572,7 @@ function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate(`/assets/${position.asset_id}`)}
+                onClick={goToAssetDetail}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
               >
                 View Details
