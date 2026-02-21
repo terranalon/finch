@@ -23,3 +23,6 @@ CURRENCY_CODE_MAP: dict[str, str] = {
     "000": "ILS",
     "001": "USD",
 }
+
+# Israeli tax codes use security numbers starting with 999
+TAX_CODE_PREFIX = "999"

@@ -1,7 +1,8 @@
 """Israeli securities import service for database operations.
 
-Handles importing parsed data from Israeli brokers (Meitav, Bank Hapoalim, Leumi)
-into the database, with Israeli security number resolution via TASE API cache.
+Handles importing parsed data from Israeli brokers (Meitav, Bank Hapoalim, Leumi,
+Mizrahi Tefahot) into the database, with Israeli security number resolution via
+TASE API cache.
 """
 
 import logging
@@ -49,7 +50,7 @@ def _normalize_to_datetime(value: datetime | date | None) -> datetime | None:
 class IsraeliSecuritiesImportService(BaseBrokerImportService):
     """Service for importing Israeli broker data into the database.
 
-    Supports: Meitav Trade, Bank Hapoalim, Bank Leumi.
+    Supports: Meitav Trade, Bank Hapoalim, Bank Leumi, Mizrahi Tefahot.
 
     Handles:
     - Israeli security number -> Yahoo Finance symbol resolution

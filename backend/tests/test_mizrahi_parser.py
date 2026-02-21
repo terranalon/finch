@@ -73,6 +73,35 @@ class TestMizrahiParserMetadata:
         assert MizrahiParser.has_api() is False
 
 
+class TestMizrahiSymbolResolution:
+    """Test symbol resolution for ILS, USD, and tax code securities."""
+
+    def test_ils_security_uses_tase_prefix(self):
+        assert MizrahiParser._resolve_symbol("1087824", "אל על", "ILS") == "TASE:1087824"
+
+    def test_usd_security_without_ticker_falls_back_to_tase(self):
+        assert MizrahiParser._resolve_symbol("0047241", "NVIDIA CORP", "USD") == "TASE:0047241"
+
+    def test_usd_security_with_ticker_in_name(self):
+        """If name contains ticker after closing paren, extract it."""
+        assert MizrahiParser._resolve_symbol("0047241", "NVIDIA CORP) NVDA", "USD") == "NVDA"
+
+    def test_tax_code_uses_tax_prefix(self):
+        assert MizrahiParser._resolve_symbol("9991234", "מס רווחי הון", "ILS") == "TAX:9991234"
+
+    def test_tax_code_usd_still_uses_tax_prefix(self):
+        """Tax code detection takes priority over USD ticker extraction."""
+        assert MizrahiParser._resolve_symbol("9995678", "TAX) FAKE", "USD") == "TAX:9995678"
+
+    def test_empty_security_number(self):
+        assert MizrahiParser._resolve_symbol("", "something", "ILS") == ""
+
+    def test_is_tax_code(self):
+        assert MizrahiParser._is_tax_code("9991234") is True
+        assert MizrahiParser._is_tax_code("1087824") is False
+        assert MizrahiParser._is_tax_code("0047241") is False
+
+
 class TestMizrahiHTMLParsing:
     """Test HTML table extraction from UTF-16 LE encoded .xls files."""
 
@@ -221,10 +250,19 @@ class TestMizrahiFullParse:
         assert redemption[0].transaction_type == "Sell"
         assert redemption[0].quantity == Decimal("50126")
 
-    def test_all_symbols_use_tase_prefix(self, parsed):
-        """All symbols should use TASE:{number} format."""
-        for txn in parsed.transactions:
-            assert txn.symbol.startswith("TASE:"), f"Symbol {txn.symbol} missing TASE: prefix"
+    def test_ils_symbols_use_tase_prefix(self, parsed):
+        """ILS symbols should use TASE:{number} format."""
+        ils_txns = [t for t in parsed.transactions if t.currency == "ILS"]
+        for txn in ils_txns:
+            assert txn.symbol.startswith("TASE:"), f"ILS symbol {txn.symbol} missing TASE: prefix"
+
+    def test_usd_symbols_use_tase_fallback(self, parsed):
+        """USD symbols without extractable tickers fall back to TASE:{number}."""
+        usd_txns = [t for t in parsed.transactions if t.currency == "USD"]
+        for txn in usd_txns:
+            assert txn.symbol.startswith("TASE:"), (
+                f"USD symbol {txn.symbol} should fall back to TASE: (no ticker in name)"
+            )
 
     def test_raw_data_preserved(self, parsed):
         """Raw data should contain original Hebrew action type."""

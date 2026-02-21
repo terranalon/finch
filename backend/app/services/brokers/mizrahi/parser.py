@@ -6,6 +6,7 @@ with securities transactions. Prices for ILS securities are in Agorot.
 """
 
 import logging
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
@@ -15,11 +16,19 @@ from app.services.brokers.base_broker_parser import (
     BrokerImportData,
     ParsedTransaction,
 )
-from app.services.brokers.mizrahi.constants import ACTION_TYPE_MAP, CURRENCY_CODE_MAP
+from app.services.brokers.mizrahi.constants import (
+    ACTION_TYPE_MAP,
+    CURRENCY_CODE_MAP,
+    TAX_CODE_PREFIX,
+)
 
 logger = logging.getLogger(__name__)
 
 AGOROT_TO_ILS = Decimal("100")
+
+# Matches a closing paren followed by an English ticker at end of name.
+# Used by Israeli brokers whose exports include tickers like "NVIDIA CORP) NVDA".
+_TICKER_RE = re.compile(r"\)\s*(\w+)\s*$")
 
 
 class _TableExtractor(HTMLParser):
@@ -147,6 +156,29 @@ class MizrahiParser(BaseBrokerParser):
         except InvalidOperation:
             return Decimal("0")
 
+    @staticmethod
+    def _is_tax_code(security_number: str) -> bool:
+        """Check if security number is a tax code (starts with 999)."""
+        return security_number.startswith(TAX_CODE_PREFIX)
+
+    @staticmethod
+    def _resolve_symbol(security_number: str, name: str, currency: str) -> str:
+        """Resolve security to a symbol for import.
+
+        ILS securities -> TASE:{number}
+        USD securities -> extracted English ticker from name, fallback to TASE:{number}
+        Tax codes -> TAX:{number}
+        """
+        if not security_number:
+            return ""
+        if MizrahiParser._is_tax_code(security_number):
+            return f"TAX:{security_number}"
+        if currency == "USD":
+            match = _TICKER_RE.search(name)
+            if match:
+                return match.group(1)
+        return f"TASE:{security_number}"
+
     def _parse_row(self, row: dict[str, str]) -> ParsedTransaction | None:
         """Parse a single data row into a ParsedTransaction.
 
@@ -165,6 +197,12 @@ class MizrahiParser(BaseBrokerParser):
         if not trade_date:
             return None
 
+        return self._build_transaction(row, action_type, action_raw, trade_date)
+
+    def _build_transaction(
+        self, row: dict[str, str], action_type: str, action_raw: str, trade_date: date
+    ) -> ParsedTransaction:
+        """Build a ParsedTransaction from validated row data."""
         security_number = row.get("מספר נייר", "").strip()
         security_name = row.get("שם נייר", "").strip()
         currency_code = row.get("קוד מטבע", "").strip()
@@ -178,22 +216,9 @@ class MizrahiParser(BaseBrokerParser):
 
         # ILS prices are in Agorot (divide by 100); USD prices are direct
         price = price_raw / AGOROT_TO_ILS if currency == "ILS" and price_raw else price_raw
-
-        # Total fees = commission + correspondent fee (both stored as negatives)
         fees = abs(commission) + abs(correspondent_fee)
-
-        # Symbol: all securities use TASE:{number} for resolution
-        symbol = f"TASE:{security_number}" if security_number else ""
-
-        # Amount: use absolute net cash value
+        symbol = self._resolve_symbol(security_number, security_name, currency)
         amount = abs(net_cash) if net_cash else None
-
-        raw_data = {
-            "security_number": security_number,
-            "security_name": security_name,
-            "action_type": action_raw,
-            "currency_code": currency_code,
-        }
 
         return ParsedTransaction(
             trade_date=trade_date,
@@ -205,7 +230,12 @@ class MizrahiParser(BaseBrokerParser):
             fees=fees,
             currency=currency,
             notes=security_name,
-            raw_data=raw_data,
+            raw_data={
+                "security_number": security_number,
+                "security_name": security_name,
+                "action_type": action_raw,
+                "currency_code": currency_code,
+            },
         )
 
     def _date_range_from_rows(self, rows: list[dict[str, str]]) -> tuple[date, date]:
