@@ -12,8 +12,8 @@ export function OnboardingRoute() {
       try {
         const response = await api('/accounts');
         if (response.ok) {
-          const accounts = await response.json();
-          setHasAccounts(accounts.length > 0);
+          const data = await response.json();
+          setHasAccounts(data.total > 0);
         } else {
           setHasAccounts(false);
         }

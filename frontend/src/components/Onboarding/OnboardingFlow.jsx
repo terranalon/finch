@@ -14,6 +14,7 @@ import { DataConnectionStep } from '../AccountWizard/steps/DataConnectionStep';
 import { ImportingStep } from '../AccountWizard/steps/ImportingStep';
 import { ImportResultsStep } from '../AccountWizard/steps/ImportResultsStep';
 import { WizardNotification } from '../AccountWizard/WizardNotification';
+import { SetupGuidePanel } from '../AccountWizard/SetupGuidePanel';
 import { CATEGORY_IDS } from '../AccountWizard/constants/index.js';
 
 const STEPS = ['Welcome', 'Type', 'Broker', 'Connect', 'Results', 'Finish'];
@@ -110,6 +111,7 @@ export function OnboardingFlow() {
 
   // UI
   const [notification, setNotification] = useState({ message: null, type: 'error' });
+  const [showGuide, setShowGuide] = useState(null);
 
   const showNotification = useCallback((message, type = 'error') => {
     setNotification({ message, type });
@@ -333,7 +335,7 @@ export function OnboardingFlow() {
               if (accountIdRef.current) return;
               setCurrentStep(broker ? 3 : 2);
             }}
-            onShowGuide={() => {}}
+            onShowGuide={(type) => setShowGuide(type)}
             onTestCredentials={handleTestCredentials}
             onError={showNotification}
             sectionValidation={sectionValidation}
@@ -383,6 +385,14 @@ export function OnboardingFlow() {
         type={notification.type}
         onDismiss={() => setNotification({ message: null, type: 'error' })}
       />
+
+      {showGuide && broker && (
+        <SetupGuidePanel
+          broker={broker}
+          guideType={showGuide}
+          onClose={() => setShowGuide(null)}
+        />
+      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ describe('OnboardingRoute', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders onboarding when user has zero accounts', async () => {
-    api.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 0, items: [] }) });
 
     render(
       <MemoryRouter initialEntries={['/onboarding']}>
@@ -35,7 +35,7 @@ describe('OnboardingRoute', () => {
   });
 
   it('redirects to dashboard when user has accounts', async () => {
-    api.mockResolvedValue({ ok: true, json: () => Promise.resolve([{ id: 1 }]) });
+    api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 1, items: [{ id: 1 }] }) });
 
     render(
       <MemoryRouter initialEntries={['/onboarding']}>

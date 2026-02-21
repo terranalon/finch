@@ -27,7 +27,7 @@ describe('OnboardingGuard', () => {
   });
 
   it('renders children when user has accounts', async () => {
-    api.mockResolvedValue({ ok: true, json: () => Promise.resolve([{ id: 1 }]) });
+    api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 1, items: [{ id: 1 }] }) });
 
     renderWithRouter('/', [
       <Route key="/" path="/" element={
@@ -42,7 +42,7 @@ describe('OnboardingGuard', () => {
   });
 
   it('redirects to /onboarding when user has zero accounts', async () => {
-    api.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    api.mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 0, items: [] }) });
 
     renderWithRouter('/', [
       <Route key="/" path="/" element={
