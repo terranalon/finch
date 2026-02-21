@@ -62,7 +62,7 @@ class IsraeliSecuritiesImportService(BaseBrokerImportService):
     @classmethod
     def supported_broker_types(cls) -> list[str]:
         """Return list of broker types this service handles."""
-        return ["meitav", "bank_hapoalim", "leumi"]
+        return ["meitav", "bank_hapoalim", "leumi", "mizrahi"]
 
     def __init__(self, db: Session, broker_type: str) -> None:
         """Initialize with database session and broker type.

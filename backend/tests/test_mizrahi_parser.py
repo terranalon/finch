@@ -259,3 +259,25 @@ class TestMizrahiFullParse:
         assert "action_type" in txn.raw_data
         assert "security_number" in txn.raw_data
         assert "security_name" in txn.raw_data
+
+
+class TestMizrahiRegistry:
+    """Test parser and import service registration."""
+
+    def test_parser_in_registry(self):
+        from app.services.brokers.broker_parser_registry import BrokerParserRegistry
+
+        assert BrokerParserRegistry.is_supported("mizrahi")
+
+    def test_get_parser_from_registry(self):
+        from app.services.brokers.broker_parser_registry import BrokerParserRegistry
+
+        parser = BrokerParserRegistry.get_parser("mizrahi")
+        assert parser.broker_type() == "mizrahi"
+
+    def test_import_service_supports_mizrahi(self):
+        from app.services.brokers.shared.israeli_import_service import (
+            IsraeliSecuritiesImportService,
+        )
+
+        assert "mizrahi" in IsraeliSecuritiesImportService.supported_broker_types()
