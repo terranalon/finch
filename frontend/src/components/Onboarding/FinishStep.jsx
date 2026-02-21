@@ -81,7 +81,7 @@ export function FinishStep({ onGoToDashboard, onAddAnother, defaultPortfolioName
         <button
           type="button"
           onClick={() => onGoToDashboard(portfolioName)}
-          className="inline-flex items-center gap-2 min-w-[260px] justify-center px-7 py-3 rounded-xl text-base font-semibold bg-positive text-white hover:bg-positive-hover transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 min-w-[260px] justify-center px-7 py-3 rounded-xl text-base font-semibold bg-positive text-white hover:bg-positive-dark transition-colors cursor-pointer"
         >
           Go to Dashboard
           <ArrowRightIcon className="size-4" />

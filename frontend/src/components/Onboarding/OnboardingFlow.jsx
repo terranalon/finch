@@ -263,6 +263,10 @@ export function OnboardingFlow() {
       }
 
       if (results === null) {
+        // 422 missing-sections: reset account ref so Back button unlocks
+        // and a retry can create a fresh account if needed.
+        accountIdRef.current = null;
+        createAccountPromiseRef.current = null;
         setIsImporting(false);
         return;
       }
