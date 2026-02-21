@@ -6,15 +6,13 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { useTheme } from '../contexts';
-import { FinchIcon, ThemeToggle } from '../components/ui';
+import { AuthLayout } from '../components/auth';
 import { verifyEmail } from '../lib/api';
 
 export default function VerifyEmail() {
   const [status, setStatus] = useState('verifying'); // verifying, success, error
   const [error, setError] = useState('');
 
-  const { theme, toggleTheme } = useTheme();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
 
@@ -39,21 +37,8 @@ export default function VerifyEmail() {
   }, [token]);
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8 relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      </div>
-
-      <div className="max-w-md w-full space-y-8 text-center">
-        <div>
-          <div className="flex items-center justify-center gap-2">
-            <FinchIcon className="size-10 text-accent" />
-            <h1 className="text-4xl font-bold text-[var(--text-primary)]">
-              <span className="text-accent">Fin</span>ch
-            </h1>
-          </div>
-        </div>
-
+    <AuthLayout page="verify-email">
+      <div className="text-center">
         {status === 'verifying' && (
           <div className="space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto" />
@@ -67,10 +52,11 @@ export default function VerifyEmail() {
           <div className="space-y-6">
             <div className="py-4">
               <svg
-                className="mx-auto h-16 w-16 text-positive"
+                className="mx-auto h-16 w-16 text-[var(--positive)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -99,10 +85,11 @@ export default function VerifyEmail() {
           <div className="space-y-6">
             <div className="py-4">
               <svg
-                className="mx-auto h-16 w-16 text-negative"
+                className="mx-auto h-16 w-16 text-[var(--negative)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -117,7 +104,7 @@ export default function VerifyEmail() {
             </h2>
             <p className="text-[var(--text-secondary)]">{error}</p>
             <div className="space-y-3">
-              <p className="text-sm text-[var(--text-tertiary)]">
+              <p className="text-[13px] text-[var(--text-tertiary)]">
                 The link may have expired or already been used.
               </p>
               <Link
@@ -130,6 +117,6 @@ export default function VerifyEmail() {
           </div>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }
