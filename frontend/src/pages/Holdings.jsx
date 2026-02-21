@@ -443,7 +443,7 @@ function TransactionCard({ tx }) {
  */
 function AssetDetailPanel({ position, currency, onClose, onToggleFavorite }) {
   const navigate = useNavigate();
-  const goToAssetDetail = useCallback(() => navigate(`/assets/${position.asset_id}`), [navigate, position.asset_id]);
+  const goToAssetDetail = useCallback(() => { onClose(); navigate(`/assets/${position.asset_id}`); }, [navigate, onClose, position.asset_id]);
   const [timeRange, setTimeRange] = useState('1M');
   const ranges = ['1W', '1M', '3M', '1Y'];
   const pnlColor = getChangeColor(position.total_pnl);
