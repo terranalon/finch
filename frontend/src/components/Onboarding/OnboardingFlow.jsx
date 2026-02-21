@@ -249,6 +249,7 @@ export function OnboardingFlow() {
 
   const handleDataComplete = useCallback(async (data) => {
     setIsImporting(true);
+    setSectionValidation(null);
 
     try {
       const portfolioId = await ensurePortfolio();
@@ -270,6 +271,10 @@ export function OnboardingFlow() {
       setIsImporting(false);
       setCurrentStep(5);
     } catch (error) {
+      // Reset account ref so a retry creates a fresh account rather than
+      // leaving an orphan and creating a second one on the next attempt.
+      accountIdRef.current = null;
+      createAccountPromiseRef.current = null;
       setIsImporting(false);
       showNotification(`Import failed: ${error.message}`);
     }
