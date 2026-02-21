@@ -10,7 +10,7 @@
 
 const API_BASE = 'http://localhost:8000/api';
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message, { errorCode, details, extra } = {}) {
     super(message);
     this.name = 'ApiError';
@@ -487,5 +487,4 @@ export async function deleteDataSource(sourceId) {
   return handleResponse(response, 'Failed to delete data source');
 }
 
-export { ApiError };
 export default api;

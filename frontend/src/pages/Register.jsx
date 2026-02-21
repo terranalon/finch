@@ -3,6 +3,48 @@ import { useNavigate, Link } from 'react-router-dom';
 import { register } from '../lib/api';
 import { AuthLayout, AuthAlert } from '../components/auth';
 
+const BASE_INPUT_CLASS =
+  'w-full px-3 py-2 text-sm border text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors';
+
+const MESSAGE_TO_FIELD = {
+  'Email already registered': 'email',
+  'Username already taken': 'username',
+};
+
+function FieldError({ message }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1 text-[11px] text-[var(--negative)]" role="alert">
+      {message}
+    </p>
+  );
+}
+
+function inputClassName(hasError) {
+  const borderClass = hasError ? 'border-[var(--negative)]' : 'border-[var(--border-primary)]';
+  return `${BASE_INPUT_CLASS} ${borderClass}`;
+}
+
+function extractFieldErrors(err) {
+  if (err.details?.length > 0) {
+    const mapped = {};
+    for (const detail of err.details) {
+      if (detail.field) {
+        mapped[detail.field] = detail.message;
+      }
+    }
+    if (Object.keys(mapped).length > 0) {
+      return mapped;
+    }
+  } else {
+    const targetField = MESSAGE_TO_FIELD[err.message];
+    if (targetField) {
+      return { [targetField]: err.message };
+    }
+  }
+  return null;
+}
+
 export default function Register() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -13,6 +55,14 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  function clearFieldError(field) {
+    if (!fieldErrors[field]) return;
+    setFieldErrors((prev) => {
+      const { [field]: _, ...rest } = prev;
+      return rest;
+    });
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,43 +85,16 @@ export default function Register() {
       await register(email, password, username);
       navigate('/verification-pending', { state: { email } });
     } catch (err) {
-      if (err.details?.length > 0) {
-        const mapped = {};
-        for (const detail of err.details) {
-          if (detail.field) {
-            mapped[detail.field] = detail.message;
-          }
-        }
-        if (Object.keys(mapped).length > 0) {
-          setFieldErrors(mapped);
-        } else {
-          setError(err.message || 'Registration failed');
-        }
+      const mapped = extractFieldErrors(err);
+      if (mapped) {
+        setFieldErrors(mapped);
       } else {
-        const fieldMap = {
-          'Email already registered': 'email',
-          'Username already taken': 'username',
-        };
-        const targetField = fieldMap[err.message];
-        if (targetField) {
-          setFieldErrors({ [targetField]: err.message });
-        } else {
-          setError(err.message || 'Registration failed');
-        }
+        setError(err.message || 'Registration failed');
       }
     } finally {
       setLoading(false);
     }
   };
-
-  function FieldError({ message }) {
-    if (!message) return null;
-    return (
-      <p className="mt-1 text-[11px] text-[var(--negative)]" role="alert">
-        {message}
-      </p>
-    );
-  }
 
   return (
     <AuthLayout page="register">
@@ -96,13 +119,9 @@ export default function Register() {
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
-                if (fieldErrors.email) {
-                  setFieldErrors((prev) => { const { email: _, ...rest } = prev; return rest; });
-                }
+                clearFieldError('email');
               }}
-              className={`w-full px-3 py-2 text-sm border text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors ${
-                fieldErrors.email ? 'border-[var(--negative)]' : 'border-[var(--border-primary)]'
-              }`}
+              className={inputClassName(fieldErrors.email)}
               placeholder="you@example.com"
             />
             <FieldError message={fieldErrors.email} />
@@ -124,13 +143,9 @@ export default function Register() {
               value={username}
               onChange={(e) => {
                 setUsername(e.target.value);
-                if (fieldErrors.username) {
-                  setFieldErrors((prev) => { const { username: _, ...rest } = prev; return rest; });
-                }
+                clearFieldError('username');
               }}
-              className={`w-full px-3 py-2 text-sm border text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors ${
-                fieldErrors.username ? 'border-[var(--negative)]' : 'border-[var(--border-primary)]'
-              }`}
+              className={inputClassName(fieldErrors.username)}
               placeholder="your_username"
             />
             <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
@@ -152,13 +167,9 @@ export default function Register() {
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
-                if (fieldErrors.password) {
-                  setFieldErrors((prev) => { const { password: _, ...rest } = prev; return rest; });
-                }
+                clearFieldError('password');
               }}
-              className={`w-full px-3 py-2 text-sm border text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors ${
-                fieldErrors.password ? 'border-[var(--negative)]' : 'border-[var(--border-primary)]'
-              }`}
+              className={inputClassName(fieldErrors.password)}
               placeholder="At least 8 characters"
             />
             <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
