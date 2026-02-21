@@ -1,7 +1,49 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { register } from '../lib/api';
-import { AuthLayout } from '../components/auth';
+import { AuthLayout, AuthAlert } from '../components/auth';
+
+const BASE_INPUT_CLASS =
+  'w-full px-3 py-2 text-sm border text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors';
+
+const MESSAGE_TO_FIELD = {
+  'Email already registered': 'email',
+  'Username already taken': 'username',
+};
+
+function FieldError({ message }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1 text-[11px] text-[var(--negative)]" role="alert">
+      {message}
+    </p>
+  );
+}
+
+function inputClassName(hasError) {
+  const borderClass = hasError ? 'border-[var(--negative)]' : 'border-[var(--border-primary)]';
+  return `${BASE_INPUT_CLASS} ${borderClass}`;
+}
+
+function extractFieldErrors(err) {
+  if (err.details?.length > 0) {
+    const mapped = {};
+    for (const detail of err.details) {
+      if (detail.field) {
+        mapped[detail.field] = detail.message;
+      }
+    }
+    if (Object.keys(mapped).length > 0) {
+      return mapped;
+    }
+  } else {
+    const targetField = MESSAGE_TO_FIELD[err.message];
+    if (targetField) {
+      return { [targetField]: err.message };
+    }
+  }
+  return null;
+}
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -9,13 +51,23 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
+  function clearFieldError(field) {
+    if (!fieldErrors[field]) return;
+    setFieldErrors((prev) => {
+      const { [field]: _, ...rest } = prev;
+      return rest;
+    });
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -33,7 +85,12 @@ export default function Register() {
       await register(email, password, username);
       navigate('/verification-pending', { state: { email } });
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      const mapped = extractFieldErrors(err);
+      if (mapped) {
+        setFieldErrors(mapped);
+      } else {
+        setError(err.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -46,11 +103,7 @@ export default function Register() {
       </h2>
 
       <form onSubmit={handleSubmit}>
-        {error && (
-          <div className="rounded-md bg-[var(--negative-bg)] p-4 mb-4" role="alert">
-            <p className="text-sm text-[var(--negative)]">{error}</p>
-          </div>
-        )}
+        <AuthAlert message={error} />
 
         <div className="space-y-4">
           <div>
@@ -64,10 +117,14 @@ export default function Register() {
               autoComplete="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clearFieldError('email');
+              }}
+              className={inputClassName(fieldErrors.email)}
               placeholder="you@example.com"
             />
+            <FieldError message={fieldErrors.email} />
           </div>
 
           <div>
@@ -84,13 +141,17 @@ export default function Register() {
               maxLength={30}
               pattern="[A-Za-z0-9_]+"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              onChange={(e) => {
+                setUsername(e.target.value);
+                clearFieldError('username');
+              }}
+              className={inputClassName(fieldErrors.username)}
               placeholder="your_username"
             />
             <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
               3-30 characters: letters, numbers, and underscores
             </p>
+            <FieldError message={fieldErrors.username} />
           </div>
 
           <div>
@@ -104,13 +165,17 @@ export default function Register() {
               autoComplete="new-password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clearFieldError('password');
+              }}
+              className={inputClassName(fieldErrors.password)}
               placeholder="At least 8 characters"
             />
             <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
               Must contain uppercase, lowercase, and a number
             </p>
+            <FieldError message={fieldErrors.password} />
           </div>
 
           <div>
@@ -125,7 +190,7 @@ export default function Register() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              className={inputClassName(false)}
               placeholder="Confirm your password"
             />
           </div>
