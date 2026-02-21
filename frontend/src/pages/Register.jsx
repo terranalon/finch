@@ -190,7 +190,7 @@ export default function Register() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-[var(--border-primary)] text-[var(--text-primary)] bg-white placeholder-[var(--text-tertiary)] rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+              className={inputClassName(false)}
               placeholder="Confirm your password"
             />
           </div>
