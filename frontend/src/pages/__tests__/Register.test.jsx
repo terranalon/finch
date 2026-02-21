@@ -29,6 +29,14 @@ function renderRegister() {
   );
 }
 
+function fillAndSubmit({ email = "a@b.com", username = "user1", password = "Password1", confirm } = {}) {
+  fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText(/^username$/i), { target: { value: username } });
+  fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: password } });
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: confirm ?? password } });
+  fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+}
+
 describe("Register", () => {
   beforeEach(() => {
     register.mockClear();
@@ -93,5 +101,77 @@ describe("Register", () => {
       expect(register).toHaveBeenCalledWith("a@b.com", "Password1", "user1");
       expect(mockNavigate).toHaveBeenCalledWith("/verification-pending", { state: { email: "a@b.com" } });
     });
+  });
+
+  it("shows field-level error for password validation failure", async () => {
+    const err = new Error("Request validation failed");
+    err.details = [{ field: "password", message: "Password must contain at least one: uppercase letter" }];
+    register.mockRejectedValue(err);
+    renderRegister();
+
+    fillAndSubmit({ password: "weakpass1", confirm: "weakpass1" });
+
+    expect(await screen.findByText("Password must contain at least one: uppercase letter")).toBeInTheDocument();
+    expect(screen.queryByText("Request validation failed")).not.toBeInTheDocument();
+  });
+
+  it("shows multiple field-level errors simultaneously", async () => {
+    const err = new Error("Request validation failed");
+    err.details = [
+      { field: "password", message: "Password must contain at least one: uppercase letter" },
+      { field: "username", message: "Username must be 3-30 characters and contain only letters, numbers, and underscores" },
+    ];
+    register.mockRejectedValue(err);
+    renderRegister();
+
+    fillAndSubmit({ password: "weakpass1", confirm: "weakpass1" });
+
+    expect(await screen.findByText(/uppercase letter/)).toBeInTheDocument();
+    expect(screen.getByText(/Username must be 3-30 characters/)).toBeInTheDocument();
+  });
+
+  it("shows 'Email already registered' as inline email field error", async () => {
+    register.mockRejectedValue(new Error("Email already registered"));
+    renderRegister();
+
+    fillAndSubmit();
+
+    const errorEl = await screen.findByText("Email already registered");
+    expect(errorEl).toBeInTheDocument();
+    expect(errorEl.closest("[role='alert']")).toBeInTheDocument();
+  });
+
+  it("shows 'Username already taken' as inline username field error", async () => {
+    register.mockRejectedValue(new Error("Username already taken"));
+    renderRegister();
+
+    fillAndSubmit();
+
+    const errorEl = await screen.findByText("Username already taken");
+    expect(errorEl).toBeInTheDocument();
+    expect(errorEl.closest("[role='alert']")).toBeInTheDocument();
+  });
+
+  it("shows unknown server error as banner", async () => {
+    register.mockRejectedValue(new Error("Internal server error"));
+    renderRegister();
+
+    fillAndSubmit();
+
+    expect(await screen.findByText("Internal server error")).toBeInTheDocument();
+  });
+
+  it("clears field error when user edits the errored field", async () => {
+    const err = new Error("Request validation failed");
+    err.details = [{ field: "password", message: "Password must contain at least one: uppercase letter" }];
+    register.mockRejectedValue(err);
+    renderRegister();
+
+    fillAndSubmit({ password: "weakpass1", confirm: "weakpass1" });
+
+    expect(await screen.findByText(/uppercase letter/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "StrongPass1" } });
+    expect(screen.queryByText(/uppercase letter/)).not.toBeInTheDocument();
   });
 });
