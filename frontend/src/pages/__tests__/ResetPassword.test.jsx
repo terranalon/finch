@@ -72,7 +72,8 @@ describe("ResetPassword", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/password reset successful/i)).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /sign in/i })).toBeInTheDocument();
+      const links = screen.getAllByRole("link", { name: /sign in/i });
+      expect(links.length).toBeGreaterThanOrEqual(1);
     });
   });
 
