@@ -52,3 +52,46 @@ describe('OnboardingFlow', () => {
     expect(screen.getByText(/what type of account/i)).toBeInTheDocument();
   });
 });
+
+describe('OnboardingFlow navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('navigates through Type -> Broker steps', async () => {
+    renderOnboarding();
+
+    // Step 1: Welcome
+    fireEvent.click(screen.getByText(/get started/i));
+
+    // Step 2: Type - click Brokerage
+    await waitFor(() => {
+      expect(screen.getByText(/what type of account/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Brokerage'));
+
+    // Step 3: Broker selection should show
+    await waitFor(() => {
+      expect(screen.getByText(/select your broker/i)).toBeInTheDocument();
+    });
+  });
+
+  it('back button on Broker step returns to Type', async () => {
+    renderOnboarding();
+    fireEvent.click(screen.getByText(/get started/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/what type of account/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Brokerage'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/select your broker/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/back to account types/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/what type of account/i)).toBeInTheDocument();
+    });
+  });
+});
