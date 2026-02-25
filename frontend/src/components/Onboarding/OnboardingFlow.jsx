@@ -310,6 +310,20 @@ export function OnboardingFlow() {
     setCurrentStep(stepNum);
   }, [isImporting, sectionValidation, currentStep]);
 
+  const handleDataConnectionBack = useCallback(async () => {
+    if (accountIdRef.current && !sectionValidation) return;
+    // Best-effort delete: if an account was partially created (e.g. credentials
+    // saved but import blocked by a 422 validation error), remove it before
+    // going back so it doesn't accumulate as an orphan in the user's portfolio.
+    if (accountIdRef.current) {
+      await api(`/accounts/${accountIdRef.current}`, { method: 'DELETE' }).catch(() => {});
+    }
+    accountIdRef.current = null;
+    createAccountPromiseRef.current = null;
+    setSectionValidation(null);
+    setCurrentStep(category?.id === CATEGORY_IDS.MANUAL ? 2 : 3);
+  }, [sectionValidation, category]);
+
   const handleAddAnother = useCallback(() => {
     setCategory(null);
     setBroker(null);
@@ -343,16 +357,7 @@ export function OnboardingFlow() {
           <DataConnectionStep
             broker={broker}
             onComplete={handleDataComplete}
-            onBack={() => {
-              if (accountIdRef.current && !sectionValidation) return;
-              // Going back abandons the current account setup; reset so a
-              // re-entry creates a fresh account for whichever broker the
-              // user picks next.
-              accountIdRef.current = null;
-              createAccountPromiseRef.current = null;
-              setSectionValidation(null);
-              setCurrentStep(category?.id === CATEGORY_IDS.MANUAL ? 2 : 3);
-            }}
+            onBack={handleDataConnectionBack}
             onShowGuide={(type) => setShowGuide(type)}
             onTestCredentials={handleTestCredentials}
             onError={showNotification}
