@@ -306,8 +306,9 @@ export function OnboardingFlow() {
 
   const handleStepClick = useCallback((stepNum) => {
     if ((accountIdRef.current && !sectionValidation) || isImporting) return;
+    if (stepNum > currentStep) return;
     setCurrentStep(stepNum);
-  }, [isImporting, sectionValidation]);
+  }, [isImporting, sectionValidation, currentStep]);
 
   const handleAddAnother = useCallback(() => {
     setCategory(null);
@@ -344,6 +345,12 @@ export function OnboardingFlow() {
             onComplete={handleDataComplete}
             onBack={() => {
               if (accountIdRef.current && !sectionValidation) return;
+              // Going back abandons the current account setup; reset so a
+              // re-entry creates a fresh account for whichever broker the
+              // user picks next.
+              accountIdRef.current = null;
+              createAccountPromiseRef.current = null;
+              setSectionValidation(null);
               setCurrentStep(category?.id === CATEGORY_IDS.MANUAL ? 2 : 3);
             }}
             onShowGuide={(type) => setShowGuide(type)}
