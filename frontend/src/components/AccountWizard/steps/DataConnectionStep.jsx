@@ -356,13 +356,15 @@ export function DataConnectionStep({ broker, onComplete, onSkip, onBack, onShowG
           <span className="font-medium">Back</span>
         </button>
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] font-medium cursor-pointer"
-          >
-            Skip for now
-          </button>
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] font-medium cursor-pointer"
+            >
+              Skip for now
+            </button>
+          )}
           {connectionMethod === 'api' && testStatus === 'success' && (
             <button
               type="button"

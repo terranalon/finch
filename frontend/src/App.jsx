@@ -25,6 +25,8 @@ import ResetPassword from './pages/ResetPassword'
 import MfaVerify from './pages/MfaVerify'
 import LandingPage from './pages/LandingPage'
 import AuthSwitchRoute from './components/AuthSwitchRoute'
+import { OnboardingRoute } from './components/Onboarding'
+import { OnboardingGuard } from './components/OnboardingGuard'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +66,19 @@ function AppLayout({ children }) {
   );
 }
 
+// Protected route with onboarding guard and app layout
+function GuardedLayout({ children }) {
+  return (
+    <ProtectedRoute>
+      <OnboardingGuard>
+        <AppLayout>
+          {children}
+        </AppLayout>
+      </OnboardingGuard>
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -96,82 +111,33 @@ function App() {
                   <MfaVerify />
                 } />
 
+                {/* Onboarding: full-screen flow for new users, no navbar */}
+                <Route path="/onboarding" element={
+                  <ProtectedRoute>
+                    <OnboardingRoute />
+                  </ProtectedRoute>
+                } />
+
                 {/* Home: landing page for visitors, dashboard for authenticated users */}
                 <Route path="/" element={
                   <AuthSwitchRoute
                     authenticated={
-                      <ProtectedRoute>
-                        <AppLayout>
-                          <Overview />
-                        </AppLayout>
-                      </ProtectedRoute>
+                      <GuardedLayout>
+                        <Overview />
+                      </GuardedLayout>
                     }
                     unauthenticated={<LandingPage />}
                   />
                 } />
-                <Route path="/holdings" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Holdings />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/activity" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Activity />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/insights" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Insights />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/assets" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Assets />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/assets/:id" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <AssetDetail />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/accounts" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Accounts />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/accounts/:id" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <AccountDetail />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/portfolios" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Portfolios />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <Settings />
-                    </AppLayout>
-                  </ProtectedRoute>
-                } />
+                <Route path="/holdings" element={<GuardedLayout><Holdings /></GuardedLayout>} />
+                <Route path="/activity" element={<GuardedLayout><Activity /></GuardedLayout>} />
+                <Route path="/insights" element={<GuardedLayout><Insights /></GuardedLayout>} />
+                <Route path="/assets" element={<GuardedLayout><Assets /></GuardedLayout>} />
+                <Route path="/assets/:id" element={<GuardedLayout><AssetDetail /></GuardedLayout>} />
+                <Route path="/accounts" element={<GuardedLayout><Accounts /></GuardedLayout>} />
+                <Route path="/accounts/:id" element={<GuardedLayout><AccountDetail /></GuardedLayout>} />
+                <Route path="/portfolios" element={<GuardedLayout><Portfolios /></GuardedLayout>} />
+                <Route path="/settings" element={<GuardedLayout><Settings /></GuardedLayout>} />
 
                 {/* Catch-all redirect */}
                 <Route path="*" element={<Navigate to="/" replace />} />
