@@ -395,17 +395,25 @@ class PriceFetcher:
         return stats
 
     @staticmethod
-    def get_historical_prices(symbol: str, period: str = "1mo") -> dict | None:
+    def get_historical_prices(
+        symbol: str, period: str = "1mo", *, is_crypto: bool = False
+    ) -> dict | None:
         """
         Get historical price data for a symbol.
+
+        Routes crypto assets to CoinGecko, all others to YFinance.
 
         Args:
             symbol: The ticker symbol
             period: Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
+            is_crypto: Whether the asset is a cryptocurrency
 
         Returns:
             Dictionary with historical data or None if fetch failed
         """
+        if is_crypto:
+            return PriceFetcher._get_crypto_historical_prices(symbol, period)
+
         try:
             rows = YFinanceClient().get_historical_data(symbol, period=period)
 
@@ -441,6 +449,66 @@ class PriceFetcher:
 
         except Exception as e:
             logger.error(f"Error fetching historical data for {symbol}: {e}")
+            return None
+
+    @staticmethod
+    def _get_crypto_historical_prices(symbol: str, period: str) -> dict | None:
+        """Fetch historical crypto prices from CoinGecko.
+
+        Converts period strings (e.g., '1mo', '1y') to date ranges
+        for CoinGecko's market_chart/range API.
+
+        Args:
+            symbol: Crypto symbol (e.g., 'BTC', 'ETH')
+            period: Time period string
+
+        Returns:
+            Dictionary with historical data or None if fetch failed
+        """
+        period_to_days = {
+            "1d": 1,
+            "5d": 5,
+            "1mo": 30,
+            "3mo": 90,
+            "6mo": 180,
+            "1y": 365,
+            "2y": 730,
+            "5y": 1825,
+            "10y": 3650,
+            "ytd": (date.today() - date(date.today().year, 1, 1)).days or 1,
+            "max": 3650,
+        }
+
+        days = period_to_days.get(period, 30)
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        try:
+            client = _get_coingecko_client()
+            prices = client.get_price_history(symbol, start_date, end_date)
+
+            if not prices:
+                logger.warning(f"No historical crypto data found for {symbol}")
+                return None
+
+            return {
+                "symbol": symbol,
+                "period": period,
+                "data": [
+                    {
+                        "date": d.strftime("%Y-%m-%d"),
+                        "open": float(price),
+                        "high": float(price),
+                        "low": float(price),
+                        "close": float(price),
+                        "volume": 0,
+                    }
+                    for d, price in prices
+                ],
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching crypto historical data for {symbol}: {e}")
             return None
 
     @staticmethod

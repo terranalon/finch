@@ -77,25 +77,24 @@ async def get_historical_prices(
     if period not in valid_periods:
         raise BadRequestError(f"Invalid period. Must be one of: {', '.join(valid_periods)}")
 
-    data = PriceFetcher.get_historical_prices(symbol, period)
+    # Look up the asset once to determine asset class and currency
+    asset = db.query(Asset).filter(Asset.symbol == symbol).first()
+    is_crypto = asset.asset_class == "Crypto" if asset else False
+
+    data = PriceFetcher.get_historical_prices(symbol, period, is_crypto=is_crypto)
 
     if not data:
         raise NotFoundError("Historical data", symbol)
 
+    # Determine native currency
+    if symbol.endswith(".TA"):
+        native_currency = "ILS"
+    else:
+        native_currency = asset.currency if asset and asset.currency else "USD"
+
     # Convert to display currency if requested
     if display_currency:
-        # Determine native currency from symbol
-        # .TA = ILS (Tel Aviv Stock Exchange)
-        # Default to USD for others
-        if symbol.endswith(".TA"):
-            native_currency = "ILS"
-        else:
-            # Look up asset in database to get currency
-            asset = db.query(Asset).filter(Asset.symbol == symbol).first()
-            native_currency = asset.currency if asset and asset.currency else "USD"
-
         if native_currency != display_currency:
-            # Convert all prices
             for item in data["data"]:
                 for price_field in ["open", "high", "low", "close"]:
                     if item.get(price_field) is not None:
@@ -109,11 +108,6 @@ async def get_historical_prices(
 
         data["currency"] = display_currency
     else:
-        # Return native currency info
-        if symbol.endswith(".TA"):
-            data["currency"] = "ILS"
-        else:
-            asset = db.query(Asset).filter(Asset.symbol == symbol).first()
-            data["currency"] = asset.currency if asset and asset.currency else "USD"
+        data["currency"] = native_currency
 
     return data
