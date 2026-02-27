@@ -453,10 +453,11 @@ class PriceFetcher:
 
     @staticmethod
     def _get_crypto_historical_prices(symbol: str, period: str) -> dict | None:
-        """Fetch historical crypto prices from CoinGecko.
+        """Fetch historical crypto prices for a chart period.
 
-        Converts period strings (e.g., '1mo', '1y') to date ranges
-        for CoinGecko's market_chart/range API.
+        Converts period strings (e.g., '1mo', '1y') to date ranges and
+        delegates to _fetch_crypto_historical_prices, which handles the
+        CoinGecko (<= 365 days) / CryptoCompare (> 365 days) split.
 
         Args:
             symbol: Crypto symbol (e.g., 'BTC', 'ETH')
@@ -483,33 +484,27 @@ class PriceFetcher:
         days = period_to_days.get(period, 30)
         start_date = today - timedelta(days=days)
 
-        try:
-            client = _get_coingecko_client()
-            prices = client.get_price_history(symbol, start_date, today)
+        prices = PriceFetcher._fetch_crypto_historical_prices(symbol, start_date, today)
 
-            if not prices:
-                logger.warning(f"No historical crypto data found for {symbol}")
-                return None
-
-            return {
-                "symbol": symbol,
-                "period": period,
-                "data": [
-                    {
-                        "date": d.strftime("%Y-%m-%d"),
-                        "open": float(price),
-                        "high": float(price),
-                        "low": float(price),
-                        "close": float(price),
-                        "volume": 0,
-                    }
-                    for d, price in prices
-                ],
-            }
-
-        except Exception as e:
-            logger.error(f"Error fetching crypto historical data for {symbol}: {e}")
+        if not prices:
+            logger.warning(f"No historical crypto data found for {symbol}")
             return None
+
+        return {
+            "symbol": symbol,
+            "period": period,
+            "data": [
+                {
+                    "date": d.strftime("%Y-%m-%d"),
+                    "open": float(price),
+                    "high": float(price),
+                    "low": float(price),
+                    "close": float(price),
+                    "volume": 0,
+                }
+                for d, price in prices
+            ],
+        }
 
     @staticmethod
     def _fetch_crypto_historical_prices(
