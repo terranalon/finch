@@ -18,6 +18,19 @@ from app.services.shared.currency_conversion_helper import CurrencyConversionHel
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
 
+def _native_currency_for(symbol: str, asset: Asset | None) -> str:
+    """Return the native trading currency for a symbol.
+
+    Israeli stocks (.TA) always trade in ILS. For other assets, the
+    currency is read from the database record, defaulting to USD.
+    """
+    if symbol.endswith(".TA"):
+        return "ILS"
+    if asset and asset.currency:
+        return asset.currency
+    return "USD"
+
+
 @router.post("", response_model=PriceUpdateResponse)
 async def update_all_prices(
     background_tasks: BackgroundTasks,
@@ -77,22 +90,16 @@ async def get_historical_prices(
     if period not in valid_periods:
         raise BadRequestError(f"Invalid period. Must be one of: {', '.join(valid_periods)}")
 
-    # Look up the asset once to determine asset class and currency
     asset = db.query(Asset).filter(Asset.symbol == symbol).first()
-    is_crypto = asset.asset_class == "Crypto" if asset else False
+    is_crypto = asset is not None and asset.asset_class == "Crypto"
 
     data = PriceFetcher.get_historical_prices(symbol, period, is_crypto=is_crypto)
 
     if not data:
         raise NotFoundError("Historical data", symbol)
 
-    # Determine native currency
-    if symbol.endswith(".TA"):
-        native_currency = "ILS"
-    else:
-        native_currency = asset.currency if asset and asset.currency else "USD"
+    native_currency = _native_currency_for(symbol, asset)
 
-    # Convert to display currency if requested
     if display_currency:
         if native_currency != display_currency:
             for item in data["data"]:

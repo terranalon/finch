@@ -465,6 +465,7 @@ class PriceFetcher:
         Returns:
             Dictionary with historical data or None if fetch failed
         """
+        today = date.today()
         period_to_days = {
             "1d": 1,
             "5d": 5,
@@ -475,17 +476,16 @@ class PriceFetcher:
             "2y": 730,
             "5y": 1825,
             "10y": 3650,
-            "ytd": (date.today() - date(date.today().year, 1, 1)).days or 1,
+            "ytd": (today - date(today.year, 1, 1)).days or 1,
             "max": 3650,
         }
 
         days = period_to_days.get(period, 30)
-        end_date = date.today()
-        start_date = end_date - timedelta(days=days)
+        start_date = today - timedelta(days=days)
 
         try:
             client = _get_coingecko_client()
-            prices = client.get_price_history(symbol, start_date, end_date)
+            prices = client.get_price_history(symbol, start_date, today)
 
             if not prices:
                 logger.warning(f"No historical crypto data found for {symbol}")
