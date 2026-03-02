@@ -66,3 +66,6 @@ class Transaction(TransactionBase):
 
     id: int
     created_at: datetime.datetime
+    symbol: str | None = None
+    asset_name: str | None = None
+    account_name: str | None = None

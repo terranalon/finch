@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
@@ -42,6 +42,10 @@ async def list_transactions(
     query = (
         db.query(Transaction)
         .join(Transaction.holding)
+        .options(
+            joinedload(Transaction.holding).joinedload(Holding.asset),
+            joinedload(Transaction.holding).joinedload(Holding.account),
+        )
         .filter(Holding.account_id.in_(allowed_account_ids))
     )
 
@@ -67,6 +71,8 @@ async def list_transactions(
     total = query.count()
     items = query.offset(skip).limit(limit).all()
 
+    _enrich_transactions(items)
+
     return PaginatedResponse.create(items=items, total=total, skip=skip, limit=limit)
 
 
@@ -77,14 +83,24 @@ async def get_transaction(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific transaction by ID (must belong to user's accounts)."""
-    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    transaction = (
+        db.query(Transaction)
+        .options(
+            joinedload(Transaction.holding).joinedload(Holding.asset),
+            joinedload(Transaction.holding).joinedload(Holding.account),
+        )
+        .filter(Transaction.id == transaction_id)
+        .first()
+    )
     if not transaction:
         raise NotFoundError("Transaction", transaction_id)
 
-    holding = db.query(Holding).filter(Holding.id == transaction.holding_id).first()
+    holding = transaction.holding
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
         raise NotFoundError("Transaction", transaction_id)
+
+    _enrich_transactions([transaction])
 
     return transaction
 
@@ -204,3 +220,13 @@ async def delete_transaction(
     db.commit()
 
     return None
+
+
+def _enrich_transactions(items: list[Transaction]) -> None:
+    """Set symbol, asset_name, account_name from eager-loaded relationships."""
+    for item in items:
+        if item.holding and item.holding.asset:
+            item.symbol = item.holding.asset.symbol  # type: ignore[assignment]
+            item.asset_name = item.holding.asset.name  # type: ignore[assignment]
+        if item.holding and item.holding.account:
+            item.account_name = item.holding.account.name  # type: ignore[assignment]
