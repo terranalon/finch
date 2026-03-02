@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
@@ -39,37 +39,41 @@ async def list_transactions(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
-    query = (
+    base_query = (
         db.query(Transaction)
         .join(Transaction.holding)
-        .options(
-            joinedload(Transaction.holding).joinedload(Holding.asset),
-            joinedload(Transaction.holding).joinedload(Holding.account),
-        )
         .filter(Holding.account_id.in_(allowed_account_ids))
     )
 
     if holding_id:
-        query = query.filter(Transaction.holding_id == holding_id)
+        base_query = base_query.filter(Transaction.holding_id == holding_id)
 
     if account_id:
         if account_id not in allowed_account_ids:
             raise NotFoundError("Account", account_id)
-        query = query.filter(Holding.account_id == account_id)
+        base_query = base_query.filter(Holding.account_id == account_id)
 
     if transaction_type:
-        query = query.filter(Transaction.type == transaction_type)
+        base_query = base_query.filter(Transaction.type == transaction_type)
 
     if start_date:
-        query = query.filter(Transaction.date >= start_date)
+        base_query = base_query.filter(Transaction.date >= start_date)
 
     if end_date:
-        query = query.filter(Transaction.date <= end_date)
+        base_query = base_query.filter(Transaction.date <= end_date)
 
-    query = query.order_by(desc(Transaction.date), desc(Transaction.id))
+    base_query = base_query.order_by(desc(Transaction.date), desc(Transaction.id))
 
-    total = query.count()
-    items = query.offset(skip).limit(limit).all()
+    total = base_query.count()
+    items = (
+        base_query.options(
+            contains_eager(Transaction.holding).joinedload(Holding.asset),
+            contains_eager(Transaction.holding).joinedload(Holding.account),
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     _enrich_transactions(items)
 

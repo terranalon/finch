@@ -19,13 +19,12 @@ from app.services.portfolio.types import (
     DashboardSummary,
     HoldingValue,
     PerformancePoint,
-    PositionResult,
     TopHolding,
 )
 from app.services.repositories import AccountRepository, HoldingRepository
 from app.services.repositories.snapshot_repository import SnapshotRepository
 from app.services.shared.currency_service import CurrencyService
-from app.services.shared.response_formatters import to_float
+from app.services.shared.response_formatters import format_mover
 
 
 class DashboardService:
@@ -65,6 +64,8 @@ class DashboardService:
             historical_performance=self._get_performance(account_ids),
         )
 
+    _MAX_POSITIONS = 10_000  # upper bound for fetching all positions
+
     def get_movers(
         self, account_ids: list[int], *, limit: int = 3
     ) -> tuple[list[dict], list[dict]]:
@@ -73,36 +74,17 @@ class DashboardService:
         Returns (gainers, losers) as lists of dicts ready for schema conversion.
         """
         position_svc = PositionService(self._db)
-        positions, _ = position_svc.get_positions(account_ids, limit=9999)
+        positions, _ = position_svc.get_positions(account_ids, limit=self._MAX_POSITIONS)
 
         with_change = [p for p in positions if p.day_change_pct is not None]
+        by_pct = sorted(with_change, key=lambda p: p.day_change_pct, reverse=True)
 
-        by_pct = sorted(
-            with_change, key=lambda p: p.day_change_pct or Decimal("0"), reverse=True
-        )
+        # ty can't narrow Decimal|None through list-comp filter (day_change_pct is non-None here)
+        gainers = [p for p in by_pct if p.day_change_pct > 0][:limit]  # ty: ignore[unsupported-operator]
+        # Reverse so most negative comes first
+        losers = [p for p in by_pct if p.day_change_pct < 0][-limit:][::-1]  # ty: ignore[unsupported-operator]
 
-        gainers = [
-            p for p in by_pct if p.day_change_pct is not None and p.day_change_pct > 0
-        ][:limit]
-        losers = [
-            p
-            for p in reversed(by_pct)
-            if p.day_change_pct is not None and p.day_change_pct < 0
-        ][:limit]
-
-        def _to_mover(p: PositionResult) -> dict:
-            return {
-                "asset_id": p.asset_id,
-                "symbol": p.symbol,
-                "name": p.name,
-                "asset_class": p.asset_class,
-                "current_price": to_float(p.current_price),
-                "day_change": to_float(p.day_change),
-                "day_change_pct": to_float(p.day_change_pct),
-                "currency": p.currency,
-            }
-
-        return [_to_mover(g) for g in gainers], [_to_mover(p) for p in losers]
+        return [format_mover(g) for g in gainers], [format_mover(p) for p in losers]
 
     # ------------------------------------------------------------------
     # Private helpers

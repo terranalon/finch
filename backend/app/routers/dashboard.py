@@ -19,6 +19,7 @@ from app.services.portfolio.types import (
     TopHolding,
 )
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.response_formatters import to_float
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +132,6 @@ async def get_benchmark_performance(
 # ------------------------------------------------------------------
 
 
-def _to_float(value: Decimal | None) -> float | None:
-    return float(value) if value is not None else None
-
-
 def _convert(db: Session, value: Decimal, display_currency: str) -> float:
     """Convert a USD Decimal to display_currency float."""
     return float(CurrencyConversionHelper.convert_value(db, value, "USD", display_currency))
@@ -175,7 +172,7 @@ def _format_top_holding(h: TopHolding) -> dict:
         "account_name": h.account_name,
         "quantity": float(h.quantity),
         "cost_basis": float(h.cost_basis),
-        "current_price": _to_float(h.current_price),
+        "current_price": to_float(h.current_price),
         "currency": h.currency,
         "market_value": float(h.market_value_usd),
     }
@@ -196,7 +193,7 @@ def _format_summary(db: Session, s: DashboardSummary, display_currency: str) -> 
         "total_value_usd": float(s.total_value_usd),
         "total_value_ils": float(s.total_value_ils),
         "day_change": day_change,
-        "day_change_pct": _to_float(s.day_change_pct),
+        "day_change_pct": to_float(s.day_change_pct),
         "previous_close_value": previous_close_value,
         "accounts": [_format_account(db, a, display_currency) for a in s.accounts],
         "asset_allocation": [
