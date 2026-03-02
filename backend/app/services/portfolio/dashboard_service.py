@@ -77,10 +77,18 @@ class DashboardService:
 
         with_change = [p for p in positions if p.day_change_pct is not None]
 
-        by_pct = sorted(with_change, key=lambda p: p.day_change_pct, reverse=True)
+        by_pct = sorted(
+            with_change, key=lambda p: p.day_change_pct or Decimal("0"), reverse=True
+        )
 
-        gainers = [p for p in by_pct if p.day_change_pct > 0][:limit]
-        losers = [p for p in reversed(by_pct) if p.day_change_pct < 0][:limit]
+        gainers = [
+            p for p in by_pct if p.day_change_pct is not None and p.day_change_pct > 0
+        ][:limit]
+        losers = [
+            p
+            for p in reversed(by_pct)
+            if p.day_change_pct is not None and p.day_change_pct < 0
+        ][:limit]
 
         def _to_mover(p: PositionResult) -> dict:
             return {
@@ -94,7 +102,7 @@ class DashboardService:
                 "currency": p.currency,
             }
 
-        return [_to_mover(g) for g in gainers], [_to_mover(l) for l in losers]
+        return [_to_mover(g) for g in gainers], [_to_mover(p) for p in losers]
 
     # ------------------------------------------------------------------
     # Private helpers

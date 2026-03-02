@@ -75,17 +75,11 @@ class TestDashboardMovers:
 
         # Gainers should be sorted by day_change_pct descending
         if len(data["gainers"]) >= 2:
-            assert (
-                data["gainers"][0]["day_change_pct"]
-                >= data["gainers"][1]["day_change_pct"]
-            )
+            assert data["gainers"][0]["day_change_pct"] >= data["gainers"][1]["day_change_pct"]
 
         # Losers should be sorted by day_change_pct ascending (most negative first)
         if len(data["losers"]) >= 2:
-            assert (
-                data["losers"][0]["day_change_pct"]
-                <= data["losers"][1]["day_change_pct"]
-            )
+            assert data["losers"][0]["day_change_pct"] <= data["losers"][1]["day_change_pct"]
 
     def test_movers_respects_limit(self, auth_client, seed_holdings):
         response = auth_client.get("/api/dashboard/movers?limit=1")
@@ -94,12 +88,8 @@ class TestDashboardMovers:
         assert len(data["gainers"]) <= 1
         assert len(data["losers"]) <= 1
 
-    def test_movers_filters_by_portfolio(
-        self, auth_client, test_portfolio, seed_holdings
-    ):
-        response = auth_client.get(
-            f"/api/dashboard/movers?portfolio_id={test_portfolio.id}"
-        )
+    def test_movers_filters_by_portfolio(self, auth_client, test_portfolio, seed_holdings):
+        response = auth_client.get(f"/api/dashboard/movers?portfolio_id={test_portfolio.id}")
         assert response.status_code == 200
 
     def test_movers_response_shape(self, auth_client, seed_holdings):
