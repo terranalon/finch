@@ -12,17 +12,20 @@ from sqlalchemy.orm import Session
 
 from app.models import Asset
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
+from app.services.portfolio.position_service import PositionService
 from app.services.portfolio.types import (
     AccountValue,
     AllocationItem,
     DashboardSummary,
     HoldingValue,
     PerformancePoint,
+    PositionResult,
     TopHolding,
 )
 from app.services.repositories import AccountRepository, HoldingRepository
 from app.services.repositories.snapshot_repository import SnapshotRepository
 from app.services.shared.currency_service import CurrencyService
+from app.services.shared.response_formatters import to_float
 
 
 class DashboardService:
@@ -61,6 +64,37 @@ class DashboardService:
             top_holdings=self._calc_top_holdings(account_ids),
             historical_performance=self._get_performance(account_ids),
         )
+
+    def get_movers(
+        self, account_ids: list[int], *, limit: int = 3
+    ) -> tuple[list[dict], list[dict]]:
+        """Return top gainers and losers by day_change_pct.
+
+        Returns (gainers, losers) as lists of dicts ready for schema conversion.
+        """
+        position_svc = PositionService(self._db)
+        positions, _ = position_svc.get_positions(account_ids, limit=9999)
+
+        with_change = [p for p in positions if p.day_change_pct is not None]
+
+        by_pct = sorted(with_change, key=lambda p: p.day_change_pct, reverse=True)
+
+        gainers = [p for p in by_pct if p.day_change_pct > 0][:limit]
+        losers = [p for p in reversed(by_pct) if p.day_change_pct < 0][:limit]
+
+        def _to_mover(p: PositionResult) -> dict:
+            return {
+                "asset_id": p.asset_id,
+                "symbol": p.symbol,
+                "name": p.name,
+                "asset_class": p.asset_class,
+                "current_price": to_float(p.current_price),
+                "day_change": to_float(p.day_change),
+                "day_change_pct": to_float(p.day_change_pct),
+                "currency": p.currency,
+            }
+
+        return [_to_mover(g) for g in gainers], [_to_mover(l) for l in losers]
 
     # ------------------------------------------------------------------
     # Private helpers

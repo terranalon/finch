@@ -10,7 +10,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
-from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse
+from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse, MoversResponse
 from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.portfolio.dashboard_service import DashboardService
 from app.services.portfolio.types import (
@@ -55,6 +55,22 @@ async def get_dashboard_summary(
 
     summary = DashboardService(db).get_summary(allowed_account_ids)
     return _format_summary(db, summary, display_currency)
+
+
+@router.get("/movers", response_model=MoversResponse)
+async def get_movers(
+    limit: int = Query(3, ge=1, le=10, description="Number of gainers/losers to return"),
+    portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get top daily gainers and losers from portfolio positions."""
+    allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
+    if not allowed_account_ids:
+        return {"gainers": [], "losers": []}
+
+    gainers, losers = DashboardService(db).get_movers(allowed_account_ids, limit=limit)
+    return {"gainers": gainers, "losers": losers}
 
 
 @router.get("/benchmark", response_model=BenchmarkResponse)
