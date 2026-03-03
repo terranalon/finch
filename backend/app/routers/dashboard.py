@@ -19,7 +19,7 @@ from app.services.portfolio.types import (
     TopHolding,
 )
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
-from app.services.shared.response_formatters import to_float
+from app.services.shared.response_formatters import format_mover, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,10 @@ async def get_movers(
         return {"gainers": [], "losers": []}
 
     gainers, losers = DashboardService(db).get_movers(allowed_account_ids, limit=limit)
-    return {"gainers": gainers, "losers": losers}
+    return {
+        "gainers": [format_mover(g) for g in gainers],
+        "losers": [format_mover(p) for p in losers],
+    }
 
 
 @router.get("/benchmark", response_model=BenchmarkResponse)

@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.models import AssetPrice
+from app.models import Asset, AssetPrice, Holding
 
 
 class TestDashboardMovers:
@@ -24,8 +24,6 @@ class TestDashboardMovers:
         self, auth_client, db, test_account, test_portfolio
     ):
         """With multiple assets having day changes, returns sorted gainers/losers."""
-        from app.models import Asset, Holding
-
         yesterday = date.today() - timedelta(days=1)
 
         # Create 4 assets with different day changes
@@ -70,16 +68,19 @@ class TestDashboardMovers:
         assert response.status_code == 200
         data = response.json()
 
-        assert len(data["gainers"]) <= 2
-        assert len(data["losers"]) <= 2
+        # Must return exactly 2 gainers and 2 losers (we created 2 of each)
+        assert len(data["gainers"]) == 2
+        assert len(data["losers"]) == 2
 
-        # Gainers should be sorted by day_change_pct descending
-        if len(data["gainers"]) >= 2:
-            assert data["gainers"][0]["day_change_pct"] >= data["gainers"][1]["day_change_pct"]
+        # Gainers sorted by day_change_pct descending: MSFT (+5.26%) > AAPL (+3.45%)
+        assert data["gainers"][0]["symbol"] == "MSFT"
+        assert data["gainers"][1]["symbol"] == "AAPL"
+        assert data["gainers"][0]["day_change_pct"] > data["gainers"][1]["day_change_pct"]
 
-        # Losers should be sorted by day_change_pct ascending (most negative first)
-        if len(data["losers"]) >= 2:
-            assert data["losers"][0]["day_change_pct"] <= data["losers"][1]["day_change_pct"]
+        # Losers sorted most negative first: TSLA (-10%) < GOOGL (-4.76%)
+        assert data["losers"][0]["symbol"] == "TSLA"
+        assert data["losers"][1]["symbol"] == "GOOGL"
+        assert data["losers"][0]["day_change_pct"] < data["losers"][1]["day_change_pct"]
 
     def test_movers_respects_limit(self, auth_client, seed_holdings):
         response = auth_client.get("/api/dashboard/movers?limit=1")

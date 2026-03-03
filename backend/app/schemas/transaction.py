@@ -69,3 +69,18 @@ class Transaction(TransactionBase):
     symbol: str | None = None
     asset_name: str | None = None
     account_name: str | None = None
+
+    @classmethod
+    def from_orm_enriched(cls, txn: object) -> "Transaction":
+        """Build a Transaction schema with enriched fields from ORM relationships."""
+        instance = cls.model_validate(txn)
+        holding = getattr(txn, "holding", None)
+        if holding:
+            asset = getattr(holding, "asset", None)
+            if asset:
+                instance.symbol = getattr(asset, "symbol", None)
+                instance.asset_name = getattr(asset, "name", None)
+            account = getattr(holding, "account", None)
+            if account:
+                instance.account_name = getattr(account, "name", None)
+        return instance

@@ -75,9 +75,9 @@ async def list_transactions(
         .all()
     )
 
-    _enrich_transactions(items)
+    enriched = [TransactionSchema.from_orm_enriched(item) for item in items]
 
-    return PaginatedResponse.create(items=items, total=total, skip=skip, limit=limit)
+    return PaginatedResponse.create(items=enriched, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{transaction_id}", response_model=TransactionSchema)
@@ -104,9 +104,7 @@ async def get_transaction(
     if not holding or holding.account_id not in allowed_account_ids:
         raise NotFoundError("Transaction", transaction_id)
 
-    _enrich_transactions([transaction])
-
-    return transaction
+    return TransactionSchema.from_orm_enriched(transaction)
 
 
 @router.post("", response_model=TransactionSchema, status_code=status.HTTP_201_CREATED)
@@ -159,7 +157,7 @@ async def create_transaction(
 
         db.commit()
         db.refresh(db_transaction)
-        return db_transaction
+        return TransactionSchema.from_orm_enriched(db_transaction)
 
     except TransactionError as e:
         db.rollback()
@@ -196,7 +194,7 @@ async def update_transaction(
     db.commit()
     db.refresh(db_transaction)
 
-    return db_transaction
+    return TransactionSchema.from_orm_enriched(db_transaction)
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -224,13 +222,3 @@ async def delete_transaction(
     db.commit()
 
     return None
-
-
-def _enrich_transactions(items: list[Transaction]) -> None:
-    """Set symbol, asset_name, account_name from eager-loaded relationships."""
-    for item in items:
-        if item.holding and item.holding.asset:
-            item.symbol = item.holding.asset.symbol  # type: ignore[assignment]
-            item.asset_name = item.holding.asset.name  # type: ignore[assignment]
-        if item.holding and item.holding.account:
-            item.account_name = item.holding.account.name  # type: ignore[assignment]

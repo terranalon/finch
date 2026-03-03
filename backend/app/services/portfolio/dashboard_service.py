@@ -19,12 +19,12 @@ from app.services.portfolio.types import (
     DashboardSummary,
     HoldingValue,
     PerformancePoint,
+    PositionResult,
     TopHolding,
 )
 from app.services.repositories import AccountRepository, HoldingRepository
 from app.services.repositories.snapshot_repository import SnapshotRepository
 from app.services.shared.currency_service import CurrencyService
-from app.services.shared.response_formatters import format_mover
 
 
 class DashboardService:
@@ -68,11 +68,8 @@ class DashboardService:
 
     def get_movers(
         self, account_ids: list[int], *, limit: int = 3
-    ) -> tuple[list[dict], list[dict]]:
-        """Return top gainers and losers by day_change_pct.
-
-        Returns (gainers, losers) as lists of dicts ready for schema conversion.
-        """
+    ) -> tuple[list[PositionResult], list[PositionResult]]:
+        """Return top gainers and losers by day_change_pct."""
         position_svc = PositionService(self._db)
         positions, _ = position_svc.get_positions(account_ids, limit=self._MAX_POSITIONS)
 
@@ -84,7 +81,7 @@ class DashboardService:
         # Reverse so most negative comes first
         losers = [p for p in by_pct if p.day_change_pct < 0][-limit:][::-1]  # ty: ignore[unsupported-operator]
 
-        return [format_mover(g) for g in gainers], [format_mover(p) for p in losers]
+        return gainers, losers
 
     # ------------------------------------------------------------------
     # Private helpers
