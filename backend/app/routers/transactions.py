@@ -21,6 +21,19 @@ from app.services.portfolio.transaction_types import TransactionError
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
+def _load_transaction_with_relations(db: Session, transaction_id: int) -> Transaction:
+    """Re-query a transaction with eager-loaded holding, asset, and account."""
+    return (
+        db.query(Transaction)
+        .options(
+            joinedload(Transaction.holding).joinedload(Holding.asset),
+            joinedload(Transaction.holding).joinedload(Holding.account),
+        )
+        .filter(Transaction.id == transaction_id)
+        .one()
+    )
+
+
 @router.get("", response_model=PaginatedResponse[TransactionSchema])
 async def list_transactions(
     holding_id: int | None = None,
@@ -156,8 +169,8 @@ async def create_transaction(
             svc.process_sell(holding, transaction.quantity)
 
         db.commit()
-        db.refresh(db_transaction)
-        return TransactionSchema.from_orm_enriched(db_transaction)
+        loaded = _load_transaction_with_relations(db, db_transaction.id)
+        return TransactionSchema.from_orm_enriched(loaded)
 
     except TransactionError as e:
         db.rollback()
@@ -192,9 +205,9 @@ async def update_transaction(
         setattr(db_transaction, field, value)
 
     db.commit()
-    db.refresh(db_transaction)
+    loaded = _load_transaction_with_relations(db, db_transaction.id)
 
-    return TransactionSchema.from_orm_enriched(db_transaction)
+    return TransactionSchema.from_orm_enriched(loaded)
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
