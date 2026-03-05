@@ -10,7 +10,7 @@ from app.database import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
-from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse
+from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse, MoversResponse
 from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.portfolio.dashboard_service import DashboardService
 from app.services.portfolio.types import (
@@ -19,6 +19,7 @@ from app.services.portfolio.types import (
     TopHolding,
 )
 from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.response_formatters import format_mover, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,25 @@ async def get_dashboard_summary(
 
     summary = DashboardService(db).get_summary(allowed_account_ids)
     return _format_summary(db, summary, display_currency)
+
+
+@router.get("/movers", response_model=MoversResponse)
+async def get_movers(
+    limit: int = Query(3, ge=1, le=10, description="Number of gainers/losers to return"),
+    portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Get top daily gainers and losers from portfolio positions."""
+    allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
+    if not allowed_account_ids:
+        return {"gainers": [], "losers": []}
+
+    gainers, losers = DashboardService(db).get_movers(allowed_account_ids, limit=limit)
+    return {
+        "gainers": [format_mover(g) for g in gainers],
+        "losers": [format_mover(p) for p in losers],
+    }
 
 
 @router.get("/benchmark", response_model=BenchmarkResponse)
@@ -115,10 +135,6 @@ async def get_benchmark_performance(
 # ------------------------------------------------------------------
 
 
-def _to_float(value: Decimal | None) -> float | None:
-    return float(value) if value is not None else None
-
-
 def _convert(db: Session, value: Decimal, display_currency: str) -> float:
     """Convert a USD Decimal to display_currency float."""
     return float(CurrencyConversionHelper.convert_value(db, value, "USD", display_currency))
@@ -159,7 +175,7 @@ def _format_top_holding(h: TopHolding) -> dict:
         "account_name": h.account_name,
         "quantity": float(h.quantity),
         "cost_basis": float(h.cost_basis),
-        "current_price": _to_float(h.current_price),
+        "current_price": to_float(h.current_price),
         "currency": h.currency,
         "market_value": float(h.market_value_usd),
     }
@@ -180,7 +196,7 @@ def _format_summary(db: Session, s: DashboardSummary, display_currency: str) -> 
         "total_value_usd": float(s.total_value_usd),
         "total_value_ils": float(s.total_value_ils),
         "day_change": day_change,
-        "day_change_pct": _to_float(s.day_change_pct),
+        "day_change_pct": to_float(s.day_change_pct),
         "previous_close_value": previous_close_value,
         "accounts": [_format_account(db, a, display_currency) for a in s.accounts],
         "asset_allocation": [

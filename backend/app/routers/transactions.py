@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from app.database import get_db
 from app.dependencies.auth import get_current_user
@@ -19,6 +19,19 @@ from app.services.portfolio.transaction_service import TransactionService
 from app.services.portfolio.transaction_types import TransactionError
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
+
+
+def _load_transaction_with_relations(db: Session, transaction_id: int) -> Transaction:
+    """Re-query a transaction with eager-loaded holding, asset, and account."""
+    return (
+        db.query(Transaction)
+        .options(
+            joinedload(Transaction.holding).joinedload(Holding.asset),
+            joinedload(Transaction.holding).joinedload(Holding.account),
+        )
+        .filter(Transaction.id == transaction_id)
+        .one()
+    )
 
 
 @router.get("", response_model=PaginatedResponse[TransactionSchema])
@@ -39,35 +52,45 @@ async def list_transactions(
     if not allowed_account_ids:
         return PaginatedResponse.create(items=[], total=0, skip=skip, limit=limit)
 
-    query = (
+    base_query = (
         db.query(Transaction)
         .join(Transaction.holding)
         .filter(Holding.account_id.in_(allowed_account_ids))
     )
 
     if holding_id:
-        query = query.filter(Transaction.holding_id == holding_id)
+        base_query = base_query.filter(Transaction.holding_id == holding_id)
 
     if account_id:
         if account_id not in allowed_account_ids:
             raise NotFoundError("Account", account_id)
-        query = query.filter(Holding.account_id == account_id)
+        base_query = base_query.filter(Holding.account_id == account_id)
 
     if transaction_type:
-        query = query.filter(Transaction.type == transaction_type)
+        base_query = base_query.filter(Transaction.type == transaction_type)
 
     if start_date:
-        query = query.filter(Transaction.date >= start_date)
+        base_query = base_query.filter(Transaction.date >= start_date)
 
     if end_date:
-        query = query.filter(Transaction.date <= end_date)
+        base_query = base_query.filter(Transaction.date <= end_date)
 
-    query = query.order_by(desc(Transaction.date), desc(Transaction.id))
+    base_query = base_query.order_by(desc(Transaction.date), desc(Transaction.id))
 
-    total = query.count()
-    items = query.offset(skip).limit(limit).all()
+    total = base_query.count()
+    items = (
+        base_query.options(
+            contains_eager(Transaction.holding).joinedload(Holding.asset),
+            contains_eager(Transaction.holding).joinedload(Holding.account),
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
-    return PaginatedResponse.create(items=items, total=total, skip=skip, limit=limit)
+    enriched = [TransactionSchema.from_orm_enriched(item) for item in items]
+
+    return PaginatedResponse.create(items=enriched, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{transaction_id}", response_model=TransactionSchema)
@@ -77,16 +100,24 @@ async def get_transaction(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific transaction by ID (must belong to user's accounts)."""
-    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    transaction = (
+        db.query(Transaction)
+        .options(
+            joinedload(Transaction.holding).joinedload(Holding.asset),
+            joinedload(Transaction.holding).joinedload(Holding.account),
+        )
+        .filter(Transaction.id == transaction_id)
+        .first()
+    )
     if not transaction:
         raise NotFoundError("Transaction", transaction_id)
 
-    holding = db.query(Holding).filter(Holding.id == transaction.holding_id).first()
+    holding = transaction.holding
     allowed_account_ids = get_user_account_ids(current_user, db)
     if not holding or holding.account_id not in allowed_account_ids:
         raise NotFoundError("Transaction", transaction_id)
 
-    return transaction
+    return TransactionSchema.from_orm_enriched(transaction)
 
 
 @router.post("", response_model=TransactionSchema, status_code=status.HTTP_201_CREATED)
@@ -138,8 +169,8 @@ async def create_transaction(
             svc.process_sell(holding, transaction.quantity)
 
         db.commit()
-        db.refresh(db_transaction)
-        return db_transaction
+        loaded = _load_transaction_with_relations(db, db_transaction.id)
+        return TransactionSchema.from_orm_enriched(loaded)
 
     except TransactionError as e:
         db.rollback()
@@ -174,9 +205,9 @@ async def update_transaction(
         setattr(db_transaction, field, value)
 
     db.commit()
-    db.refresh(db_transaction)
+    loaded = _load_transaction_with_relations(db, db_transaction.id)
 
-    return db_transaction
+    return TransactionSchema.from_orm_enriched(loaded)
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)

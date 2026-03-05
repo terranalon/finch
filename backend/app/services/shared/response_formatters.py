@@ -48,6 +48,25 @@ def format_account_holding(a: AccountHolding) -> dict:
     }
 
 
+_MOVER_KEYS = frozenset(
+    {
+        "asset_id",
+        "symbol",
+        "name",
+        "asset_class",
+        "current_price",
+        "day_change",
+        "day_change_pct",
+        "currency",
+    }
+)
+
+
+def format_mover(p: PositionResult) -> dict:
+    """Format a PositionResult as a mover dict (subset of position fields)."""
+    return {k: v for k, v in format_position(p).items() if k in _MOVER_KEYS}
+
+
 def format_position(p: PositionResult) -> dict:
     return {
         "asset_id": p.asset_id,

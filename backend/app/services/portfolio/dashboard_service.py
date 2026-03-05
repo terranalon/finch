@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.models import Asset
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
+from app.services.portfolio.position_service import PositionService
 from app.services.portfolio.types import (
     AccountValue,
     AllocationItem,
     DashboardSummary,
     HoldingValue,
     PerformancePoint,
+    PositionResult,
     TopHolding,
 )
 from app.services.repositories import AccountRepository, HoldingRepository
@@ -61,6 +63,25 @@ class DashboardService:
             top_holdings=self._calc_top_holdings(account_ids),
             historical_performance=self._get_performance(account_ids),
         )
+
+    _MAX_POSITIONS = 10_000  # upper bound for fetching all positions
+
+    def get_movers(
+        self, account_ids: list[int], *, limit: int = 3
+    ) -> tuple[list[PositionResult], list[PositionResult]]:
+        """Return top gainers and losers by day_change_pct."""
+        position_svc = PositionService(self._db)
+        positions, _ = position_svc.get_positions(account_ids, limit=self._MAX_POSITIONS)
+
+        with_change = [p for p in positions if p.day_change_pct is not None]
+        by_pct = sorted(with_change, key=lambda p: p.day_change_pct, reverse=True)
+
+        # ty can't narrow Decimal|None through list-comp filter (day_change_pct is non-None here)
+        gainers = [p for p in by_pct if p.day_change_pct > 0][:limit]  # ty: ignore[unsupported-operator]
+        # Reverse so most negative comes first
+        losers = [p for p in by_pct if p.day_change_pct < 0][-limit:][::-1]  # ty: ignore[unsupported-operator]
+
+        return gainers, losers
 
     # ------------------------------------------------------------------
     # Private helpers

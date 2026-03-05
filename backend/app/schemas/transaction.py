@@ -2,8 +2,12 @@
 
 import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from app.models.transaction import Transaction as TransactionModel
 
 
 class TransactionBase(BaseModel):
@@ -66,3 +70,21 @@ class Transaction(TransactionBase):
 
     id: int
     created_at: datetime.datetime
+    symbol: str | None = None
+    asset_name: str | None = None
+    account_name: str | None = None
+
+    @classmethod
+    def from_orm_enriched(cls, txn: "TransactionModel") -> "Transaction":
+        """Build a Transaction schema with enriched fields from ORM relationships."""
+        holding = getattr(txn, "holding", None)
+        asset = getattr(holding, "asset", None) if holding else None
+        account = getattr(holding, "account", None) if holding else None
+
+        return cls.model_validate(txn).model_copy(
+            update={
+                "symbol": getattr(asset, "symbol", None),
+                "asset_name": getattr(asset, "name", None),
+                "account_name": getattr(account, "name", None),
+            }
+        )

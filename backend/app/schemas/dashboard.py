@@ -74,3 +74,23 @@ class BenchmarkResponse(BaseModel):
     name: str
     data: list[BenchmarkDataPoint]
     error: str | None = None
+
+
+class MoverResponse(BaseModel):
+    """Single asset in daily movers list."""
+
+    asset_id: int
+    symbol: str
+    name: str | None = None
+    asset_class: str | None = None
+    current_price: float | None = None
+    day_change: float | None = None
+    day_change_pct: float | None = None
+    currency: str
+
+
+class MoversResponse(BaseModel):
+    """Response for GET /api/dashboard/movers."""
+
+    gainers: list[MoverResponse]
+    losers: list[MoverResponse]
