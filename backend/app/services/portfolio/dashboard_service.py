@@ -22,7 +22,7 @@ from app.services.portfolio.types import (
     PositionResult,
     TopHolding,
 )
-from app.services.repositories import AccountRepository, HoldingRepository
+from app.services.repositories import AccountRepository, HoldingRepository, PriceRepository
 from app.services.repositories.snapshot_repository import SnapshotRepository
 from app.services.shared.currency_service import CurrencyService
 
@@ -37,6 +37,7 @@ class DashboardService:
         self._account_repo = AccountRepository(db)
         self._holding_repo = HoldingRepository(db)
         self._snapshot_repo = SnapshotRepository(db)
+        self._price_repo = PriceRepository(db)
 
     def get_summary(self, account_ids: list[int]) -> DashboardSummary:
         """Build a complete dashboard summary.
@@ -52,6 +53,8 @@ class DashboardService:
             account_ids, total_usd
         )
 
+        total_cost_basis_usd, total_cash_usd = self._calc_cost_basis_and_cash(account_ids)
+
         return DashboardSummary(
             total_value_usd=total_usd,
             total_value_ils=total_ils,
@@ -62,6 +65,8 @@ class DashboardService:
             asset_allocation=self._calc_allocation(account_ids),
             top_holdings=self._calc_top_holdings(account_ids),
             historical_performance=self._get_performance(account_ids),
+            total_cost_basis_usd=total_cost_basis_usd,
+            total_cash_usd=total_cash_usd,
         )
 
     _MAX_POSITIONS = 10_000  # upper bound for fetching all positions
@@ -167,6 +172,21 @@ class DashboardService:
         items.sort(key=lambda x: x.total_value, reverse=True)
         return items
 
+    def _calc_cost_basis_and_cash(self, account_ids: list[int]) -> tuple[Decimal, Decimal]:
+        """Sum total cost basis and total cash across all holdings."""
+        rows = self._holding_repo.find_active_with_assets_and_accounts(account_ids)
+
+        total_cost = Decimal("0")
+        total_cash = Decimal("0")
+        for holding, asset, _account_name in rows:
+            total_cost += holding.cost_basis or Decimal("0")
+            if asset.asset_class == "Cash":
+                hv = self._value_asset_holding(asset, holding.quantity)
+                if hv is not None:
+                    total_cash += hv.market_value_usd
+
+        return total_cost, total_cash
+
     def _calc_top_holdings(self, account_ids: list[int], limit: int = 10) -> list[TopHolding]:
         rows = self._holding_repo.find_active_with_assets_and_accounts(account_ids)
 
@@ -177,7 +197,17 @@ class DashboardService:
                 continue
 
             price = Decimal("1") if hv.is_cash else (asset.last_fetched_price or Decimal("0"))
-            items.append(
+
+            day_change_pct: Decimal | None = None
+            if not hv.is_cash and asset.last_fetched_price and asset.last_fetched_price > 0:
+                prev = self._price_repo.find_previous_close(asset.id, date.today())
+                if prev and prev.closing_price and prev.closing_price > 0:
+                    day_change_pct = (
+                        (asset.last_fetched_price - prev.closing_price) / prev.closing_price * 100
+                    )
+
+            items = [
+                *items,
                 TopHolding(
                     holding_id=holding.id,
                     symbol=asset.symbol,
@@ -189,8 +219,9 @@ class DashboardService:
                     current_price=price,
                     currency=asset.currency or "USD",
                     market_value_usd=hv.market_value_usd,
-                )
-            )
+                    day_change_pct=day_change_pct,
+                ),
+            ]
 
         items.sort(key=lambda x: x.market_value_usd, reverse=True)
         return items[:limit]

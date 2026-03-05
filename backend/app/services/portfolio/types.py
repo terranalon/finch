@@ -121,6 +121,7 @@ class TopHolding:
     current_price: Decimal | None
     currency: str
     market_value_usd: Decimal
+    day_change_pct: Decimal | None = None
 
 
 @dataclass
@@ -145,3 +146,5 @@ class DashboardSummary:
     asset_allocation: list[AllocationItem]
     top_holdings: list[TopHolding]
     historical_performance: list[PerformancePoint]
+    total_cost_basis_usd: Decimal = Decimal("0")
+    total_cash_usd: Decimal = Decimal("0")

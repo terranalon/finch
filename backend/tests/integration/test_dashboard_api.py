@@ -50,6 +50,22 @@ class TestDashboardAPI:
         data = response.json()
         assert data["display_currency"] == "ILS"
 
+    def test_dashboard_summary_includes_cost_basis_and_cash(self, auth_client, seed_holdings):
+        """Summary includes total_cost_basis and total_cash fields."""
+        response = auth_client.get("/api/dashboard/summary")
+        data = response.json()
+        assert "total_cost_basis" in data
+        assert "total_cash" in data
+        assert isinstance(data["total_cost_basis"], (int, float))
+        assert isinstance(data["total_cash"], (int, float))
+
+    def test_top_holdings_include_day_change(self, auth_client, seed_holdings):
+        """Top holdings include day_change_pct field."""
+        response = auth_client.get("/api/dashboard/summary")
+        data = response.json()
+        for holding in data["top_holdings"]:
+            assert "day_change_pct" in holding
+
     def test_benchmark_returns_data(self, auth_client):
         """Benchmark endpoint returns historical data."""
         response = auth_client.get("/api/dashboard/benchmark?symbol=SPY&period=1mo")

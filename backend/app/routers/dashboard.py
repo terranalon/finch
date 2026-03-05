@@ -39,6 +39,8 @@ _EMPTY_SUMMARY = {
     "asset_allocation": [],
     "top_holdings": [],
     "historical_performance": [],
+    "total_cost_basis": 0,
+    "total_cash": 0,
 }
 
 
@@ -202,6 +204,7 @@ def _format_top_holding(h: TopHolding) -> dict:
         "current_price": to_float(h.current_price),
         "currency": h.currency,
         "market_value": float(h.market_value_usd),
+        "day_change_pct": to_float(h.day_change_pct),
     }
 
 
@@ -241,4 +244,6 @@ def _format_summary(db: Session, s: DashboardSummary, display_currency: str) -> 
             )
             for p in s.historical_performance
         ],
+        "total_cost_basis": _convert(db, s.total_cost_basis_usd, display_currency),
+        "total_cash": _convert(db, s.total_cash_usd, display_currency),
     }

@@ -41,6 +41,7 @@ class TopHoldingResponse(BaseModel):
     current_price: float | None = None
     currency: str
     market_value: float
+    day_change_pct: float | None = None
 
 
 class DashboardSummaryResponse(BaseModel):
@@ -57,6 +58,8 @@ class DashboardSummaryResponse(BaseModel):
     asset_allocation: list[AssetAllocationResponse]
     top_holdings: list[TopHoldingResponse]
     historical_performance: list[SnapshotPointResponse]
+    total_cost_basis: float = 0
+    total_cash: float = 0
 
 
 class BenchmarkDataPoint(BaseModel):
