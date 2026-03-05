@@ -1,0 +1,345 @@
+import { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { cn, formatCurrency } from '../../lib';
+import { useTheme, useCurrency, useAuth, usePortfolio } from '../../contexts';
+import { ThemeToggle } from '../ui';
+
+const PAGE_NAMES = {
+  '/': 'Overview',
+  '/holdings': 'Holdings',
+  '/activity': 'Activity',
+  '/insights': 'Insights',
+  '/assets': 'Assets',
+  '/accounts': 'Accounts',
+  '/settings': 'Settings',
+  '/portfolios': 'Portfolios',
+};
+
+function ChevronDownIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+
+function BriefcaseIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0M12 12.75h.008v.008H12v-.008Z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function AdjustmentsIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+    </svg>
+  );
+}
+
+function Cog6ToothIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+  );
+}
+
+function ArrowRightStartOnRectangleIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" />
+    </svg>
+  );
+}
+
+function CurrencyIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function PortfolioSelector() {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { portfolios, selectedPortfolioId, selectedPortfolio, selectPortfolio, showCombinedView, loading } = usePortfolio();
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (portfolioId) => {
+    if (portfolioId === selectedPortfolioId) {
+      setIsOpen(false);
+      return;
+    }
+    setIsOpen(false);
+    selectPortfolio(portfolioId);
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
+  };
+
+  if (loading || portfolios.length === 0) return null;
+
+  const displayName = selectedPortfolio ? selectedPortfolio.name : 'All Portfolios';
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer',
+          'bg-[var(--bg-tertiary)] border border-[var(--border-primary)]',
+          'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-faint)]',
+          'text-xs font-medium',
+          isOpen && 'border-accent text-[var(--text-primary)]'
+        )}
+        aria-label="Select portfolio"
+        aria-expanded={isOpen}
+      >
+        <BriefcaseIcon className="w-3.5 h-3.5" />
+        <span className="max-w-[100px] truncate hidden sm:inline">{displayName}</span>
+        <ChevronDownIcon className={cn('w-3 h-3 transition-transform', isOpen && 'rotate-180')} />
+      </button>
+
+      {isOpen && (
+        <div className={cn(
+          'absolute right-0 mt-2 w-56 rounded-lg shadow-lg',
+          'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+          'py-2 z-50'
+        )}>
+          {showCombinedView && (
+            <>
+              <button
+                onClick={() => handleSelect(null)}
+                className={cn(
+                  'w-full px-4 py-2 flex items-center gap-3 text-left',
+                  'text-sm hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer',
+                  !selectedPortfolioId ? 'text-accent font-medium' : 'text-[var(--text-secondary)]'
+                )}
+              >
+                <span className="flex-1">All Portfolios</span>
+                {!selectedPortfolioId && <CheckIcon className="w-4 h-4" />}
+              </button>
+              {portfolios.length > 0 && <div className="border-t border-[var(--border-primary)] my-1" />}
+            </>
+          )}
+          {[...portfolios].sort((a, b) => Number(b.is_default) - Number(a.is_default)).map((portfolio) => (
+            <button
+              key={portfolio.id}
+              onClick={() => handleSelect(portfolio.id)}
+              className={cn(
+                'w-full px-4 py-2 flex items-center gap-2 text-left',
+                'text-sm hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer',
+                selectedPortfolioId === portfolio.id ? 'text-accent font-medium' : 'text-[var(--text-secondary)]'
+              )}
+            >
+              <span className="flex-1 truncate">{portfolio.name}</span>
+              {selectedPortfolioId === portfolio.id && <CheckIcon className="w-4 h-4 flex-shrink-0" />}
+            </button>
+          ))}
+          <div className="border-t border-[var(--border-primary)] my-1" />
+          <button
+            onClick={() => { setIsOpen(false); navigate('/portfolios'); }}
+            className={cn(
+              'w-full px-4 py-2 flex items-center gap-2',
+              'text-sm font-medium text-accent hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
+            )}
+          >
+            <AdjustmentsIcon className="w-4 h-4" />
+            Manage Portfolios
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const { user, logout } = useAuth();
+  const { currency, setCurrency, supportedCurrencies } = useCurrency();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    setIsOpen(false);
+    await logout();
+    navigate('/login');
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'w-[34px] h-[34px] flex items-center justify-center rounded-lg cursor-pointer',
+          'text-[var(--text-faint)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-secondary)] transition-all',
+          isOpen && 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+        )}
+        aria-label="Settings menu"
+        aria-expanded={isOpen}
+      >
+        <Cog6ToothIcon className="w-[17px] h-[17px]" />
+      </button>
+
+      {isOpen && (
+        <div className={cn(
+          'absolute right-0 mt-2 w-64 rounded-lg shadow-lg',
+          'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+          'py-2 z-50'
+        )}>
+          {user && (
+            <>
+              <div className="px-4 py-2">
+                <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user.username || user.email}</p>
+                <p className="text-xs text-[var(--text-tertiary)] truncate">{user.email}</p>
+              </div>
+              <div className="border-t border-[var(--border-primary)] my-1" />
+            </>
+          )}
+          <div className="px-4 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                <CurrencyIcon className="w-4 h-4" />
+                <span className="text-sm">Currency</span>
+              </div>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className={cn(
+                  'bg-[var(--bg-tertiary)] text-sm font-medium text-[var(--text-primary)]',
+                  'border border-[var(--border-primary)] rounded-md px-2 py-1',
+                  'hover:bg-[var(--bg-primary)] transition-colors cursor-pointer',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+                )}
+                aria-label="Select display currency"
+              >
+                {supportedCurrencies.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="border-t border-[var(--border-primary)] my-1" />
+          <button
+            onClick={() => { setIsOpen(false); navigate('/settings'); }}
+            className={cn(
+              'w-full px-4 py-2 flex items-center gap-3',
+              'text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+              'hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
+            )}
+          >
+            <Cog6ToothIcon className="w-4 h-4" />
+            <span>Settings</span>
+          </button>
+          {user && (
+            <button
+              onClick={handleLogout}
+              className={cn(
+                'w-full px-4 py-2 flex items-center gap-3',
+                'text-sm text-[var(--text-secondary)] hover:text-negative',
+                'hover:bg-negative-bg dark:hover:bg-negative-bg-dark/20 transition-colors cursor-pointer'
+              )}
+            >
+              <ArrowRightStartOnRectangleIcon className="w-4 h-4" />
+              <span>Log out</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function HeaderBar() {
+  const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const { selectedPortfolio } = usePortfolio();
+  const { currency } = useCurrency();
+
+  const pageName = PAGE_NAMES[location.pathname] || 'Overview';
+
+  return (
+    <header className="h-[52px] min-h-[52px] bg-[var(--bg-primary)] border-b border-[var(--border-primary)] flex items-center px-5 gap-3">
+      {/* Left: breadcrumb */}
+      <div className="flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)]">
+        Finch <span>/</span>
+        <span className="text-[var(--text-primary)] font-semibold">{pageName}</span>
+      </div>
+
+      {/* Center: search placeholder */}
+      <div className="flex-1 flex justify-center">
+        <div className={cn(
+          'flex items-center gap-2 px-3.5 py-1.5 min-w-[260px]',
+          'bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg',
+          'text-xs text-[var(--text-tertiary)] cursor-pointer',
+          'hover:border-[var(--text-faint)] transition-colors'
+        )}>
+          <SearchIcon className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>Search assets, accounts...</span>
+          <kbd className="ml-auto text-[10px] px-1.5 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded text-[var(--text-faint)] font-sans">
+            Cmd+K
+          </kbd>
+        </div>
+      </div>
+
+      {/* Right: controls */}
+      <div className="flex items-center gap-2">
+        {selectedPortfolio?.total_value != null && (
+          <span className="text-[13px] font-bold font-mono tabular-nums px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg">
+            {formatCurrency(selectedPortfolio.total_value, currency)}
+          </span>
+        )}
+        <PortfolioSelector />
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <SettingsDropdown />
+        <div className="w-[30px] h-[30px] rounded-full bg-accent flex items-center justify-center text-xs font-semibold text-white cursor-pointer">
+          {user?.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+        </div>
+      </div>
+    </header>
+  );
+}
