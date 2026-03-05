@@ -11,8 +11,10 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
 from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse, MoversResponse
+from app.schemas.market_pulse import MarketPulseResponse
 from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.portfolio.dashboard_service import DashboardService
+from app.services.portfolio.market_pulse_service import get_market_pulse
 from app.services.portfolio.types import (
     AccountValue,
     DashboardSummary,
@@ -128,6 +130,28 @@ async def get_benchmark_performance(
     except Exception as e:
         logger.error(f"Error fetching benchmark data for {symbol}: {e}")
         return {"symbol": symbol, "name": default_name, "data": [], "error": str(e)}
+
+
+@router.get("/market-pulse", response_model=MarketPulseResponse)
+async def get_market_pulse_data(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Get live market index prices and sparklines for the dashboard pulse card."""
+    client = YFinanceClient()
+    items = get_market_pulse(client)
+    return {
+        "items": [
+            {
+                "symbol": item.symbol,
+                "name": item.name,
+                "price": item.price,
+                "day_change": item.day_change,
+                "day_change_pct": item.day_change_pct,
+                "sparkline": item.sparkline,
+            }
+            for item in items
+        ],
+    }
 
 
 # ------------------------------------------------------------------
