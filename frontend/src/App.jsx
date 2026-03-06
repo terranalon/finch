@@ -6,7 +6,7 @@ import { DashboardLayout } from './components/layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
 // Pages
-import Overview from './pages/Overview'
+import DashboardPage from './pages/DashboardPage'
 import Holdings from './pages/Holdings'
 import Activity from './pages/Activity'
 import Accounts from './pages/Accounts'
@@ -118,7 +118,7 @@ function App() {
                   <AuthSwitchRoute
                     authenticated={
                       <GuardedLayout>
-                        <Overview />
+                        <DashboardPage />
                       </GuardedLayout>
                     }
                     unauthenticated={<LandingPage />}
