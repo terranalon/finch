@@ -67,9 +67,7 @@ export default function DashboardPage() {
       <div className="w-[340px] min-w-[340px] flex-shrink-0 p-5 pl-0 flex flex-col gap-3.5 overflow-y-auto h-full [scrollbar-width:thin]">
         <MarketPulseCard />
 
-        <div className="card flex-1 min-h-0 overflow-y-auto">
-          <RecentActivityCard />
-        </div>
+        <RecentActivityCard />
 
         <div className="card">
           <MoversCard onAssetClick={handleAssetClick} />
