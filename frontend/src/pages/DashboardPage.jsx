@@ -1,8 +1,18 @@
+import { useState } from 'react';
 import { useDashboardData } from '../hooks/useDashboardData';
-import { Skeleton } from '../components/ui';
+import {
+  SummaryStrip,
+  ChartCard,
+  AccountStrip,
+  TopHoldingsTable,
+  AssetExplorerCard,
+} from '../components/dashboard';
 
 export default function DashboardPage() {
   const { summary, snapshots, cashFlows, loading, error, currency } = useDashboardData();
+  const [sidebarAsset, setSidebarAsset] = useState(null);
+
+  const handleAssetClick = (asset) => setSidebarAsset(asset);
 
   if (error) {
     return (
@@ -16,30 +26,36 @@ export default function DashboardPage() {
     <div className="flex h-full overflow-hidden">
       {/* Left Column */}
       <div className="flex-1 overflow-y-auto p-5 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* SummaryStrip */}
-        <div className="mb-5 pb-[18px] border-b border-[var(--border-primary)]">
-          {loading ? (
-            <Skeleton className="h-16 w-full" />
-          ) : (
-            <p className="text-3xl font-bold font-mono tabular-nums">
-              Summary Strip placeholder
-            </p>
-          )}
-        </div>
+        <SummaryStrip
+          summary={summary}
+          snapshots={snapshots}
+          loading={loading}
+          currency={currency}
+        />
 
-        {/* ChartCard */}
-        <div className="card mb-5">
-          {loading ? <Skeleton className="h-[280px] w-full" /> : <p>Chart Card placeholder</p>}
-        </div>
+        <ChartCard
+          snapshots={snapshots}
+          cashFlows={cashFlows}
+          summary={summary}
+          currency={currency}
+          loading={loading}
+        />
 
-        {/* AccountStrip */}
-        <div className="mb-5">Account Strip placeholder</div>
+        <AccountStrip
+          accounts={summary?.accounts}
+          loading={loading}
+          currency={currency}
+        />
 
-        {/* TopHoldingsTable */}
-        <div className="card mb-5">Top Holdings placeholder</div>
+        <TopHoldingsTable
+          holdings={summary?.top_holdings}
+          totalValue={summary?.total_value || 0}
+          loading={loading}
+          currency={currency}
+          onAssetClick={handleAssetClick}
+        />
 
-        {/* AssetExplorerCard */}
-        <div className="card">Asset Explorer placeholder</div>
+        <AssetExplorerCard onAssetClick={handleAssetClick} />
       </div>
 
       {/* Right Column */}
