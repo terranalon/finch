@@ -9,6 +9,7 @@ import {
   MarketPulseCard,
   RecentActivityCard,
   MoversCard,
+  AssetDetailSidebar,
 } from '../components/dashboard';
 
 export default function DashboardPage() {
@@ -16,6 +17,7 @@ export default function DashboardPage() {
   const [sidebarAsset, setSidebarAsset] = useState(null);
 
   const handleAssetClick = (asset) => setSidebarAsset(asset);
+  const handleCloseSidebar = () => setSidebarAsset(null);
 
   if (error) {
     return (
@@ -73,6 +75,13 @@ export default function DashboardPage() {
           <MoversCard onAssetClick={handleAssetClick} />
         </div>
       </div>
+
+      {/* Asset Detail Slide-Over */}
+      <AssetDetailSidebar
+        asset={sidebarAsset}
+        isOpen={!!sidebarAsset}
+        onClose={handleCloseSidebar}
+      />
     </div>
   );
 }

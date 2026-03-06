@@ -6,3 +6,4 @@ export { AssetExplorerCard } from './AssetExplorerCard';
 export { MarketPulseCard } from './MarketPulseCard';
 export { RecentActivityCard } from './RecentActivityCard';
 export { MoversCard } from './MoversCard';
+export { AssetDetailSidebar } from './AssetDetailSidebar';
