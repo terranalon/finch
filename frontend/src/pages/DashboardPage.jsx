@@ -6,6 +6,9 @@ import {
   AccountStrip,
   TopHoldingsTable,
   AssetExplorerCard,
+  MarketPulseCard,
+  RecentActivityCard,
+  MoversCard,
 } from '../components/dashboard';
 
 export default function DashboardPage() {
@@ -60,8 +63,15 @@ export default function DashboardPage() {
 
       {/* Right Column */}
       <div className="w-[340px] min-w-[340px] flex-shrink-0 p-5 pl-0 flex flex-col gap-3.5 overflow-y-auto h-full [scrollbar-width:thin]">
-        <div className="card flex-1 min-h-0 overflow-y-auto">Market Pulse placeholder</div>
-        <div className="card flex-1 min-h-0 overflow-y-auto">Recent Activity placeholder</div>
+        <MarketPulseCard />
+
+        <div className="card flex-1 min-h-0 overflow-y-auto">
+          <RecentActivityCard />
+        </div>
+
+        <div className="card">
+          <MoversCard onAssetClick={handleAssetClick} />
+        </div>
       </div>
     </div>
   );
