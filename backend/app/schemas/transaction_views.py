@@ -24,6 +24,8 @@ class TradeResponse(BaseModel):
     currency: str
     account_name: str
     notes: str | None = None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None
 
 
 class DividendResponse(BaseModel):
@@ -40,6 +42,8 @@ class DividendResponse(BaseModel):
     currency: str
     account_name: str
     notes: str | None = None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None
 
 
 class ForexResponse(BaseModel):
@@ -72,3 +76,5 @@ class CashActivityResponse(BaseModel):
     currency: str
     account_name: str
     notes: str | None = None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None
