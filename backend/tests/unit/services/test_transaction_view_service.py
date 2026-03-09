@@ -8,7 +8,7 @@ import pytest
 from app.models import Asset, Holding, Transaction
 from app.services.portfolio.transaction_view_service import TransactionViewService
 from app.services.repositories.transaction_repository import TransactionRepository
-from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.currency_service import CurrencyService
 
 
 @pytest.fixture
@@ -171,9 +171,9 @@ class TestGetTrades:
         )
 
         monkeypatch.setattr(
-            CurrencyConversionHelper,
-            "convert_value",
-            staticmethod(lambda _db, val, _from, _to, _dt: val * Decimal("0.74")),
+            CurrencyService,
+            "get_exchange_rate",
+            lambda _self, _from, _to, _dt: Decimal("0.74"),
         )
 
         svc = TransactionViewService(db)
@@ -234,15 +234,13 @@ class TestGetDividends:
         )
 
         monkeypatch.setattr(
-            CurrencyConversionHelper,
-            "convert_value",
-            staticmethod(lambda _db, val, _from, _to, _dt: val * Decimal("0.74")),
+            CurrencyService,
+            "get_exchange_rate",
+            lambda _self, _from, _to, _dt: Decimal("0.74"),
         )
 
         svc = TransactionViewService(db)
-        divs, _ = svc.get_dividends(
-            [test_account.id], display_currency="USD"
-        )
+        divs, _ = svc.get_dividends([test_account.id], display_currency="USD")
 
         assert divs[0].currency == "USD"
         assert divs[0].original_currency == "CAD"
@@ -377,9 +375,9 @@ class TestGetCashActivity:
         )
 
         monkeypatch.setattr(
-            CurrencyConversionHelper,
-            "convert_value",
-            staticmethod(lambda _db, val, _from, _to, _dt: val * Decimal("0.27")),
+            CurrencyService,
+            "get_exchange_rate",
+            lambda _self, _from, _to, _dt: Decimal("0.27"),
         )
 
         svc = TransactionViewService(db)
@@ -390,9 +388,7 @@ class TestGetCashActivity:
         assert cash[0].original_currency == "ILS"
         assert cash[0].original_amount == Decimal("6000")
 
-    def test_original_currency_none_when_no_conversion(
-        self, db, test_account, cash_holding
-    ):
+    def test_original_currency_none_when_no_conversion(self, db, test_account, cash_holding):
         """When no display_currency, original fields are None."""
         _create_txn(
             db,

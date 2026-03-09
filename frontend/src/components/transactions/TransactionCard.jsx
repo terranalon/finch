@@ -300,10 +300,10 @@ function renderDetailedContent(tx, style, currency) {
 }
 
 function OriginalAmountLine({ tx }) {
-  if (!tx.original_currency || tx.original_currency === tx.currency) return null;
+  if (!tx.original_currency || tx.original_amount == null || tx.original_currency === tx.currency) return null;
   return (
     <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
-      {getCurrencySymbol(tx.original_currency)}{Math.abs(tx.original_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {formatCurrency(Math.abs(tx.original_amount), tx.original_currency)}
     </p>
   );
 }

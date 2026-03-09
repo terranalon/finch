@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Sequence
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from app.services.portfolio.transaction_view_types import (
     TradeItem,
 )
 from app.services.repositories.transaction_repository import TransactionRepository
-from app.services.shared.currency_conversion_helper import CurrencyConversionHelper
+from app.services.shared.currency_service import CurrencyService
 
 _CRYPTO_CASH_TYPES = ("Deposit", "Withdrawal", "Custody Fee")
 
@@ -26,6 +27,22 @@ class TransactionViewService:
     def __init__(self, db: Session) -> None:
         self._db = db
         self._repo = TransactionRepository(db)
+
+    def _get_rate(
+        self,
+        rate_cache: dict[tuple[str, str, date], Decimal],
+        from_currency: str,
+        to_currency: str,
+        conversion_date: date,
+    ) -> Decimal:
+        """Get exchange rate with per-request caching to avoid N+1 queries."""
+        key = (from_currency, to_currency, conversion_date)
+        if key not in rate_cache:
+            rate = CurrencyService(self._db).get_exchange_rate(
+                from_currency, to_currency, conversion_date
+            )
+            rate_cache[key] = rate if rate is not None else Decimal("1")
+        return rate_cache[key]
 
     def get_trades(
         self,
@@ -40,6 +57,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
+        rate_cache: dict[tuple[str, str, date], Decimal] = {}
         total = self._repo.count_trades(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_trades(
             account_ids,
@@ -63,12 +81,10 @@ class TransactionViewService:
             if display_currency and display_currency != native_currency:
                 original_amount = trade_total
                 original_currency = native_currency
-                convert = CurrencyConversionHelper.convert_value
-                price = convert(self._db, price, native_currency, display_currency, txn.date)
-                fees = convert(self._db, fees, native_currency, display_currency, txn.date)
-                trade_total = convert(
-                    self._db, trade_total, native_currency, display_currency, txn.date
-                )
+                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
+                price = price * rate
+                fees = fees * rate
+                trade_total = trade_total * rate
                 output_currency = display_currency
             else:
                 output_currency = native_currency
@@ -108,6 +124,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
+        rate_cache: dict[tuple[str, str, date], Decimal] = {}
         total = self._repo.count_dividends(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_dividends(
             account_ids,
@@ -127,9 +144,8 @@ class TransactionViewService:
             if display_currency and display_currency != native_currency:
                 original_amount = amount
                 original_currency = native_currency
-                amount = CurrencyConversionHelper.convert_value(
-                    self._db, amount, native_currency, display_currency, txn.date
-                )
+                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
+                amount = amount * rate
                 output_currency = display_currency
             else:
                 output_currency = native_currency
@@ -199,6 +215,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
+        rate_cache: dict[tuple[str, str, date], Decimal] = {}
         total = self._repo.count_cash_activity(account_ids, account_id=account_id)
         rows = self._repo.find_cash_activity(
             account_ids, account_id=account_id, limit=limit, offset=offset
@@ -213,10 +230,10 @@ class TransactionViewService:
             if display_currency and display_currency != native_currency:
                 original_amount = amount
                 original_currency = native_currency
-                convert = CurrencyConversionHelper.convert_value
-                amount = convert(self._db, amount, native_currency, display_currency, txn.date)
+                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
+                amount = amount * rate
                 if fees is not None:
-                    fees = convert(self._db, fees, native_currency, display_currency, txn.date)
+                    fees = fees * rate
                 output_currency = display_currency
             else:
                 output_currency = native_currency
