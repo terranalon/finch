@@ -57,8 +57,12 @@ class TransactionViewService:
             trade_total = (qty * price) + fees
 
             native_currency = _resolve_native_currency(asset, txn.notes)
+            original_amount: Decimal | None = None
+            original_currency: str | None = None
 
             if display_currency and display_currency != native_currency:
+                original_amount = trade_total
+                original_currency = native_currency
                 convert = CurrencyConversionHelper.convert_value
                 price = convert(self._db, price, native_currency, display_currency, txn.date)
                 fees = convert(self._db, fees, native_currency, display_currency, txn.date)
@@ -84,6 +88,8 @@ class TransactionViewService:
                     currency=output_currency,
                     account_name=account.name,
                     notes=txn.notes,
+                    original_amount=original_amount,
+                    original_currency=original_currency,
                 ),
             )
 
@@ -95,6 +101,7 @@ class TransactionViewService:
         *,
         account_id: int | None = None,
         symbol: str | None = None,
+        display_currency: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[DividendItem], int]:
@@ -110,20 +117,38 @@ class TransactionViewService:
             offset=offset,
         )
 
-        items = [
-            DividendItem(
-                id=txn.id,
-                date=txn.date,
-                symbol=asset.symbol,
-                asset_name=asset.name,
-                type=txn.type,
-                amount=txn.amount or Decimal("0"),
-                currency=asset.currency,
-                account_name=account.name,
-                notes=txn.notes,
+        items: list[DividendItem] = []
+        for txn, _, asset, account in rows:
+            amount = txn.amount or Decimal("0")
+            native_currency = asset.currency or "USD"
+            original_amount: Decimal | None = None
+            original_currency: str | None = None
+
+            if display_currency and display_currency != native_currency:
+                original_amount = amount
+                original_currency = native_currency
+                amount = CurrencyConversionHelper.convert_value(
+                    self._db, amount, native_currency, display_currency, txn.date
+                )
+                output_currency = display_currency
+            else:
+                output_currency = native_currency
+
+            items.append(
+                DividendItem(
+                    id=txn.id,
+                    date=txn.date,
+                    symbol=asset.symbol,
+                    asset_name=asset.name,
+                    type=txn.type,
+                    amount=amount,
+                    currency=output_currency,
+                    account_name=account.name,
+                    notes=txn.notes,
+                    original_amount=original_amount,
+                    original_currency=original_currency,
+                ),
             )
-            for txn, _, asset, account in rows
-        ]
         return items, total
 
     def get_forex(
@@ -182,8 +207,12 @@ class TransactionViewService:
         items: list[CashActivityItem] = []
         for txn, _, asset, account in rows:
             amount, fees, native_currency = self._compute_cash_values(txn, asset)
+            original_amount: Decimal | None = None
+            original_currency: str | None = None
 
             if display_currency and display_currency != native_currency:
+                original_amount = amount
+                original_currency = native_currency
                 convert = CurrencyConversionHelper.convert_value
                 amount = convert(self._db, amount, native_currency, display_currency, txn.date)
                 if fees is not None:
@@ -203,6 +232,8 @@ class TransactionViewService:
                     currency=output_currency,
                     account_name=account.name,
                     notes=txn.notes,
+                    original_amount=original_amount,
+                    original_currency=original_currency,
                 ),
             )
 

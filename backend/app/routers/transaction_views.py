@@ -62,6 +62,9 @@ async def list_dividends(
     account_id: int | None = None,
     symbol: str | None = None,
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
+    display_currency: str = Query(
+        None, description="Currency for displaying values (converts from native currency)"
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -79,6 +82,7 @@ async def list_dividends(
         allowed_account_ids,
         account_id=account_id,
         symbol=symbol,
+        display_currency=display_currency,
         limit=limit,
         offset=skip,
     )
