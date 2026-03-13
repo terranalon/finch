@@ -193,6 +193,43 @@ class TestGetTrades:
         assert trades[0].original_currency is None
         assert trades[0].original_amount is None
 
+    def test_falls_back_to_native_currency_when_rate_unavailable(
+        self, db, test_account, asset_cad, monkeypatch
+    ):
+        """When exchange rate is unavailable, no conversion is applied and original fields stay None."""
+        holding = Holding(
+            account_id=test_account.id,
+            asset_id=asset_cad.id,
+            quantity=Decimal("20"),
+            cost_basis=Decimal("1000"),
+            is_active=True,
+        )
+        db.add(holding)
+        db.flush()
+        _create_txn(
+            db,
+            holding,
+            type="Buy",
+            quantity=Decimal("20"),
+            price_per_unit=Decimal("50"),
+            fees=Decimal("10"),
+        )
+
+        monkeypatch.setattr(
+            CurrencyService,
+            "get_exchange_rate",
+            lambda _self, _from, _to, _dt: None,
+        )
+
+        svc = TransactionViewService(db)
+        trades, _ = svc.get_trades([test_account.id], display_currency="USD")
+
+        # Rate unavailable: no conversion, no misleading original fields
+        assert trades[0].currency == "CAD"
+        assert trades[0].original_currency is None
+        assert trades[0].original_amount is None
+        assert trades[0].total == Decimal("1010")  # unchanged
+
 
 class TestGetDividends:
     def test_returns_dividend_transactions(self, db, test_account, test_asset, test_holding):

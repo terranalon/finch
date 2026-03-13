@@ -1,5 +1,6 @@
 """Transaction view business logic - trade computation, forex parsing, cash conversion."""
 
+import logging
 import re
 from collections.abc import Sequence
 from datetime import date
@@ -18,6 +19,8 @@ from app.services.portfolio.transaction_view_types import (
 from app.services.repositories.transaction_repository import TransactionRepository
 from app.services.shared.currency_service import CurrencyService
 
+logger = logging.getLogger(__name__)
+
 _CRYPTO_CASH_TYPES = ("Deposit", "Withdrawal", "Custody Fee")
 
 
@@ -30,18 +33,30 @@ class TransactionViewService:
 
     def _get_rate(
         self,
-        rate_cache: dict[tuple[str, str, date], Decimal],
+        rate_cache: dict[tuple[str, str, date], Decimal | None],
         from_currency: str,
         to_currency: str,
         conversion_date: date,
-    ) -> Decimal:
-        """Get exchange rate with per-request caching to avoid N+1 queries."""
+    ) -> Decimal | None:
+        """Get exchange rate with per-request caching to avoid N+1 queries.
+
+        Returns None when the rate is unavailable (logs a warning). Callers
+        should fall back to native currency rather than pretending a conversion
+        occurred at 1:1.
+        """
         key = (from_currency, to_currency, conversion_date)
         if key not in rate_cache:
             rate = CurrencyService(self._db).get_exchange_rate(
                 from_currency, to_currency, conversion_date
             )
-            rate_cache[key] = rate if rate is not None else Decimal("1")
+            if rate is None:
+                logger.warning(
+                    "No exchange rate for %s/%s on %s, falling back to native currency",
+                    from_currency,
+                    to_currency,
+                    conversion_date,
+                )
+            rate_cache[key] = rate
         return rate_cache[key]
 
     def get_trades(
@@ -57,7 +72,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
-        rate_cache: dict[tuple[str, str, date], Decimal] = {}
+        rate_cache: dict[tuple[str, str, date], Decimal | None] = {}
         total = self._repo.count_trades(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_trades(
             account_ids,
@@ -79,13 +94,16 @@ class TransactionViewService:
             original_currency: str | None = None
 
             if display_currency and display_currency != native_currency:
-                original_amount = trade_total
-                original_currency = native_currency
                 rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                price = price * rate
-                fees = fees * rate
-                trade_total = trade_total * rate
-                output_currency = display_currency
+                if rate is not None:
+                    original_amount = trade_total
+                    original_currency = native_currency
+                    price = price * rate
+                    fees = fees * rate
+                    trade_total = trade_total * rate
+                    output_currency = display_currency
+                else:
+                    output_currency = native_currency
             else:
                 output_currency = native_currency
 
@@ -124,7 +142,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
-        rate_cache: dict[tuple[str, str, date], Decimal] = {}
+        rate_cache: dict[tuple[str, str, date], Decimal | None] = {}
         total = self._repo.count_dividends(account_ids, account_id=account_id, symbol=symbol)
         rows = self._repo.find_dividends(
             account_ids,
@@ -142,11 +160,14 @@ class TransactionViewService:
             original_currency: str | None = None
 
             if display_currency and display_currency != native_currency:
-                original_amount = amount
-                original_currency = native_currency
                 rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                amount = amount * rate
-                output_currency = display_currency
+                if rate is not None:
+                    original_amount = amount
+                    original_currency = native_currency
+                    amount = amount * rate
+                    output_currency = display_currency
+                else:
+                    output_currency = native_currency
             else:
                 output_currency = native_currency
 
@@ -215,7 +236,7 @@ class TransactionViewService:
         if not account_ids:
             return [], 0
 
-        rate_cache: dict[tuple[str, str, date], Decimal] = {}
+        rate_cache: dict[tuple[str, str, date], Decimal | None] = {}
         total = self._repo.count_cash_activity(account_ids, account_id=account_id)
         rows = self._repo.find_cash_activity(
             account_ids, account_id=account_id, limit=limit, offset=offset
@@ -228,13 +249,16 @@ class TransactionViewService:
             original_currency: str | None = None
 
             if display_currency and display_currency != native_currency:
-                original_amount = amount
-                original_currency = native_currency
                 rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                amount = amount * rate
-                if fees is not None:
-                    fees = fees * rate
-                output_currency = display_currency
+                if rate is not None:
+                    original_amount = amount
+                    original_currency = native_currency
+                    amount = amount * rate
+                    if fees is not None:
+                        fees = fees * rate
+                    output_currency = display_currency
+                else:
+                    output_currency = native_currency
             else:
                 output_currency = native_currency
 
