@@ -299,19 +299,34 @@ function renderDetailedContent(tx, style, currency) {
   }
 }
 
+function OriginalAmountLine({ tx }) {
+  if (!tx.original_currency || tx.original_amount == null || tx.original_currency === tx.currency) return null;
+  return (
+    <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+      {formatCurrency(Math.abs(tx.original_amount), tx.original_currency)}
+    </p>
+  );
+}
+
 function renderDetailedAmount(tx, style, currency) {
   switch (tx.type) {
     case 'trade':
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          {style.sign}{formatCurrency(Math.abs(tx.total), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            {style.sign}{formatCurrency(Math.abs(tx.total), currency)}
+          </p>
+          <OriginalAmountLine tx={tx} />
+        </>
       );
     case 'dividend':
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          +{formatCurrency(Math.abs(tx.amount), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            +{formatCurrency(Math.abs(tx.amount), currency)}
+          </p>
+          <OriginalAmountLine tx={tx} />
+        </>
       );
     case 'forex':
       return (
@@ -326,9 +341,12 @@ function renderDetailedAmount(tx, style, currency) {
       );
     case 'cash':
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
+          </p>
+          <OriginalAmountLine tx={tx} />
+        </>
       );
     default:
       return null;
