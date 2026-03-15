@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
+import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash, hasConversion } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { MultiSelectFilter, Skeleton } from '../components/ui';
@@ -198,7 +198,7 @@ const formatShortDate = (dateStr) => {
 function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
   if (!tx) return null;
 
-  const hasOriginal = tx.original_currency && tx.original_amount != null && tx.original_currency !== tx.currency;
+  const hasOriginal = hasConversion(tx);
 
   const renderTradeDetails = () => {
     const isBuy = tx.side === 'BUY';
@@ -376,6 +376,8 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
     const isFee = tx.activity_type === 'FEE';
     const isInterest = tx.activity_type === 'INTEREST';
     const displayType = tx.cash_type || (isDeposit ? 'Deposit' : 'Withdrawal');
+    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
+    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
 
     // Determine colors and icons based on transaction type
     const getStyleConfig = () => {
@@ -433,7 +435,7 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
             <span className="text-sm text-[var(--text-secondary)]">Amount</span>
             <div className="text-right">
               <span className={cn('text-2xl font-semibold font-mono tabular-nums', style.textColor)}>
-                {style.sign}{formatCurrency(Math.abs(hasOriginal ? tx.original_amount : tx.amount), hasOriginal ? tx.original_currency : tx.currency)}
+                {style.sign}{formatCurrency(primaryAmount, primaryCurrency)}
               </span>
               {hasOriginal && (
                 <p className="text-sm text-[var(--text-tertiary)] font-mono">

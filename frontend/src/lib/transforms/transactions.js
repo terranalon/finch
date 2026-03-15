@@ -15,6 +15,13 @@ const CASH_ACTIVITY_TYPE_MAP = {
 };
 
 /**
+ * Check if a transaction was currency-converted (has original amount in a different currency).
+ */
+export function hasConversion(tx) {
+  return tx.original_currency && tx.original_amount != null && tx.original_currency !== tx.currency;
+}
+
+/**
  * Transform API trade response to unified format.
  */
 export function transformTrade(trade) {

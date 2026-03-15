@@ -3,4 +3,5 @@ export {
   transformDividend,
   transformForex,
   transformCash,
+  hasConversion,
 } from './transactions';

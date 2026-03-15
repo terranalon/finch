@@ -6,7 +6,7 @@
  * - "compact": Single row for Account tab lists (minimal, inline layout)
  */
 
-import { cn, formatCurrency } from '../../lib';
+import { cn, formatCurrency, hasConversion } from '../../lib';
 
 // ============================================
 // ICONS
@@ -314,10 +314,6 @@ function renderDetailedContent(tx, style, currency) {
   }
 }
 
-function hasConversion(tx) {
-  return tx.original_currency && tx.original_amount != null && tx.original_currency !== tx.currency;
-}
-
 function ConvertedAmountLine({ amount, currency }) {
   return (
     <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
@@ -399,6 +395,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
   const style = getStyle(tx);
   const Icon = style.icon;
   const txCurrency = tx.currency || currency || 'USD';
+  const isConverted = hasConversion(tx);
 
   // Compact variant - single row
   if (variant === 'compact') {
@@ -425,7 +422,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
           <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
             {getCompactAmount(tx, txCurrency, style)}
           </p>
-          {hasConversion(tx) && (
+          {isConverted && (
             <p className="text-xs text-[var(--text-tertiary)] font-mono">
               {formatCurrency(Math.abs(tx.type === 'trade' ? tx.total : tx.amount), txCurrency)}
             </p>
