@@ -1,6 +1,8 @@
 """Dashboard API router."""
 
+import dataclasses
 import logging
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -41,6 +43,10 @@ _EMPTY_SUMMARY = {
     "historical_performance": [],
     "total_cost_basis": 0,
     "total_cash": 0,
+    "total_return": 0,
+    "total_return_pct": None,
+    "unrealized_pnl": 0,
+    "realized_pnl": 0,
 }
 
 
@@ -85,18 +91,25 @@ async def get_movers(
 async def get_benchmark_performance(
     period: str = Query("1mo", description="Time period: 1mo, 3mo, 6mo, 1y, ytd, max"),
     symbol: str = Query("SPY", description="Benchmark symbol (default: SPY for S&P 500)"),
+    start_date: date | None = Query(None, description="Custom range start (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="Custom range end (YYYY-MM-DD)"),
 ):
     """
     Get benchmark historical performance data.
 
     Returns daily closing prices and cumulative % change from period start,
     designed to align with portfolio TWR calculations.
+
+    Accepts either a named period or a custom date range via start_date/end_date.
     """
     default_name = "S&P 500 ETF"
 
     try:
         client = YFinanceClient()
-        rows = client.get_historical_data(symbol, period=period)
+        if start_date and end_date:
+            rows = client.get_history_for_range(symbol, start_date, end_date)
+        else:
+            rows = client.get_historical_data(symbol, period=period)
 
         if not rows:
             logger.warning(f"No historical data found for benchmark {symbol}")
@@ -134,6 +147,70 @@ async def get_benchmark_performance(
         return {"symbol": symbol, "name": default_name, "data": [], "error": str(e)}
 
 
+@router.get("/sparklines")
+async def get_batch_sparklines(
+    symbols: str = Query(..., description="Comma-separated ticker symbols"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Batch-fetch 1-day intraday sparklines (hourly) for a list of symbols.
+
+    Stocks/ETFs use YFinance (period=1d, interval=1h).
+    Crypto uses CoinGecko (1-day range, downsampled to ~hourly).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import date, timedelta
+
+    from app.models.asset import Asset
+    from app.services.market_data.coingecko_client import CoinGeckoClient
+
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()][:20]
+    if not symbol_list:
+        return {"sparklines": {}}
+
+    # Partition symbols into crypto vs non-crypto
+    assets = db.query(Asset.symbol, Asset.asset_class).filter(Asset.symbol.in_(symbol_list)).all()
+    crypto_symbols = {a.symbol for a in assets if a.asset_class == "Crypto"}
+    stock_symbols = [s for s in symbol_list if s not in crypto_symbols]
+    crypto_list = [s for s in symbol_list if s in crypto_symbols]
+
+    sparklines: dict[str, list[float]] = {}
+
+    def _fetch_1d_sparkline(client: YFinanceClient, symbol: str) -> list[float]:
+        """Fetch 1-day hourly sparkline for a single symbol."""
+        try:
+            rows = client.get_historical_data(symbol, period="1d", interval="1h")
+            return [float(r.close) for r in rows]
+        except Exception:
+            logger.debug("Failed 1D sparkline for %s", symbol, exc_info=True)
+            return []
+
+    # Fetch stock sparklines via YFinance (1D hourly, parallel)
+    if stock_symbols:
+        yf_client = YFinanceClient()
+        with ThreadPoolExecutor(max_workers=min(len(stock_symbols), 8)) as pool:
+            futures = {s: pool.submit(_fetch_1d_sparkline, yf_client, s) for s in stock_symbols}
+            sparklines.update({s: fut.result() for s, fut in futures.items()})
+
+    # Fetch crypto sparklines via CoinGecko (1-day, downsampled to ~7 points)
+    if crypto_list:
+        cg_client = CoinGeckoClient()
+        end = date.today()
+        start = end - timedelta(days=1)
+        target_points = 7  # Match YFinance stock sparkline density
+        for sym in crypto_list:
+            try:
+                history = cg_client.get_price_history(sym, start, end)
+                all_prices = [float(price) for _d, price in history]
+                step = max(1, len(all_prices) // target_points)
+                sparklines[sym] = all_prices[::step]
+            except Exception:
+                logger.debug("CoinGecko sparkline failed for %s", sym, exc_info=True)
+                sparklines[sym] = []
+
+    return {"sparklines": sparklines}
+
+
 @router.get("/market-pulse", response_model=MarketPulseResponse)
 async def get_market_pulse_data(
     current_user: User = Depends(get_current_user),
@@ -141,19 +218,7 @@ async def get_market_pulse_data(
     """Get live market index prices and sparklines for the dashboard pulse card."""
     client = YFinanceClient()
     items = get_market_pulse(client)
-    return {
-        "items": [
-            {
-                "symbol": item.symbol,
-                "name": item.name,
-                "price": item.price,
-                "day_change": item.day_change,
-                "day_change_pct": item.day_change_pct,
-                "sparkline": item.sparkline,
-            }
-            for item in items
-        ],
-    }
+    return {"items": [dataclasses.asdict(item) for item in items]}
 
 
 # ------------------------------------------------------------------
@@ -183,11 +248,13 @@ def _format_account(db: Session, a: AccountValue, display_currency: str) -> dict
         "name": a.name,
         "type": a.account_type,
         "institution": a.institution,
+        "broker_type": a.broker_type,
         "currency": a.currency,
         "value": value,
         "value_usd": value_usd,
         "value_ils": value_ils,
         "display_currency": display_currency,
+        "holding_count": a.holding_count,
     }
 
 
@@ -195,6 +262,7 @@ def _format_top_holding(h: TopHolding) -> dict:
     """Format a single top-holding entry (always USD)."""
     return {
         "id": h.holding_id,
+        "asset_id": h.asset_id,
         "symbol": h.symbol,
         "name": h.name,
         "asset_class": h.asset_class,
@@ -205,6 +273,7 @@ def _format_top_holding(h: TopHolding) -> dict:
         "currency": h.currency,
         "market_value": float(h.market_value_usd),
         "day_change_pct": to_float(h.day_change_pct),
+        "is_favorite": h.is_favorite,
     }
 
 
@@ -246,4 +315,8 @@ def _format_summary(db: Session, s: DashboardSummary, display_currency: str) -> 
         ],
         "total_cost_basis": _convert(db, s.total_cost_basis_usd, display_currency),
         "total_cash": _convert(db, s.total_cash_usd, display_currency),
+        "total_return": _convert(db, s.total_return_usd, display_currency),
+        "total_return_pct": to_float(s.total_return_pct),
+        "unrealized_pnl": _convert(db, s.unrealized_pnl_usd, display_currency),
+        "realized_pnl": _convert(db, s.realized_pnl_usd, display_currency),
     }

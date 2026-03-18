@@ -285,12 +285,16 @@ class YFinanceClient:
             logger.error(f"Error fetching price for {symbol}: {e}")
             return None
 
-    def get_historical_data(self, symbol: str, period: str = "1y") -> list[OHLCVRow]:
+    def get_historical_data(
+        self, symbol: str, period: str = "1y", interval: str | None = None
+    ) -> list[OHLCVRow]:
         """Get historical OHLCV data by period.
 
         Args:
             symbol: Ticker symbol
             period: Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
+            interval: Data granularity (1m, 5m, 15m, 30m, 1h, 1d, 1wk, 1mo).
+                      Defaults to None which uses yfinance default (1d for daily).
 
         Returns:
             List of OHLCVRow
@@ -298,7 +302,10 @@ class YFinanceClient:
         try:
             self._rate_limit()
             ticker = yf.Ticker(symbol)
-            history = ticker.history(period=period)
+            kwargs: dict[str, str] = {"period": period}
+            if interval:
+                kwargs["interval"] = interval
+            history = ticker.history(**kwargs)
 
             if history.empty:
                 logger.warning(f"No historical data for {symbol}")

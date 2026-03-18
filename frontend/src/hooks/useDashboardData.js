@@ -24,21 +24,45 @@ export function useDashboardData() {
           ? `&portfolio_id=${selectedPortfolioId}`
           : '';
 
-        const [summaryRes, snapshotsRes, cashRes] = await Promise.all([
-          api(`/api/dashboard/summary?display_currency=${currency}${portfolioParam}`),
-          api(`/api/snapshots/portfolio?limit=365${portfolioParam}`),
-          api(`/api/transactions/cash?display_currency=${currency}${portfolioParam}`),
+        const [summaryResp, snapshotsResp, cashResp] = await Promise.all([
+          api(`/dashboard/summary?display_currency=${currency}${portfolioParam}`),
+          api(`/snapshots/portfolio?limit=9999&display_currency=${currency}${portfolioParam}`),
+          api(`/transactions/cash?display_currency=${currency}&limit=500${portfolioParam}`),
         ]);
 
         if (cancelled) return;
 
+        const summaryRes = await summaryResp.json();
+        const snapshotsRes = await snapshotsResp.json();
+        const cashRes = await cashResp.json();
+
         setSummary(summaryRes);
-        setSnapshots(snapshotsRes.items || snapshotsRes || []);
+        const snapshotItems = snapshotsRes.items || snapshotsRes || [];
+        // API returns newest-first; chart needs oldest-first (ascending)
+        const sorted = snapshotItems.slice().reverse();
+
+        // Append a live data point for today so the chart matches the summary value
+        if (summaryRes?.total_value != null) {
+          const today = new Date().toISOString().slice(0, 10);
+          const last = sorted[sorted.length - 1];
+          if (last && last.date === today) {
+            sorted[sorted.length - 1] = { ...last, value: summaryRes.total_value };
+          } else {
+            sorted.push({ date: today, value: summaryRes.total_value });
+          }
+        }
+
+        setSnapshots(sorted);
+        const cashItems = cashRes.items || cashRes || [];
         setCashFlows(
-          (cashRes.items || cashRes || []).map((t) => ({
-            date: t.date,
-            amount: t.type === 'WITHDRAWAL' ? -Math.abs(t.amount) : t.amount,
-          }))
+          Array.isArray(cashItems)
+            ? cashItems
+                .filter((t) => t.type === 'Deposit' || t.type === 'Withdrawal')
+                .map((t) => ({
+                  date: t.date,
+                  amount: t.type === 'Withdrawal' ? -Math.abs(t.amount) : Math.abs(t.amount),
+                }))
+            : []
         );
       } catch (err) {
         if (!cancelled) setError(err.message);

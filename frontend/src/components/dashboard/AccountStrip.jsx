@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency } from '../../lib';
+import { BrokerLogo } from '../AccountWizard/BrokerLogo';
 import { Skeleton } from '../ui';
 
 function ChevronLeftIcon() {
@@ -25,6 +26,11 @@ export function AccountStrip({ accounts, loading, currency }) {
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
 
+  const totalValue = useMemo(
+    () => accounts?.reduce((sum, a) => sum + (a.value || 0), 0) || 0,
+    [accounts]
+  );
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -40,13 +46,13 @@ export function AccountStrip({ accounts, loading, currency }) {
   }, [accounts]);
 
   const scroll = (dir) => {
-    scrollRef.current?.scrollBy({ left: dir * 230, behavior: 'smooth' });
+    scrollRef.current?.scrollBy({ left: dir * 240, behavior: 'smooth' });
   };
 
   if (loading) {
     return (
       <div className="flex gap-3 mb-5">
-        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[88px] w-[210px] flex-shrink-0 rounded-lg" />)}
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[88px] w-[220px] flex-shrink-0 rounded-lg" />)}
       </div>
     );
   }
@@ -67,25 +73,43 @@ export function AccountStrip({ accounts, loading, currency }) {
         ref={scrollRef}
         className="flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {accounts.map((account) => (
-          <div
-            key={account.id}
-            onClick={() => navigate(`/accounts/${account.id}`)}
-            className={cn(
-              'flex-shrink-0 w-[210px] p-4 rounded-lg cursor-pointer transition-all',
-              'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-              'hover:border-[var(--text-faint)] hover:bg-[var(--bg-tertiary)]'
-            )}
-          >
-            <div className="text-[11px] font-medium text-[var(--text-tertiary)] truncate mb-1">
-              {account.institution || account.type || 'Account'}
+        {[...accounts].sort((a, b) => (b.value || 0) - (a.value || 0)).map((account) => {
+          const allocationPct = totalValue > 0 ? (account.value / totalValue) * 100 : 0;
+          return (
+            <div
+              key={account.id}
+              onClick={() => navigate(`/accounts/${account.id}`)}
+              className={cn(
+                'flex-shrink-0 w-[220px] p-4 rounded-lg cursor-pointer transition-all',
+                'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
+                'hover:border-[var(--text-faint)] hover:bg-[var(--bg-tertiary)]'
+              )}
+            >
+              <div className="flex items-center gap-2.5 mb-2">
+                <BrokerLogo type={account.broker_type} className="w-7 h-7 rounded-md" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold truncate">{account.name}</div>
+                  <div className="text-[10px] font-medium text-[var(--text-tertiary)] truncate">
+                    {account.institution || account.type || 'Account'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-[15px] font-bold font-mono tabular-nums">
+                  {formatCurrency(account.value, currency)}
+                </div>
+                <div className="text-[10px] font-mono tabular-nums text-[var(--text-tertiary)]">
+                  {allocationPct.toFixed(1)}%
+                </div>
+              </div>
+              {account.holding_count > 0 && (
+                <div className="text-[10px] text-[var(--text-tertiary)] mt-1">
+                  {account.holding_count} holding{account.holding_count !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
-            <div className="text-[13px] font-semibold truncate mb-2">{account.name}</div>
-            <div className="text-[15px] font-bold font-mono tabular-nums">
-              {formatCurrency(account.value, currency)}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {showRight && (
         <button

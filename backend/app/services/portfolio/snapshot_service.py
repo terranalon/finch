@@ -219,7 +219,11 @@ class SnapshotService:
         limit: int = 90,
         allowed_account_ids: list[int] | None = None,
     ) -> list[dict]:
-        """Get aggregated portfolio history across all accounts."""
+        """Get aggregated portfolio history across all accounts.
+
+        Filters out dates with incomplete account coverage to avoid
+        chart anomalies when some accounts are missing snapshots.
+        """
         repo = SnapshotRepository(db)
         results = repo.find_aggregated_portfolio_history(
             start_date=start_date,
@@ -228,13 +232,36 @@ class SnapshotService:
             account_ids=allowed_account_ids,
         )
 
+        if not results:
+            return []
+
+        # Filter out dates with incomplete account coverage to avoid
+        # chart anomalies when some accounts are missing snapshots.
+        # Compare each date's account count against its local neighborhood
+        # (±2 dates). This adapts to account additions over time while
+        # still catching days where snapshot generation partially failed.
+        chronological = sorted(results, key=lambda r: r.date)
+        counts = [r.account_count for r in chronological]
+        kept = []
+        for i, row in enumerate(chronological):
+            # Skip zero-value snapshots (failed valuations)
+            if not row.total_usd or row.total_usd <= 0:
+                continue
+            window_start = max(0, i - 2)
+            window_end = min(len(counts), i + 3)
+            local_max = max(counts[window_start:window_end])
+            if row.account_count >= local_max * 0.7:
+                kept.append(row)
+
+        # Return newest-first (matching repository order)
         return [
             {
                 "date": row.date.isoformat(),
                 "value_usd": float(row.total_usd),
                 "value_ils": float(row.total_ils),
+                "account_count": row.account_count,
             }
-            for row in results
+            for row in reversed(kept)
         ]
 
     def backfill_historical_snapshots(

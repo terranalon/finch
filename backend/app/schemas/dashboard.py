@@ -12,11 +12,13 @@ class DashboardAccountResponse(BaseModel):
     name: str
     type: str | None = None
     institution: str | None = None
+    broker_type: str | None = None
     currency: str | None = None
     value: float
     value_usd: float
     value_ils: float
     display_currency: str
+    holding_count: int = 0
 
 
 class AssetAllocationResponse(BaseModel):
@@ -32,6 +34,7 @@ class TopHoldingResponse(BaseModel):
     """Top holding entry in dashboard."""
 
     id: int
+    asset_id: int
     symbol: str
     name: str | None = None
     asset_class: str | None = None
@@ -42,6 +45,7 @@ class TopHoldingResponse(BaseModel):
     currency: str
     market_value: float
     day_change_pct: float | None = None
+    is_favorite: bool = False
 
 
 class DashboardSummaryResponse(BaseModel):
@@ -60,6 +64,10 @@ class DashboardSummaryResponse(BaseModel):
     historical_performance: list[SnapshotPointResponse]
     total_cost_basis: float = 0
     total_cash: float = 0
+    total_return: float = 0
+    total_return_pct: float | None = None
+    unrealized_pnl: float = 0
+    realized_pnl: float = 0
 
 
 class BenchmarkDataPoint(BaseModel):

@@ -4,16 +4,19 @@ Aggregates holdings by asset across accounts, computing market values,
 P&L, and day changes. Extracted from routers/positions.py.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.constants import AssetClass
 from app.models import Account, Asset, Holding
+from app.models.asset_daily_metrics import AssetDailyMetrics
 from app.services.portfolio.types import AccountHolding, PositionResult
 from app.services.portfolio.valuation_service import PortfolioValuationService
 from app.services.portfolio.valuation_types import DayChangeResult
+from app.services.repositories.price_repository import PriceRepository
 from app.services.shared.currency_service import CurrencyService
 
 
@@ -62,7 +65,21 @@ class PositionService:
             date.today(),
         )
 
-        results = [acc.to_result(day_changes.get(aid)) for aid, acc in positions_map.items()]
+        # Batch market-cap fetch (latest AssetDailyMetrics per asset)
+        asset_ids = list(positions_map.keys())
+        market_caps = self._fetch_market_caps(asset_ids)
+
+        # Batch 7-day change calculation
+        week_changes = self._calc_week_changes(asset_ids, positions_map)
+
+        results = [
+            acc.to_result(
+                day_changes.get(aid),
+                market_cap=market_caps.get(aid),
+                week_change_pct=week_changes.get(aid),
+            )
+            for aid, acc in positions_map.items()
+        ]
 
         results.sort(
             key=lambda r: r.total_market_value_usd
@@ -73,6 +90,62 @@ class PositionService:
 
         total = len(results)
         return results[skip : skip + limit], total
+
+    def _fetch_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
+        """Batch-fetch latest market cap from asset_daily_metrics."""
+        if not asset_ids:
+            return {}
+
+        latest_sq = (
+            self._db.query(
+                AssetDailyMetrics.asset_id,
+                func.max(AssetDailyMetrics.date).label("max_date"),
+            )
+            .filter(
+                AssetDailyMetrics.asset_id.in_(asset_ids),
+                AssetDailyMetrics.market_cap.isnot(None),
+            )
+            .group_by(AssetDailyMetrics.asset_id)
+            .subquery()
+        )
+
+        rows = (
+            self._db.query(AssetDailyMetrics.asset_id, AssetDailyMetrics.market_cap)
+            .join(
+                latest_sq,
+                (AssetDailyMetrics.asset_id == latest_sq.c.asset_id)
+                & (AssetDailyMetrics.date == latest_sq.c.max_date),
+            )
+            .all()
+        )
+
+        return {aid: mc for aid, mc in rows if mc is not None}
+
+    def _calc_week_changes(
+        self,
+        asset_ids: list[int],
+        positions_map: dict[int, "_PositionAccumulator"],
+    ) -> dict[int, Decimal]:
+        """Calculate 7-day price change percentage for each asset."""
+        if not asset_ids:
+            return {}
+
+        price_repo = PriceRepository(self._db)
+        recent_prices = price_repo.find_latest_by_assets(asset_ids, limit_per_asset=8)
+        week_ago = date.today() - timedelta(days=7)
+
+        result: dict[int, Decimal] = {}
+        for aid, prices in recent_prices.items():
+            current = positions_map[aid].current_price
+            if current is None or current <= 0:
+                continue
+            # Find the closing price on or just before 7 days ago
+            ref = next((p for p in prices if p.date <= week_ago), None)
+            if ref is None or ref.closing_price is None or ref.closing_price <= 0:
+                continue
+            result[aid] = ((current - ref.closing_price) / ref.closing_price) * 100
+
+        return result
 
 
 # ------------------------------------------------------------------
@@ -162,7 +235,13 @@ class _PositionAccumulator:
             )
         )
 
-    def to_result(self, day_change: DayChangeResult | None = None) -> PositionResult:
+    def to_result(
+        self,
+        day_change: DayChangeResult | None = None,
+        *,
+        market_cap: Decimal | None = None,
+        week_change_pct: Decimal | None = None,
+    ) -> PositionResult:
         price = self.current_price
         total_mv_native = (self.total_quantity * price) if price is not None else None
         total_pnl_native = (
@@ -227,5 +306,7 @@ class _PositionAccumulator:
                 if self.total_quantity > 0
                 else Decimal("0")
             ),
+            market_cap=market_cap,
+            week_change_pct=week_change_pct,
             accounts=self.accounts,
         )

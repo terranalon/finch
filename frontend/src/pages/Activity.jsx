@@ -11,12 +11,13 @@
  * - GET /api/accounts?is_active=true
  */
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash, hasConversion } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { MultiSelectFilter, Skeleton } from '../components/ui';
 import { TransactionCard } from '../components/transactions';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 const TRANSACTION_TYPES = ['Trade', 'Dividend', 'Forex', 'Cash'];
 
@@ -516,16 +517,7 @@ function DateRangeFilter({ value, onChange, presets }) {
   const [customEnd, setCustomEnd] = useState(value.endDate || '');
   const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(dropdownRef, useCallback(() => setIsOpen(false), []));
 
   const handlePresetSelect = (preset) => {
     onChange({ type: 'preset', preset: preset.id, label: preset.label });

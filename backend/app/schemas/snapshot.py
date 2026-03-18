@@ -13,6 +13,7 @@ class SnapshotPointResponse(BaseModel):
     value_usd: float | None = None
     value_ils: float | None = None
     currency: str | None = None
+    account_count: int | None = None
 
 
 class SnapshotCreateResponse(StatusResponse):

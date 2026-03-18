@@ -37,6 +37,8 @@ class AccountValue:
     currency: str | None
     value_usd: Decimal
     value_ils: Decimal
+    broker_type: str | None = None
+    holding_count: int = 0
 
 
 @dataclass
@@ -91,6 +93,9 @@ class PositionResult:
     total_pnl_pct: Decimal | None
     avg_cost_per_unit_usd: Decimal
 
+    market_cap: Decimal | None = None
+    week_change_pct: Decimal | None = None
+
     accounts: list[AccountHolding] = field(default_factory=list)
 
     @property
@@ -112,6 +117,7 @@ class TopHolding:
     """A single top-holding entry for the dashboard."""
 
     holding_id: int
+    asset_id: int
     symbol: str
     name: str | None
     asset_class: str | None
@@ -122,6 +128,7 @@ class TopHolding:
     currency: str
     market_value_usd: Decimal
     day_change_pct: Decimal | None = None
+    is_favorite: bool = False
 
 
 @dataclass
@@ -148,3 +155,7 @@ class DashboardSummary:
     historical_performance: list[PerformancePoint]
     total_cost_basis_usd: Decimal = Decimal("0")
     total_cash_usd: Decimal = Decimal("0")
+    total_return_usd: Decimal = Decimal("0")
+    total_return_pct: Decimal | None = None
+    unrealized_pnl_usd: Decimal = Decimal("0")
+    realized_pnl_usd: Decimal = Decimal("0")

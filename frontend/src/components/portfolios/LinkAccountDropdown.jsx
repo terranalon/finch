@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
 import { usePortfolioPage } from '../../contexts/PortfolioPageContext';
 import { PlusIcon } from './icons';
+import { useClickOutside } from '../../hooks/useClickOutside';
 
 export function LinkAccountDropdown({ portfolioId }) {
   const { linkAccount, fetchLinkableAccounts } = usePortfolioPage();
@@ -13,15 +14,7 @@ export function LinkAccountDropdown({ portfolioId }) {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(dropdownRef, useCallback(() => setIsOpen(false), []));
 
   const handleOpen = async () => {
     setIsOpen(true);

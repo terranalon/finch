@@ -5,5 +5,6 @@ export { TopHoldingsTable } from './TopHoldingsTable';
 export { AssetExplorerCard } from './AssetExplorerCard';
 export { MarketPulseCard } from './MarketPulseCard';
 export { RecentActivityCard } from './RecentActivityCard';
-export { MoversCard } from './MoversCard';
+export { AllocationDonutCard } from './AllocationDonutCard';
 export { AssetDetailSidebar } from './AssetDetailSidebar';
+export { TradeDetailSidebar } from './TradeDetailSidebar';

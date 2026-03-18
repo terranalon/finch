@@ -2,8 +2,9 @@
 
 from collections.abc import Sequence
 from datetime import date
+from decimal import Decimal
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Query, Session
 
 from app.models import Account, Asset, Holding, Transaction
@@ -197,3 +198,17 @@ class TransactionRepository:
     def find_first_by_holding(self, holding_id: int) -> Transaction | None:
         """Find first transaction for a holding (existence check)."""
         return self._db.query(Transaction).filter(Transaction.holding_id == holding_id).first()
+
+    def sum_realized_pnl_usd(self, account_ids: Sequence[int]) -> Decimal:
+        """Sum realized_pnl_usd for all sell transactions in given accounts."""
+        row = (
+            self._db.query(func.sum(Transaction.realized_pnl_usd).label("total"))
+            .join(Holding, Transaction.holding_id == Holding.id)
+            .filter(
+                Holding.account_id.in_(account_ids),
+                Transaction.type == "Sell",
+                Transaction.realized_pnl_usd.isnot(None),
+            )
+            .first()
+        )
+        return Decimal(str(row.total)) if row and row.total is not None else Decimal("0")

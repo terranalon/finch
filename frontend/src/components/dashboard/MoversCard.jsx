@@ -25,7 +25,8 @@ export function MoversCard({ onAssetClick }) {
 
   useEffect(() => {
     let cancelled = false;
-    api('/api/dashboard/movers?limit=3')
+    api('/dashboard/movers?limit=3')
+      .then((resp) => resp.json())
       .then((res) => { if (!cancelled) setData(res); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });

@@ -109,3 +109,40 @@ class PriceRepository:
             .order_by(desc(AssetPrice.date))
             .first()
         )
+
+    def find_previous_closes(
+        self, asset_ids: list[int], before_date: date
+    ) -> dict[int, AssetPrice]:
+        """Find the most recent price before a given date for multiple assets.
+
+        Returns a dict mapping asset_id -> AssetPrice (most recent before before_date).
+        Uses a window function to get the latest price per asset in a single query.
+        """
+        if not asset_ids:
+            return {}
+
+        subquery = (
+            self._db.query(
+                AssetPrice,
+                func.row_number()
+                .over(
+                    partition_by=AssetPrice.asset_id,
+                    order_by=desc(AssetPrice.date),
+                )
+                .label("rn"),
+            )
+            .filter(
+                AssetPrice.asset_id.in_(asset_ids),
+                AssetPrice.date < before_date,
+            )
+            .subquery()
+        )
+
+        prices = (
+            self._db.query(AssetPrice)
+            .join(subquery, AssetPrice.id == subquery.c.id)
+            .filter(subquery.c.rn == 1)
+            .all()
+        )
+
+        return {price.asset_id: price for price in prices}

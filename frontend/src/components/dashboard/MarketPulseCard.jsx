@@ -2,35 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { cn, formatPercent, getChangeColor } from '../../lib';
 import api from '../../lib/api';
-import { Skeleton } from '../ui';
-
-function MiniSparkline({ data, positive }) {
-  if (!data || data.length < 2) return null;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const w = 48;
-  const h = 20;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 2) - 1;
-    return `${x},${y}`;
-  });
-  const color = positive ? 'var(--positive)' : 'var(--negative)';
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-12 h-5 flex-shrink-0">
-      <polyline
-        points={points.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+import { Skeleton, MiniSparkline } from '../ui';
 
 export function MarketPulseCard() {
   const [data, setData] = useState(null);
@@ -38,13 +10,29 @@ export function MarketPulseCard() {
 
   useEffect(() => {
     fetchPulse();
-    const interval = setInterval(fetchPulse, 300_000);
-    return () => clearInterval(interval);
+    let interval = setInterval(fetchPulse, 300_000);
+
+    // Pause polling when tab is hidden to avoid wasted requests
+    function handleVisibility() {
+      if (document.hidden) {
+        clearInterval(interval);
+      } else {
+        clearInterval(interval);
+        fetchPulse();
+        interval = setInterval(fetchPulse, 300_000);
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   async function fetchPulse() {
     try {
-      const res = await api('/api/dashboard/market-pulse');
+      const resp = await api('/dashboard/market-pulse');
+      const res = await resp.json();
       setData(res.items);
     } catch {
       // Silently fail - market pulse is non-critical
@@ -54,7 +42,7 @@ export function MarketPulseCard() {
   }
 
   return (
-    <div className="card flex-1 min-h-0 overflow-y-auto">
+    <div className="card">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[13px] font-semibold">Markets</span>
         <Link to="/assets" className="text-[12px] text-accent hover:text-accent-hover font-medium">
@@ -83,7 +71,9 @@ export function MarketPulseCard() {
                   </div>
                   <div className="text-[10px] text-[var(--text-tertiary)]">{item.symbol}</div>
                 </div>
-                <MiniSparkline data={item.sparkline} positive={isPositive} />
+                <div className="w-12 h-5 flex-shrink-0">
+                  <MiniSparkline data={item.sparkline} positive={isPositive} />
+                </div>
                 <div className="text-right flex-shrink-0 min-w-[60px]">
                   <div className="text-[12px] font-mono tabular-nums font-medium">
                     {item.price != null ? `$${item.price.toLocaleString()}` : '--'}

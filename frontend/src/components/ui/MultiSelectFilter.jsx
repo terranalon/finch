@@ -12,8 +12,9 @@
  * @param {Function} getOptionValue - Function to get value from option
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { cn } from '../../lib';
+import { useClickOutside } from '../../hooks/useClickOutside';
 
 // Inline icons to avoid circular dependencies
 function ChevronDownIcon({ className }) {
@@ -43,16 +44,7 @@ export function MultiSelectFilter({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(dropdownRef, useCallback(() => setIsOpen(false), []));
 
   const allSelected = selected.length === options.length;
   const noneSelected = selected.length === 0;
