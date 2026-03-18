@@ -9,6 +9,20 @@ export function MarketPulseCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchPulse() {
+      try {
+        const resp = await api('/dashboard/market-pulse');
+        const res = await resp.json();
+        if (!cancelled) setData(res.items);
+      } catch {
+        // Silently fail - market pulse is non-critical
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     fetchPulse();
     let interval = setInterval(fetchPulse, 300_000);
 
@@ -22,22 +36,11 @@ export function MarketPulseCard() {
     }
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
+      cancelled = true;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
-
-  async function fetchPulse() {
-    try {
-      const resp = await api('/dashboard/market-pulse');
-      const res = await resp.json();
-      setData(res.items);
-    } catch {
-      // Silently fail - market pulse is non-critical
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <div className="card">

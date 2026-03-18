@@ -247,9 +247,9 @@ class SnapshotService:
             # Skip zero-value snapshots (failed valuations)
             if not row.total_usd or row.total_usd <= 0:
                 continue
-            window_start = max(0, i - 2)
-            window_end = min(len(counts), i + 3)
-            local_max = max(counts[window_start:window_end])
+            # Window excludes current index to avoid self-comparison at transitions
+            window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
+            local_max = max(window) if window else row.account_count
             if row.account_count >= local_max * 0.7:
                 kept.append(row)
 

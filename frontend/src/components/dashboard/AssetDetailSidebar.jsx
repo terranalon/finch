@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn, formatCurrency, formatPercent, formatNumber, formatDate, getChangeColor, getChangeIndicator } from '../../lib';
 import { useChartColors } from '../../hooks/useChartColors';
+import { usePortfolio } from '../../contexts';
 import api from '../../lib/api';
 import { Skeleton } from '../ui';
 
@@ -56,6 +57,7 @@ function StarIcon({ filled, className }) {
  * @param onFavoriteToggle Optional callback(assetId, newValue) for parent state sync
  */
 export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle }) {
+  const { selectedPortfolioId } = usePortfolio();
   const [period, setPeriod] = useState('1M');
   const [priceData, setPriceData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
@@ -92,7 +94,8 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
     if (!asset?.id || !isOpen) return;
     let cancelled = false;
     setPosLoading(true);
-    api('/positions?limit=100')
+    const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
+    api(`/positions?limit=100${portfolioParam}`)
       .then((resp) => resp.json())
       .then((res) => {
         if (cancelled) return;
@@ -104,7 +107,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
       .catch(() => { if (!cancelled) setPosition(null); })
       .finally(() => { if (!cancelled) setPosLoading(false); });
     return () => { cancelled = true; };
-  }, [asset?.id, isOpen]);
+  }, [asset?.id, isOpen, selectedPortfolioId]);
 
   // Fetch price history
   useEffect(() => {

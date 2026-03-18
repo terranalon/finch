@@ -69,7 +69,9 @@ class DashboardService:
             account_ids, total_usd
         )
 
-        cost_basis_usd, unrealized_pnl_usd, cash_usd = self._aggregate_from_positions(account_ids)
+        cost_basis_usd, unrealized_pnl_usd, cash_usd = self._aggregate_cost_and_cash(
+            rows, valuations
+        )
 
         # Combine unrealized P&L (active positions) + realized P&L (sold positions)
         realized_pnl_usd = self._txn_repo.sum_realized_pnl_usd(account_ids)
@@ -134,7 +136,7 @@ class DashboardService:
         if currency == "USD":
             return amount
         rate = self._currency.get_exchange_rate(currency, "USD")
-        return amount * rate if rate else amount
+        return amount * rate if rate is not None else amount
 
     # ------------------------------------------------------------------
     # Private section builders
@@ -216,28 +218,33 @@ class DashboardService:
         items.sort(key=lambda x: x.total_value, reverse=True)
         return items
 
-    def _aggregate_from_positions(self, account_ids: list[int]) -> tuple[Decimal, Decimal, Decimal]:
-        """Aggregate cost basis, P&L, and cash from the PositionService.
+    def _aggregate_cost_and_cash(
+        self,
+        rows: list[tuple[Holding, Asset, str]],
+        valuations: dict[int, HoldingValue],
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """Aggregate cost basis, unrealized P&L, and cash from pre-fetched data.
 
-        Reuses the same per-position P&L logic that the Holdings page uses,
-        which correctly handles currency conversion and per-holding cost basis.
+        Uses the same rows/valuations already loaded by get_summary(),
+        avoiding a redundant full-holdings query through PositionService.
 
-        Returns (total_cost_basis_usd, total_pnl_usd, total_cash_usd).
+        Returns (total_cost_basis_usd, total_unrealized_pnl_usd, total_cash_usd).
         """
-        position_svc = PositionService(self._db)
-        positions, _ = position_svc.get_positions(account_ids, limit=self._MAX_POSITIONS)
-
         cost_basis = Decimal("0")
         pnl = Decimal("0")
         cash = Decimal("0")
-        for p in positions:
-            if p.asset_class == "Cash":
-                if p.total_market_value_usd is not None:
-                    cash += p.total_market_value_usd
+
+        for holding, asset, _account_name in rows:
+            hv = valuations.get(holding.id)
+            if hv is None:
+                continue
+
+            if hv.is_cash:
+                cash += hv.market_value_usd
             else:
-                cost_basis += p.total_cost_basis_usd
-                if p.total_pnl_usd is not None:
-                    pnl += p.total_pnl_usd
+                cb_usd = self._to_usd(holding.cost_basis or Decimal("0"), asset.currency or "USD")
+                cost_basis += cb_usd
+                pnl += hv.market_value_usd - cb_usd
 
         return cost_basis, pnl, cash
 
@@ -310,14 +317,23 @@ class DashboardService:
 
         # Filter out dates with incomplete account coverage.
         # Use local consistency: compare each date against ±2 neighbors.
+        # Matches snapshot_service.get_portfolio_history logic.
         chronological = sorted(rows, key=lambda r: r.date)
         counts = [r.account_count for r in chronological]
-        return [
-            PerformancePoint(
-                date=str(r.date),
-                value_usd=float(r.total_usd or 0),
-                value_ils=float(r.total_ils or 0),
-            )
-            for i, r in enumerate(chronological)
-            if r.account_count >= max(counts[max(0, i - 2) : i + 3]) * 0.7
-        ]
+        kept: list[PerformancePoint] = []
+        for i, r in enumerate(chronological):
+            # Skip zero-value snapshots (failed valuations)
+            if not r.total_usd or r.total_usd <= 0:
+                continue
+            # Window excludes current index to avoid self-comparison at transitions
+            window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
+            local_max = max(window) if window else r.account_count
+            if r.account_count >= local_max * 0.7:
+                kept.append(
+                    PerformancePoint(
+                        date=str(r.date),
+                        value_usd=float(r.total_usd),
+                        value_ils=float(r.total_ils or 0),
+                    )
+                )
+        return kept

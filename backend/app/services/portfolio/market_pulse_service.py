@@ -74,11 +74,16 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
 
         price = float(row.close)
 
+        # Compute day change from previous close (sparkline[-2]) instead of
+        # intraday open, matching the standard (current - prev_close) convention.
         day_change = None
         day_change_pct = None
-        if row.open and float(row.open) > 0:
-            day_change = round(price - float(row.open), 2)
-            day_change_pct = round((day_change / float(row.open)) * 100, 2)
+        spark = sparklines.get(symbol, [])
+        if len(spark) >= 2:
+            prev_close = spark[-2]
+            if prev_close > 0:
+                day_change = round(price - prev_close, 2)
+                day_change_pct = round((day_change / prev_close) * 100, 2)
 
         items.append(
             MarketPulseItem(
@@ -87,7 +92,7 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
                 price=round(price, 2),
                 day_change=day_change,
                 day_change_pct=day_change_pct,
-                sparkline=sparklines.get(symbol, []),
+                sparkline=spark,
             ),
         )
 
