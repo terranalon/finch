@@ -25,4 +25,5 @@ export {
   transformDividend,
   transformForex,
   transformCash,
+  hasConversion,
 } from './transforms';

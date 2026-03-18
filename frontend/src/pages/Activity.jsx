@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
+import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash, hasConversion } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { MultiSelectFilter, Skeleton } from '../components/ui';
@@ -198,12 +198,14 @@ const formatShortDate = (dateStr) => {
 function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
   if (!tx) return null;
 
+  const hasOriginal = hasConversion(tx);
+
   const renderTradeDetails = () => {
     const isBuy = tx.side === 'BUY';
-    // Backend already includes fees in tx.total, so use it directly
-    const total = tx.total;
+    const primaryTotal = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.total);
+    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
     // Compute true subtotal (qty * price) by subtracting the fee from total
-    const subtotal = total - (tx.fee || 0);
+    const subtotal = tx.total - (tx.fee || 0);
 
     return (
       <>
@@ -229,12 +231,19 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
             <span className="text-sm text-[var(--text-secondary)]">Total {isBuy ? 'Cost' : 'Proceeds'}</span>
-            <span className={cn(
-              'text-2xl font-semibold font-mono tabular-nums',
-              isBuy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-            )}>
-              {isBuy ? '-' : '+'}{formatCurrency(Math.abs(total), tx.currency)}
-            </span>
+            <div className="text-right">
+              <span className={cn(
+                'text-2xl font-semibold font-mono tabular-nums',
+                isBuy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+              )}>
+                {isBuy ? '-' : '+'}{formatCurrency(primaryTotal, primaryCurrency)}
+              </span>
+              {hasOriginal && (
+                <p className="text-sm text-[var(--text-tertiary)] font-mono">
+                  {formatCurrency(Math.abs(tx.total), tx.currency)}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -264,47 +273,59 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
     );
   };
 
-  const renderDividendDetails = () => (
-    <>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40">
-          <BanknotesIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
-          <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
-        </div>
-      </div>
+  const renderDividendDetails = () => {
+    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
+    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
 
-      {/* Summary */}
-      <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-[var(--text-secondary)]">Dividend Received</span>
-          <span className="text-2xl font-semibold font-mono tabular-nums text-teal-600 dark:text-teal-400">
-            +{formatCurrency(Math.abs(tx.amount), currency)}
-          </span>
+    return (
+      <>
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40">
+            <BanknotesIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
+            <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
+          </div>
         </div>
-      </div>
 
-      {/* Details Grid */}
-      <div className="space-y-4">
-        <DetailRow label="Description" value={tx.description} />
-        {tx.shares_held && (
-          <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
-        )}
-        {tx.dividend_per_share && (
-          <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, currency)} />
-        )}
-        <div className="h-px bg-[var(--border-primary)] my-2" />
-        <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
-        {tx.ex_date && (
-          <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
-        )}
-        <DetailRow label="Account" value={tx.account_name} />
-      </div>
-    </>
-  );
+        {/* Summary */}
+        <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-[var(--text-secondary)]">Dividend Received</span>
+            <div className="text-right">
+              <span className="text-2xl font-semibold font-mono tabular-nums text-teal-600 dark:text-teal-400">
+                +{formatCurrency(primaryAmount, primaryCurrency)}
+              </span>
+              {hasOriginal && (
+                <p className="text-sm text-[var(--text-tertiary)] font-mono">
+                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Details Grid */}
+        <div className="space-y-4">
+          <DetailRow label="Description" value={tx.description} />
+          {tx.shares_held && (
+            <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
+          )}
+          {tx.dividend_per_share && (
+            <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />
+          )}
+          <div className="h-px bg-[var(--border-primary)] my-2" />
+          <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
+          {tx.ex_date && (
+            <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
+          )}
+          <DetailRow label="Account" value={tx.account_name} />
+        </div>
+      </>
+    );
+  };
 
   const renderForexDetails = () => (
     <>
@@ -355,6 +376,8 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
     const isFee = tx.activity_type === 'FEE';
     const isInterest = tx.activity_type === 'INTEREST';
     const displayType = tx.cash_type || (isDeposit ? 'Deposit' : 'Withdrawal');
+    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
+    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
 
     // Determine colors and icons based on transaction type
     const getStyleConfig = () => {
@@ -410,9 +433,16 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
             <span className="text-sm text-[var(--text-secondary)]">Amount</span>
-            <span className={cn('text-2xl font-semibold font-mono tabular-nums', style.textColor)}>
-              {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
-            </span>
+            <div className="text-right">
+              <span className={cn('text-2xl font-semibold font-mono tabular-nums', style.textColor)}>
+                {style.sign}{formatCurrency(primaryAmount, primaryCurrency)}
+              </span>
+              {hasOriginal && (
+                <p className="text-sm text-[var(--text-tertiary)] font-mono">
+                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -420,7 +450,7 @@ function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         <div className="space-y-4">
           <DetailRow label="Type" value={displayType} />
           {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, currency)} />
+            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
           )}
           {tx.reference && (
             <DetailRow label="Reference" value={tx.reference} />
@@ -737,11 +767,12 @@ export default function Activity() {
         setAccounts(accountsData);
 
         // Fetch all transaction types in parallel
+        const currencyParam = currency ? `&display_currency=${currency}` : '';
         const [tradesRes, dividendsRes, forexRes, cashRes] = await Promise.all([
-          api(`/transactions/trades?limit=500${portfolioParam}`),
-          api(`/transactions/dividends?limit=500${portfolioParam}`),
+          api(`/transactions/trades?limit=500${portfolioParam}${currencyParam}`),
+          api(`/transactions/dividends?limit=500${portfolioParam}${currencyParam}`),
           api(`/transactions/forex?limit=500${portfolioParam}`),
-          api(`/transactions/cash?limit=500${portfolioParam}`),
+          api(`/transactions/cash?limit=500${portfolioParam}${currencyParam}`),
         ]);
 
         // Check for errors
@@ -785,7 +816,7 @@ export default function Activity() {
     };
 
     fetchData();
-  }, [selectedPortfolioId]);
+  }, [selectedPortfolioId, currency]);
 
   // Filter and group transactions
   const { groupedTransactions, totalCount, filteredCount, totalPages } = useMemo(() => {

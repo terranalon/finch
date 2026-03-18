@@ -1737,7 +1737,7 @@ export default function AccountDetail() {
         const [positionsRes, tradesRes, dividendsRes, forexRes, cashRes, coverageRes, brokerRes, snapshotsRes] = await Promise.all([
           api(`/positions?display_currency=${accountCurrency}`),
           api(`/transactions/trades?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
-          api(`/transactions/dividends?account_id=${id}&limit=500`),
+          api(`/transactions/dividends?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
           api(`/transactions/forex?account_id=${id}&limit=500`),
           api(`/transactions/cash?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
           api(`/broker-data/coverage/${id}`),
