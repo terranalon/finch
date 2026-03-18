@@ -237,10 +237,7 @@ export function ChartCard({ snapshots, cashFlows, summary, currency, loading }) 
         <div className="relative" ref={periodRef}>
           <button
             onClick={() => { setPeriodOpen((prev) => !prev); setShowCalendar(false); }}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all cursor-pointer',
-              'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-            )}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all cursor-pointer bg-[var(--bg-tertiary)] text-[var(--text-primary)]"
           >
             <span>{periodLabel}</span>
             <svg className={cn('w-3 h-3 transition-transform', periodOpen && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

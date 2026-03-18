@@ -18,8 +18,8 @@ export function SummaryStrip({ summary, snapshots, loading, currency }) {
   if (!summary) return null;
 
   const changeColor = getChangeColor(summary.day_change);
-  const unrealizedPnl = summary.unrealized_pnl ?? null;
-  const realizedPnl = summary.realized_pnl ?? null;
+  const unrealizedPnl = summary.unrealized_pnl;
+  const realizedPnl = summary.realized_pnl;
 
   return (
     <div className="mb-5 pb-[18px] border-b border-[var(--border-primary)]">

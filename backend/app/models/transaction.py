@@ -36,12 +36,12 @@ class Transaction(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     external_transaction_id: Mapped[str | None] = mapped_column(String(100))
     content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
-    realized_pnl_usd: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    realized_pnl_usd: Mapped[Decimal | None] = mapped_column(Numeric(15, 2))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     # Forex-specific fields (only populated for Forex Conversion transactions)
     to_holding_id: Mapped[int | None] = mapped_column(
-        ForeignKey("holdings.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("holdings.id", ondelete="SET NULL")
     )  # The destination currency holding for forex conversions
     to_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2))  # Amount received in forex
     exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))  # Forex exchange rate

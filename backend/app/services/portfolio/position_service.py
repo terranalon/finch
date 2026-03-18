@@ -256,16 +256,16 @@ class _PositionAccumulator:
         )
 
         # USD totals
-        total_mv_usd: Decimal | None = None
-        if total_mv_native is not None:
-            if self.currency != "USD":
-                # Re-derive from per-account USD values (already accumulated)
-                total_mv_usd = sum(
-                    (a.market_value_usd for a in self.accounts if a.market_value_usd is not None),
-                    Decimal("0"),
-                )
-            else:
-                total_mv_usd = total_mv_native
+        if total_mv_native is None:
+            total_mv_usd = None
+        elif self.currency != "USD":
+            # Re-derive from per-account USD values (already accumulated)
+            total_mv_usd = sum(
+                (a.market_value_usd for a in self.accounts if a.market_value_usd is not None),
+                Decimal("0"),
+            )
+        else:
+            total_mv_usd = total_mv_native
 
         total_pnl_usd = (
             (total_mv_usd - self.total_cost_basis_usd) if total_mv_usd is not None else None

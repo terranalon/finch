@@ -14,10 +14,8 @@ export function MarketPulseCard() {
 
     // Pause polling when tab is hidden to avoid wasted requests
     function handleVisibility() {
-      if (document.hidden) {
-        clearInterval(interval);
-      } else {
-        clearInterval(interval);
+      clearInterval(interval);
+      if (!document.hidden) {
         fetchPulse();
         interval = setInterval(fetchPulse, 300_000);
       }
