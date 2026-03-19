@@ -75,7 +75,7 @@ async def get_movers(
     portfolio_id: str | None = Query(None, description="Filter by portfolio ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
+) -> MoversResponse:
     """Get top daily gainers and losers from portfolio positions."""
     allowed_account_ids = get_user_account_ids(current_user, db, portfolio_id)
     if not allowed_account_ids:
@@ -170,7 +170,7 @@ async def get_batch_sparklines(
 @router.get("/market-pulse", response_model=MarketPulseResponse)
 async def get_market_pulse_data(
     current_user: User = Depends(get_current_user),
-) -> dict:
+) -> MarketPulseResponse:
     """Get live market index prices and sparklines for the dashboard pulse card."""
     client = YFinanceClient()
     items = get_market_pulse(client)

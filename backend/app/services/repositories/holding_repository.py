@@ -51,6 +51,11 @@ class HoldingRepository:
             .first()
         )
 
+    def find_ids_by_accounts(self, account_ids: list[int]) -> list[int]:
+        """Find holding IDs for multiple accounts."""
+        rows = self._db.query(Holding.id).filter(Holding.account_id.in_(account_ids)).all()
+        return [row[0] for row in rows]
+
     def find_by_account(self, account_id: int) -> "Sequence[Holding]":
         """Find all holdings for an account."""
         return self._db.query(Holding).filter(Holding.account_id == account_id).all()

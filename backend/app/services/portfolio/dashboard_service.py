@@ -317,7 +317,7 @@ class DashboardService:
 
         # Filter out dates with incomplete account coverage.
         # Use local consistency: compare each date against ±2 neighbors.
-        # Matches snapshot_service.get_portfolio_history logic.
+        # Filtering algorithm matches snapshot_service.get_portfolio_history.
         chronological = sorted(rows, key=lambda r: r.date)
         counts = [r.account_count for r in chronological]
         kept: list[PerformancePoint] = []

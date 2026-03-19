@@ -31,6 +31,7 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
         - holdings_updated: Number of holdings updated
         - holdings_activated: Holdings that went from 0 to non-zero quantity
         - holdings_deactivated: Holdings that went from non-zero to 0 quantity
+        - realized_pnl_backfilled: Number of sell transactions with realized P&L computed
         - error: Error message if reconstruction failed (optional)
     """
     from app.services.portfolio.portfolio_reconstruction_service import (

@@ -7,12 +7,10 @@ P&L, and day changes. Extracted from routers/positions.py.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.constants import AssetClass
 from app.models import Account, Asset, Holding
-from app.models.asset_daily_metrics import AssetDailyMetrics
 from app.services.portfolio.types import AccountHolding, PositionResult
 from app.services.portfolio.valuation_service import PortfolioValuationService
 from app.services.portfolio.valuation_types import DayChangeResult
@@ -93,33 +91,8 @@ class PositionService:
 
     def _fetch_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
         """Batch-fetch latest market cap from asset_daily_metrics."""
-        if not asset_ids:
-            return {}
-
-        latest_sq = (
-            self._db.query(
-                AssetDailyMetrics.asset_id,
-                func.max(AssetDailyMetrics.date).label("max_date"),
-            )
-            .filter(
-                AssetDailyMetrics.asset_id.in_(asset_ids),
-                AssetDailyMetrics.market_cap.isnot(None),
-            )
-            .group_by(AssetDailyMetrics.asset_id)
-            .subquery()
-        )
-
-        rows = (
-            self._db.query(AssetDailyMetrics.asset_id, AssetDailyMetrics.market_cap)
-            .join(
-                latest_sq,
-                (AssetDailyMetrics.asset_id == latest_sq.c.asset_id)
-                & (AssetDailyMetrics.date == latest_sq.c.max_date),
-            )
-            .all()
-        )
-
-        return {aid: mc for aid, mc in rows if mc is not None}
+        price_repo = PriceRepository(self._db)
+        return price_repo.find_latest_market_caps(asset_ids)
 
     def _calc_week_changes(
         self,

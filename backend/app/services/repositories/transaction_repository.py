@@ -199,6 +199,15 @@ class TransactionRepository:
         """Find first transaction for a holding (existence check)."""
         return self._db.query(Transaction).filter(Transaction.holding_id == holding_id).first()
 
+    def find_by_holding_ordered(self, holding_id: int) -> "Sequence[Transaction]":
+        """Find all transactions for a holding, ordered chronologically."""
+        return (
+            self._db.query(Transaction)
+            .filter(Transaction.holding_id == holding_id)
+            .order_by(Transaction.date, Transaction.id)
+            .all()
+        )
+
     def sum_realized_pnl_usd(self, account_ids: Sequence[int]) -> Decimal:
         """Sum realized_pnl_usd for all sell transactions in given accounts."""
         row = (

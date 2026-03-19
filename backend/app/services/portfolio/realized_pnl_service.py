@@ -9,7 +9,8 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Holding, Transaction
+from app.services.repositories import HoldingRepository
+from app.services.repositories.transaction_repository import TransactionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,8 @@ class RealizedPnlService:
 
     def __init__(self, db: Session) -> None:
         self._db = db
+        self._holding_repo = HoldingRepository(db)
+        self._txn_repo = TransactionRepository(db)
 
     def backfill_for_accounts(self, account_ids: list[int]) -> int:
         """Compute realized_pnl_usd for sell transactions missing it.
@@ -47,10 +50,10 @@ class RealizedPnlService:
 
         Returns the number of transactions updated.
         """
-        holding_ids = self._db.query(Holding.id).filter(Holding.account_id.in_(account_ids)).all()
+        holding_ids = self._holding_repo.find_ids_by_accounts(account_ids)
 
         updated = 0
-        for (holding_id,) in holding_ids:
+        for holding_id in holding_ids:
             updated += self._backfill_holding(holding_id)
 
         if updated > 0:
@@ -60,12 +63,7 @@ class RealizedPnlService:
 
     def _backfill_holding(self, holding_id: int) -> int:
         """Replay FIFO for a single holding and fill realized_pnl_usd on sells."""
-        transactions = (
-            self._db.query(Transaction)
-            .filter(Transaction.holding_id == holding_id)
-            .order_by(Transaction.date, Transaction.id)
-            .all()
-        )
+        transactions = self._txn_repo.find_by_holding_ordered(holding_id)
 
         lots: list[dict] = []
         updated = 0
@@ -101,6 +99,26 @@ class RealizedPnlService:
                     currency_rate_to_usd=txn.currency_rate_to_usd_at_date,
                 )
                 updated += 1
+
+            elif txn.type not in (
+                "Deposit",
+                "Withdrawal",
+                "Dividend",
+                "Tax",
+                "Fee",
+                "Transfer",
+                "Custody Fee",
+                "Interest",
+                "Forex Conversion",
+                "Credit",
+            ):
+                logger.warning(
+                    "Unrecognized transaction type %r for holding %d (txn %d) — "
+                    "may affect FIFO lot state",
+                    txn.type,
+                    holding_id,
+                    txn.id,
+                )
 
         return updated
 

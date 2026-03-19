@@ -121,7 +121,7 @@ class TransactionService:
             # realized_pnl_service and PortfolioReconstructionService FIFO logic)
             lot_cost = quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
             if lot.quantity > 0 and lot.fees > 0:
-                lot_cost += (quantity_from_lot / lot.quantity) * lot.fees  # ty: ignore[unsupported-operator]
+                lot_cost += (quantity_from_lot / lot.quantity) * lot.fees  # ty: ignore[unsupported-operator] — guarded by lot.quantity > 0 and lot.fees > 0
             total_cost_basis_sold += lot_cost
             remaining_to_sell -= quantity_from_lot  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal from either branch
 

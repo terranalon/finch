@@ -1,12 +1,14 @@
 """Asset price data access layer."""
 
 from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models import AssetPrice
+from app.models.asset_daily_metrics import AssetDailyMetrics
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -146,3 +148,33 @@ class PriceRepository:
         )
 
         return {price.asset_id: price for price in prices}
+
+    def find_latest_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
+        """Find the latest market cap for each asset from asset_daily_metrics."""
+        if not asset_ids:
+            return {}
+
+        latest_sq = (
+            self._db.query(
+                AssetDailyMetrics.asset_id,
+                func.max(AssetDailyMetrics.date).label("max_date"),
+            )
+            .filter(
+                AssetDailyMetrics.asset_id.in_(asset_ids),
+                AssetDailyMetrics.market_cap.isnot(None),
+            )
+            .group_by(AssetDailyMetrics.asset_id)
+            .subquery()
+        )
+
+        rows = (
+            self._db.query(AssetDailyMetrics.asset_id, AssetDailyMetrics.market_cap)
+            .join(
+                latest_sq,
+                (AssetDailyMetrics.asset_id == latest_sq.c.asset_id)
+                & (AssetDailyMetrics.date == latest_sq.c.max_date),
+            )
+            .all()
+        )
+
+        return {aid: Decimal(str(mc)) for aid, mc in rows if mc is not None}
