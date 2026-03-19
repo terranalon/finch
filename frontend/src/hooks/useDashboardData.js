@@ -26,7 +26,7 @@ export function useDashboardData() {
 
         const [summaryResp, snapshotsResp, cashResp] = await Promise.all([
           api(`/dashboard/summary?display_currency=${currency}${portfolioParam}`),
-          api(`/snapshots/portfolio?limit=9999&display_currency=${currency}${portfolioParam}`),
+          api(`/snapshots/portfolio?limit=365&display_currency=${currency}${portfolioParam}`),
           api(`/transactions/cash?display_currency=${currency}&limit=500${portfolioParam}`),
         ]);
 

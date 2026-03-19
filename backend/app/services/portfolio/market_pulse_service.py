@@ -47,38 +47,33 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
 
     Accepts an optional client for dependency injection (testing).
     Sparklines are fetched in parallel to avoid sequential HTTP round-trips.
+    Price and day change are derived from the sparkline data (last 2 entries),
+    eliminating a redundant batch price fetch.
     """
     if client is None:
         client = YFinanceClient()
 
     symbols = list(MARKET_SYMBOLS.keys())
 
-    latest = client.get_batch_prices_threaded(symbols, period="2d")
-
-    # Fetch all sparklines in parallel
-    symbols_with_data = [s for s in symbols if s in latest]
+    # Single fetch: 5-day sparklines in parallel (provides price + prev_close + chart)
     sparklines: dict[str, list[float]] = {}
-    if symbols_with_data:
-        with ThreadPoolExecutor(max_workers=min(len(symbols_with_data), 8)) as pool:
-            sparkline_futures = {
-                symbol: pool.submit(_fetch_sparkline, client, symbol)
-                for symbol in symbols_with_data
-            }
-            sparklines = {symbol: fut.result() for symbol, fut in sparkline_futures.items()}
+    with ThreadPoolExecutor(max_workers=min(len(symbols), 8)) as pool:
+        sparkline_futures = {
+            symbol: pool.submit(_fetch_sparkline, client, symbol) for symbol in symbols
+        }
+        sparklines = {symbol: fut.result() for symbol, fut in sparkline_futures.items()}
 
     items: list[MarketPulseItem] = []
     for symbol, name in MARKET_SYMBOLS.items():
-        row = latest.get(symbol)
-        if row is None:
+        spark = sparklines.get(symbol, [])
+        if not spark:
             continue
 
-        price = float(row.close)
+        price = round(spark[-1], 2)
 
-        # Compute day change from previous close (sparkline[-2]) instead of
-        # intraday open, matching the standard (current - prev_close) convention.
+        # Day change from previous close (spark[-2])
         day_change = None
         day_change_pct = None
-        spark = sparklines.get(symbol, [])
         if len(spark) >= 2:
             prev_close = spark[-2]
             if prev_close > 0:
@@ -89,7 +84,7 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
             MarketPulseItem(
                 symbol=symbol,
                 name=name,
-                price=round(price, 2),
+                price=price,
                 day_change=day_change,
                 day_change_pct=day_change_pct,
                 sparkline=spark,

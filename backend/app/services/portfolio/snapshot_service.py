@@ -16,6 +16,28 @@ from app.services.repositories.snapshot_repository import SnapshotRepository
 logger = logging.getLogger(__name__)
 
 
+def filter_incomplete_snapshots(rows: list, *, threshold: float = 0.7) -> list:
+    """Filter out dates with incomplete account coverage or zero values.
+
+    Compares each date's account count against its local ±2 neighborhood
+    to adapt to account additions over time while catching days where
+    snapshot generation partially failed.
+
+    Rows must have `date`, `total_usd`, and `account_count` attributes.
+    """
+    chronological = sorted(rows, key=lambda r: r.date)
+    counts = [r.account_count for r in chronological]
+    kept = []
+    for i, row in enumerate(chronological):
+        if not row.total_usd or row.total_usd <= 0:
+            continue
+        window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
+        local_max = max(window) if window else row.account_count
+        if row.account_count >= local_max * threshold:
+            kept.append(row)
+    return kept
+
+
 def update_snapshot_status(db: Session, account_id: int, status: str | None) -> None:
     """Update the snapshot_status field for an account.
 
@@ -235,23 +257,7 @@ class SnapshotService:
         if not results:
             return []
 
-        # Filter out dates with incomplete account coverage to avoid
-        # chart anomalies when some accounts are missing snapshots.
-        # Compare each date's account count against its local neighborhood
-        # (±2 dates). This adapts to account additions over time while
-        # still catching days where snapshot generation partially failed.
-        chronological = sorted(results, key=lambda r: r.date)
-        counts = [r.account_count for r in chronological]
-        kept = []
-        for i, row in enumerate(chronological):
-            # Skip zero-value snapshots (failed valuations)
-            if not row.total_usd or row.total_usd <= 0:
-                continue
-            # Window excludes current index to avoid self-comparison at transitions
-            window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
-            local_max = max(window) if window else row.account_count
-            if row.account_count >= local_max * 0.7:
-                kept.append(row)
+        kept = filter_incomplete_snapshots(results)
 
         # Return newest-first (matching repository order)
         return [

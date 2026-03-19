@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.models import Asset, Holding
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
 from app.services.portfolio.position_service import PositionService
+from app.services.portfolio.snapshot_service import filter_incomplete_snapshots
 from app.services.portfolio.types import (
     AccountValue,
     AllocationItem,
@@ -315,25 +316,12 @@ class DashboardService:
         if not rows:
             return []
 
-        # Filter out dates with incomplete account coverage.
-        # Use local consistency: compare each date against ±2 neighbors.
-        # Filtering algorithm matches snapshot_service.get_portfolio_history.
-        chronological = sorted(rows, key=lambda r: r.date)
-        counts = [r.account_count for r in chronological]
-        kept: list[PerformancePoint] = []
-        for i, r in enumerate(chronological):
-            # Skip zero-value snapshots (failed valuations)
-            if not r.total_usd or r.total_usd <= 0:
-                continue
-            # Window excludes current index to avoid self-comparison at transitions
-            window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
-            local_max = max(window) if window else r.account_count
-            if r.account_count >= local_max * 0.7:
-                kept.append(
-                    PerformancePoint(
-                        date=str(r.date),
-                        value_usd=float(r.total_usd),
-                        value_ils=float(r.total_ils or 0),
-                    )
-                )
-        return kept
+        kept = filter_incomplete_snapshots(rows)
+        return [
+            PerformancePoint(
+                date=str(r.date),
+                value_usd=float(r.total_usd),
+                value_ils=float(r.total_ils or 0),
+            )
+            for r in kept
+        ]

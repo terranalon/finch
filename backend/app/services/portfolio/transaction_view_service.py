@@ -59,6 +59,28 @@ class TransactionViewService:
             rate_cache[key] = rate
         return rate_cache[key]
 
+    def _maybe_convert(
+        self,
+        amount: Decimal,
+        native_currency: str,
+        display_currency: str | None,
+        conversion_date: date,
+        rate_cache: dict[tuple[str, str, date], Decimal | None],
+    ) -> tuple[Decimal, str, Decimal | None, str | None]:
+        """Convert amount if display_currency differs from native, with fallback.
+
+        Returns (converted_amount, output_currency, original_amount, original_currency).
+        original_amount/original_currency are set only when a conversion occurred.
+        """
+        if not display_currency or display_currency == native_currency:
+            return amount, native_currency, None, None
+
+        rate = self._get_rate(rate_cache, native_currency, display_currency, conversion_date)
+        if rate is not None:
+            return amount * rate, display_currency, amount, native_currency
+
+        return amount, native_currency, None, None
+
     def get_trades(
         self,
         account_ids: Sequence[int],
@@ -90,22 +112,13 @@ class TransactionViewService:
             trade_total = (qty * price) + fees
 
             native_currency = _resolve_native_currency(asset, txn.notes)
-            original_amount: Decimal | None = None
-            original_currency: str | None = None
-
-            if display_currency and display_currency != native_currency:
-                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                if rate is not None:
-                    original_amount = trade_total
-                    original_currency = native_currency
-                    price = price * rate
-                    fees = fees * rate
-                    trade_total = trade_total * rate
-                    output_currency = display_currency
-                else:
-                    output_currency = native_currency
-            else:
-                output_currency = native_currency
+            trade_total, output_currency, original_amount, original_currency = self._maybe_convert(
+                trade_total, native_currency, display_currency, txn.date, rate_cache
+            )
+            if original_amount is not None:
+                rate = trade_total / original_amount if original_amount else Decimal("1")
+                price = price * rate
+                fees = fees * rate
 
             trades.append(
                 TradeItem(
@@ -156,20 +169,10 @@ class TransactionViewService:
         for txn, _, asset, account in rows:
             amount = txn.amount or Decimal("0")
             native_currency = asset.currency or "USD"
-            original_amount: Decimal | None = None
-            original_currency: str | None = None
 
-            if display_currency and display_currency != native_currency:
-                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                if rate is not None:
-                    original_amount = amount
-                    original_currency = native_currency
-                    amount = amount * rate
-                    output_currency = display_currency
-                else:
-                    output_currency = native_currency
-            else:
-                output_currency = native_currency
+            amount, output_currency, original_amount, original_currency = self._maybe_convert(
+                amount, native_currency, display_currency, txn.date, rate_cache
+            )
 
             items.append(
                 DividendItem(
@@ -245,22 +248,13 @@ class TransactionViewService:
         items: list[CashActivityItem] = []
         for txn, _, asset, account in rows:
             amount, fees, native_currency = self._compute_cash_values(txn, asset)
-            original_amount: Decimal | None = None
-            original_currency: str | None = None
 
-            if display_currency and display_currency != native_currency:
-                rate = self._get_rate(rate_cache, native_currency, display_currency, txn.date)
-                if rate is not None:
-                    original_amount = amount
-                    original_currency = native_currency
-                    amount = amount * rate
-                    if fees is not None:
-                        fees = fees * rate
-                    output_currency = display_currency
-                else:
-                    output_currency = native_currency
-            else:
-                output_currency = native_currency
+            amount, output_currency, original_amount, original_currency = self._maybe_convert(
+                amount, native_currency, display_currency, txn.date, rate_cache
+            )
+            if original_amount is not None and fees is not None:
+                rate = amount / original_amount if original_amount else Decimal("1")
+                fees = fees * rate
 
             items.append(
                 CashActivityItem(

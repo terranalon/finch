@@ -24,6 +24,7 @@ class PositionService:
     def __init__(self, db: Session) -> None:
         self._db = db
         self._currency = CurrencyService(db)
+        self._price_repo = PriceRepository(db)
 
     def get_positions(
         self,
@@ -91,8 +92,7 @@ class PositionService:
 
     def _fetch_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
         """Batch-fetch latest market cap from asset_daily_metrics."""
-        price_repo = PriceRepository(self._db)
-        return price_repo.find_latest_market_caps(asset_ids)
+        return self._price_repo.find_latest_market_caps(asset_ids)
 
     def _calc_week_changes(
         self,
@@ -103,8 +103,7 @@ class PositionService:
         if not asset_ids:
             return {}
 
-        price_repo = PriceRepository(self._db)
-        recent_prices = price_repo.find_latest_by_assets(asset_ids, limit_per_asset=8)
+        recent_prices = self._price_repo.find_latest_by_assets(asset_ids, limit_per_asset=8)
         week_ago = date.today() - timedelta(days=7)
 
         result: dict[int, Decimal] = {}

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { cn } from '../../lib';
+import { cn, formatCurrency } from '../../lib';
 import { usePortfolio } from '../../contexts';
 import { useClickOutside } from '../../hooks/useClickOutside';
 
@@ -113,12 +113,7 @@ export function PortfolioSelector() {
 
           {[...portfolios].sort((a, b) => Number(b.is_default) - Number(a.is_default)).map((portfolio) => {
             const formattedValue = portfolio.total_value != null
-              ? new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: portfolio.default_currency || 'USD',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(portfolio.total_value)
+              ? formatCurrency(portfolio.total_value, portfolio.default_currency || 'USD', { decimals: 0 })
               : null;
 
             return (
