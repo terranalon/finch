@@ -117,7 +117,12 @@ class TransactionService:
                 quantity_from_lot = remaining_to_sell
                 lot.remaining_quantity -= quantity_from_lot  # ty: ignore[unsupported-operator] — remaining_quantity is non-null for open lots
 
-            total_cost_basis_sold += quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
+            # Include proportional buy fees in cost basis (matches _consume_lots in
+            # realized_pnl_service and PortfolioReconstructionService FIFO logic)
+            lot_cost = quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
+            if lot.quantity > 0 and lot.fees > 0:
+                lot_cost += (quantity_from_lot / lot.quantity) * lot.fees  # ty: ignore[unsupported-operator]
+            total_cost_basis_sold += lot_cost
             remaining_to_sell -= quantity_from_lot  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal from either branch
 
         if remaining_to_sell > 0:

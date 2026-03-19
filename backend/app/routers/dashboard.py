@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse, MoversResponse
 from app.schemas.market_pulse import MarketPulseResponse
 from app.services.market_data.yfinance_client import YFinanceClient
+from app.services.portfolio import sparkline_service
 from app.services.portfolio.dashboard_service import DashboardService
 from app.services.portfolio.market_pulse_service import get_market_pulse
 from app.services.portfolio.types import (
@@ -158,57 +159,12 @@ async def get_batch_sparklines(
     Stocks/ETFs use YFinance (period=1d, interval=1h).
     Crypto uses CoinGecko (1-day range, downsampled to ~hourly).
     """
-    from concurrent.futures import ThreadPoolExecutor
-    from datetime import date, timedelta
-
-    from app.models.asset import Asset
-    from app.services.market_data.coingecko_client import CoinGeckoClient
-
     symbol_list = [s.strip() for s in symbols.split(",") if s.strip()][:20]
     if not symbol_list:
         return {"sparklines": {}}
 
-    # Partition symbols into crypto vs non-crypto
-    assets = db.query(Asset.symbol, Asset.asset_class).filter(Asset.symbol.in_(symbol_list)).all()
-    crypto_symbols = {a.symbol for a in assets if a.asset_class == "Crypto"}
-    stock_symbols = [s for s in symbol_list if s not in crypto_symbols]
-    crypto_list = [s for s in symbol_list if s in crypto_symbols]
-
-    sparklines: dict[str, list[float]] = {}
-
-    def _fetch_1d_sparkline(client: YFinanceClient, symbol: str) -> list[float]:
-        """Fetch 1-day hourly sparkline for a single symbol."""
-        try:
-            rows = client.get_historical_data(symbol, period="1d", interval="1h")
-            return [float(r.close) for r in rows]
-        except Exception:
-            logger.debug("Failed 1D sparkline for %s", symbol, exc_info=True)
-            return []
-
-    # Fetch stock sparklines via YFinance (1D hourly, parallel)
-    if stock_symbols:
-        yf_client = YFinanceClient()
-        with ThreadPoolExecutor(max_workers=min(len(stock_symbols), 8)) as pool:
-            futures = {s: pool.submit(_fetch_1d_sparkline, yf_client, s) for s in stock_symbols}
-            sparklines.update({s: fut.result() for s, fut in futures.items()})
-
-    # Fetch crypto sparklines via CoinGecko (1-day, downsampled to ~7 points)
-    if crypto_list:
-        cg_client = CoinGeckoClient()
-        end = date.today()
-        start = end - timedelta(days=1)
-        target_points = 7  # Match YFinance stock sparkline density
-        for sym in crypto_list:
-            try:
-                history = cg_client.get_price_history(sym, start, end)
-                all_prices = [float(price) for _d, price in history]
-                step = max(1, len(all_prices) // target_points)
-                sparklines[sym] = all_prices[::step]
-            except Exception:
-                logger.debug("CoinGecko sparkline failed for %s", sym, exc_info=True)
-                sparklines[sym] = []
-
-    return {"sparklines": sparklines}
+    result = sparkline_service.get_batch_sparklines(db, symbol_list)
+    return {"sparklines": result}
 
 
 @router.get("/market-pulse", response_model=MarketPulseResponse)
