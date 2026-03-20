@@ -7,6 +7,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models import Holding, HoldingLot, Transaction
+from app.services.portfolio.realized_pnl_service import compute_realized_pnl_usd
 from app.services.portfolio.transaction_types import (
     BuyResult,
     InsufficientQuantityError,
@@ -79,6 +80,10 @@ class TransactionService:
         self,
         holding: Holding,
         quantity: Decimal | None,
+        *,
+        sell_price_per_unit: Decimal | None = None,
+        sell_fees: Decimal | None = None,
+        currency_rate_to_usd: Decimal | None = None,
     ) -> SellResult:
         if not quantity:
             raise TransactionError("Sell transactions require quantity")
@@ -147,10 +152,21 @@ class TransactionService:
 
         self._db.flush()
 
+        realized_pnl_usd: Decimal | None = None
+        if sell_price_per_unit and quantity:
+            realized_pnl_usd = compute_realized_pnl_usd(
+                sell_quantity=quantity,
+                sell_price_per_unit=sell_price_per_unit,
+                sell_fees=sell_fees or Decimal("0"),
+                total_cost_basis_sold=total_cost_basis_sold,
+                currency_rate_to_usd=currency_rate_to_usd,
+            )
+
         return SellResult(
             holding_id=holding.id,
             new_quantity=holding.quantity,
             new_cost_basis=holding.cost_basis,
             total_cost_basis_sold=total_cost_basis_sold,
             is_closed=is_closed,
+            realized_pnl_usd=realized_pnl_usd,
         )

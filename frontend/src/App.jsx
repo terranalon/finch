@@ -56,19 +56,14 @@ function PublicRoute({ children }) {
   return children;
 }
 
-// Main app layout with sidebar + header bar
-function AppLayout({ children }) {
-  return <DashboardLayout>{children}</DashboardLayout>;
-}
-
 // Protected route with onboarding guard and app layout
 function GuardedLayout({ children }) {
   return (
     <ProtectedRoute>
       <OnboardingGuard>
-        <AppLayout>
+        <DashboardLayout>
           {children}
-        </AppLayout>
+        </DashboardLayout>
       </OnboardingGuard>
     </ProtectedRoute>
   );

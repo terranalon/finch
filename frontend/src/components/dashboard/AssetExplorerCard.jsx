@@ -2,30 +2,15 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { cn, formatCurrency, formatPercent, getChangeColor, ASSET_COLORS } from '../../lib';
 import api from '../../lib/api';
+import { usePortfolio } from '../../contexts';
 import { Skeleton, MiniSparkline } from '../ui';
+import { SortArrow, FavoriteStar, toAssetClickPayload } from './shared';
 
 const TABS = ['Favorites', 'Popular', 'Gainers', 'Losers'];
 const TAB_LIMIT = 5;
 
-function SortArrow({ dir }) {
-  return <span className="text-[10px] ml-0.5 opacity-60">{dir === 'asc' ? '\u25B2' : '\u25BC'}</span>;
-}
-
-function FavoriteStar({ isFavorite, onClick }) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={cn(
-        'text-sm leading-none transition-all cursor-pointer select-none hover:scale-110',
-        isFavorite ? 'text-[#F59E0B]' : 'text-[var(--text-faint)] hover:text-[#F59E0B]'
-      )}
-    >
-      {isFavorite ? '\u2605' : '\u2606'}
-    </button>
-  );
-}
-
 export function AssetExplorerCard({ onAssetClick, favoriteOverrides = {}, onFavoriteToggle }) {
+  const { selectedPortfolioId } = usePortfolio();
   const [tab, setTab] = useState('Favorites');
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +20,10 @@ export function AssetExplorerCard({ onAssetClick, favoriteOverrides = {}, onFavo
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api('/positions?limit=100')
+    const portfolioParam = selectedPortfolioId
+      ? `&portfolio_id=${selectedPortfolioId}`
+      : '';
+    api(`/positions?limit=100${portfolioParam}`)
       .then((resp) => resp.json())
       .then((res) => {
         if (!cancelled) setPositions(res.items || res || []);
@@ -43,7 +31,7 @@ export function AssetExplorerCard({ onAssetClick, favoriteOverrides = {}, onFavo
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedPortfolioId]);
 
   // Apply external favorite overrides from other components (e.g. TopHoldingsTable)
   const effectivePositions = useMemo(() => {
@@ -245,15 +233,7 @@ export function AssetExplorerCard({ onAssetClick, favoriteOverrides = {}, onFavo
               {filtered.map((p) => (
                 <tr
                   key={p.asset_id}
-                  onClick={() => onAssetClick?.({
-                    id: p.asset_id,
-                    symbol: p.symbol,
-                    name: p.name,
-                    asset_class: p.asset_class,
-                    current_price: p.current_price,
-                    day_change_pct: p.day_change_pct,
-                    currency: p.currency,
-                  })}
+                  onClick={() => onAssetClick?.(toAssetClickPayload(p))}
                   className="table-row-hover"
                 >
                   <td className="table-cell pr-0">

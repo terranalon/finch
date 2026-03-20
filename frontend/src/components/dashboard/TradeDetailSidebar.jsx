@@ -1,5 +1,5 @@
-import { useEffect, useCallback } from 'react';
 import { cn, formatCurrency, formatDate } from '../../lib';
+import { useSlideover } from '../../hooks/useSlideover';
 
 function CloseIcon() {
   return (
@@ -15,25 +15,7 @@ const ACTION_CONFIG = {
 };
 
 export function TradeDetailSidebar({ trade, isOpen, onClose, currency = 'USD' }) {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
-
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') onClose?.();
-  }, [onClose]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen, handleKeyDown]);
+  useSlideover(isOpen, onClose);
 
   if (!isOpen || !trade) return null;
 

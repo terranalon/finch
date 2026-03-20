@@ -6,9 +6,9 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.models.asset import Asset
 from app.services.market_data.coingecko_client import CoinGeckoClient
 from app.services.market_data.yfinance_client import YFinanceClient
+from app.services.repositories.asset_repository import AssetRepository
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +26,11 @@ def get_batch_sparklines(
     if not symbols:
         return {}
 
-    # Partition symbols into crypto vs non-crypto
-    assets = db.query(Asset.symbol, Asset.asset_class).filter(Asset.symbol.in_(symbols)).all()
+    # Partition symbols into crypto vs non-crypto (via repository)
+    assets = AssetRepository(db).find_by_symbols(symbols)
     crypto_symbols = {a.symbol for a in assets if a.asset_class == "Crypto"}
     stock_symbols = [s for s in symbols if s not in crypto_symbols]
     crypto_list = [s for s in symbols if s in crypto_symbols]
-
-    sparklines: dict[str, list[float]] = {}
 
     with ThreadPoolExecutor(max_workers=min(len(symbols), 8)) as pool:
         futures: dict[str, object] = {}
@@ -49,9 +47,7 @@ def get_batch_sparklines(
             for sym in crypto_list:
                 futures[sym] = pool.submit(_fetch_crypto_sparkline, cg_client, sym)
 
-        sparklines = {sym: fut.result() for sym, fut in futures.items()}
-
-    return sparklines
+        return {sym: fut.result() for sym, fut in futures.items()}
 
 
 def _fetch_stock_sparkline(client: YFinanceClient, symbol: str) -> list[float]:

@@ -1,14 +1,13 @@
 """Integration tests for GET /api/dashboard/market-pulse."""
 
+from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 from app.services.market_data.yfinance_client import OHLCVRow
 
 
 def _mock_ohlcv(close: float) -> OHLCVRow:
-    from datetime import date
-    from decimal import Decimal
-
     return OHLCVRow(
         date=date(2026, 3, 5),
         open=Decimal(str(close)),
@@ -26,13 +25,9 @@ class TestMarketPulse:
         response = client.get("/api/dashboard/market-pulse")
         assert response.status_code == 401
 
-    @patch("app.routers.dashboard.YFinanceClient")
+    @patch("app.services.portfolio.market_pulse_service.YFinanceClient")
     def test_market_pulse_returns_structure(self, mock_yf_cls, auth_client):
         mock_client = mock_yf_cls.return_value
-        mock_client.get_batch_prices_threaded.return_value = {
-            "SPY": _mock_ohlcv(520.0),
-            "QQQ": _mock_ohlcv(440.0),
-        }
         mock_client.get_historical_data.return_value = [
             _mock_ohlcv(500.0 + i * 4) for i in range(5)
         ]
@@ -51,10 +46,9 @@ class TestMarketPulse:
         assert "sparkline" in item
         assert isinstance(item["sparkline"], list)
 
-    @patch("app.routers.dashboard.YFinanceClient")
+    @patch("app.services.portfolio.market_pulse_service.YFinanceClient")
     def test_market_pulse_handles_empty_data(self, mock_yf_cls, auth_client):
         mock_client = mock_yf_cls.return_value
-        mock_client.get_batch_prices_threaded.return_value = {}
         mock_client.get_historical_data.return_value = []
 
         response = auth_client.get("/api/dashboard/market-pulse")

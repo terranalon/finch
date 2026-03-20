@@ -43,17 +43,24 @@ class PriceRepository:
         )
 
     def find_latest_by_assets(
-        self, asset_ids: list[int], limit_per_asset: int = 2
+        self,
+        asset_ids: list[int],
+        limit_per_asset: int = 2,
+        *,
+        before_date: date | None = None,
     ) -> dict[int, list[AssetPrice]]:
         """Find latest prices for multiple assets.
 
-        Returns a dict mapping asset_id to list of recent prices.
-        Useful for calculating day change (need current + previous price).
+        Returns a dict mapping asset_id to list of recent prices (newest first).
+        If before_date is set, only prices strictly before that date are considered.
         """
         if not asset_ids:
             return {}
 
-        # Get the latest N prices for each asset using window function
+        base_filter = [AssetPrice.asset_id.in_(asset_ids)]
+        if before_date is not None:
+            base_filter.append(AssetPrice.date < before_date)
+
         subquery = (
             self._db.query(
                 AssetPrice,
@@ -64,7 +71,7 @@ class PriceRepository:
                 )
                 .label("rn"),
             )
-            .filter(AssetPrice.asset_id.in_(asset_ids))
+            .filter(*base_filter)
             .subquery()
         )
 
@@ -76,12 +83,9 @@ class PriceRepository:
             .all()
         )
 
-        # Group by asset_id
         result: dict[int, list[AssetPrice]] = {}
         for price in prices:
-            if price.asset_id not in result:
-                result[price.asset_id] = []
-            result[price.asset_id].append(price)
+            result.setdefault(price.asset_id, []).append(price)
 
         return result
 
@@ -118,36 +122,9 @@ class PriceRepository:
         """Find the most recent price before a given date for multiple assets.
 
         Returns a dict mapping asset_id -> AssetPrice (most recent before before_date).
-        Uses a window function to get the latest price per asset in a single query.
         """
-        if not asset_ids:
-            return {}
-
-        subquery = (
-            self._db.query(
-                AssetPrice,
-                func.row_number()
-                .over(
-                    partition_by=AssetPrice.asset_id,
-                    order_by=desc(AssetPrice.date),
-                )
-                .label("rn"),
-            )
-            .filter(
-                AssetPrice.asset_id.in_(asset_ids),
-                AssetPrice.date < before_date,
-            )
-            .subquery()
-        )
-
-        prices = (
-            self._db.query(AssetPrice)
-            .join(subquery, AssetPrice.id == subquery.c.id)
-            .filter(subquery.c.rn == 1)
-            .all()
-        )
-
-        return {price.asset_id: price for price in prices}
+        by_asset = self.find_latest_by_assets(asset_ids, limit_per_asset=1, before_date=before_date)
+        return {aid: prices[0] for aid, prices in by_asset.items()}
 
     def find_latest_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
         """Find the latest market cap for each asset from asset_daily_metrics."""

@@ -69,6 +69,21 @@ def cash_holding(db, test_account, cash_usd):
     return holding
 
 
+@pytest.fixture
+def cad_holding(db, test_account, asset_cad):
+    """Holding for a CAD-denominated asset, used by currency conversion tests."""
+    holding = Holding(
+        account_id=test_account.id,
+        asset_id=asset_cad.id,
+        quantity=Decimal("20"),
+        cost_basis=Decimal("1000"),
+        is_active=True,
+    )
+    db.add(holding)
+    db.flush()
+    return holding
+
+
 def _create_txn(db, holding, **kwargs):
     """Helper to create a transaction with defaults."""
     defaults = {
@@ -149,21 +164,12 @@ class TestGetTrades:
         assert total == 0
 
     def test_original_currency_preserved_on_conversion(
-        self, db, test_account, asset_cad, monkeypatch
+        self, db, test_account, cad_holding, monkeypatch
     ):
         """When display_currency differs from native, original values are preserved."""
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=asset_cad.id,
-            quantity=Decimal("20"),
-            cost_basis=Decimal("1000"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
         _create_txn(
             db,
-            holding,
+            cad_holding,
             type="Buy",
             quantity=Decimal("20"),
             price_per_unit=Decimal("50"),
@@ -194,21 +200,12 @@ class TestGetTrades:
         assert trades[0].original_amount is None
 
     def test_falls_back_to_native_currency_when_rate_unavailable(
-        self, db, test_account, asset_cad, monkeypatch
+        self, db, test_account, cad_holding, monkeypatch
     ):
         """When exchange rate is unavailable, no conversion is applied and original fields stay None."""
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=asset_cad.id,
-            quantity=Decimal("20"),
-            cost_basis=Decimal("1000"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
         _create_txn(
             db,
-            holding,
+            cad_holding,
             type="Buy",
             quantity=Decimal("20"),
             price_per_unit=Decimal("50"),
@@ -249,21 +246,12 @@ class TestGetDividends:
         assert divs[0].symbol == "AAPL"
 
     def test_original_currency_preserved_on_conversion(
-        self, db, test_account, asset_cad, monkeypatch
+        self, db, test_account, cad_holding, monkeypatch
     ):
         """CAD dividend shows original CAD amount when converted to USD."""
-        holding = Holding(
-            account_id=test_account.id,
-            asset_id=asset_cad.id,
-            quantity=Decimal("20"),
-            cost_basis=Decimal("1000"),
-            is_active=True,
-        )
-        db.add(holding)
-        db.flush()
         _create_txn(
             db,
-            holding,
+            cad_holding,
             type="Dividend",
             amount=Decimal("50"),
             quantity=None,

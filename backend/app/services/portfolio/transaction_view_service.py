@@ -30,6 +30,7 @@ class TransactionViewService:
     def __init__(self, db: Session) -> None:
         self._db = db
         self._repo = TransactionRepository(db)
+        self._currency = CurrencyService(db)
 
     def _get_rate(
         self,
@@ -46,9 +47,7 @@ class TransactionViewService:
         """
         key = (from_currency, to_currency, conversion_date)
         if key not in rate_cache:
-            rate = CurrencyService(self._db).get_exchange_rate(
-                from_currency, to_currency, conversion_date
-            )
+            rate = self._currency.get_exchange_rate(from_currency, to_currency, conversion_date)
             if rate is None:
                 logger.warning(
                     "No exchange rate for %s/%s on %s, falling back to native currency",
@@ -115,8 +114,8 @@ class TransactionViewService:
             trade_total, output_currency, original_amount, original_currency = self._maybe_convert(
                 trade_total, native_currency, display_currency, txn.date, rate_cache
             )
-            if original_amount is not None:
-                rate = trade_total / original_amount if original_amount else Decimal("1")
+            if original_amount is not None and original_amount != 0:
+                rate = trade_total / original_amount
                 price = price * rate
                 fees = fees * rate
 
@@ -252,8 +251,8 @@ class TransactionViewService:
             amount, output_currency, original_amount, original_currency = self._maybe_convert(
                 amount, native_currency, display_currency, txn.date, rate_cache
             )
-            if original_amount is not None and fees is not None:
-                rate = amount / original_amount if original_amount else Decimal("1")
+            if original_amount is not None and original_amount != 0 and fees is not None:
+                rate = amount / original_amount
                 fees = fees * rate
 
             items.append(

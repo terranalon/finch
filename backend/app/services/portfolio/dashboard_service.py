@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Asset, Holding
+from app.models import Asset, AssetPrice, Holding
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
 from app.services.portfolio.position_service import PositionService
 from app.services.portfolio.snapshot_service import filter_incomplete_snapshots
@@ -133,11 +133,21 @@ class DashboardService:
         )
 
     def _to_usd(self, amount: Decimal, currency: str) -> Decimal:
-        """Convert an amount from *currency* to USD."""
+        """Convert an amount to USD at today's rate (for current portfolio view)."""
         if currency == "USD":
             return amount
         rate = self._currency.get_exchange_rate(currency, "USD")
-        return amount * rate if rate is not None else amount
+        if rate is None:
+            logger.warning(
+                "No %s/USD exchange rate available, returning unconverted amount",
+                currency,
+            )
+            return amount
+        return amount * rate
+
+    def _cost_basis_usd(self, holding: Holding, asset: Asset) -> Decimal:
+        """Convert a holding's cost basis to USD."""
+        return self._to_usd(holding.cost_basis or Decimal("0"), asset.currency or "USD")
 
     # ------------------------------------------------------------------
     # Private section builders
@@ -243,7 +253,7 @@ class DashboardService:
             if hv.is_cash:
                 cash += hv.market_value_usd
             else:
-                cb_usd = self._to_usd(holding.cost_basis or Decimal("0"), asset.currency or "USD")
+                cb_usd = self._cost_basis_usd(holding, asset)
                 cost_basis += cb_usd
                 pnl += hv.market_value_usd - cb_usd
 
@@ -256,7 +266,6 @@ class DashboardService:
         limit: int = 5,
     ) -> list[TopHolding]:
         # Batch-fetch previous closes for all non-cash assets (single query)
-        today = date.today()
         non_cash_asset_ids = list(
             {
                 asset.id
@@ -266,7 +275,7 @@ class DashboardService:
                 and asset.last_fetched_price > 0
             }
         )
-        prev_closes = self._price_repo.find_previous_closes(non_cash_asset_ids, today)
+        prev_closes = self._price_repo.find_previous_closes(non_cash_asset_ids, date.today())
 
         items: list[TopHolding] = []
         for holding, asset, account_name in rows:
@@ -275,19 +284,8 @@ class DashboardService:
                 continue
 
             price = Decimal("1") if hv.is_cash else (asset.last_fetched_price or Decimal("0"))
-
-            day_change_pct: Decimal | None = None
-            if not hv.is_cash and asset.last_fetched_price and asset.last_fetched_price > 0:
-                prev = prev_closes.get(asset.id)
-                if prev and prev.closing_price and prev.closing_price > 0:
-                    day_change_pct = (
-                        (asset.last_fetched_price - prev.closing_price) / prev.closing_price * 100
-                    )
-
-            # Convert cost_basis from native currency to USD
-            cost_basis_usd = self._to_usd(
-                holding.cost_basis or Decimal("0"), asset.currency or "USD"
-            )
+            day_change_pct = _calc_day_change_pct(asset, prev_closes) if not hv.is_cash else None
+            cost_basis_usd = self._cost_basis_usd(holding, asset)
 
             items.append(
                 TopHolding(
@@ -325,3 +323,13 @@ class DashboardService:
             )
             for r in kept
         ]
+
+
+def _calc_day_change_pct(asset: Asset, prev_closes: dict[int, AssetPrice]) -> Decimal | None:
+    """Calculate day change percentage from asset price vs previous close."""
+    if not asset.last_fetched_price or asset.last_fetched_price <= 0:
+        return None
+    prev = prev_closes.get(asset.id)
+    if prev is None or not prev.closing_price or prev.closing_price <= 0:
+        return None
+    return (asset.last_fetched_price - prev.closing_price) / prev.closing_price * 100

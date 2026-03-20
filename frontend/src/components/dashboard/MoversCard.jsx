@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { cn, formatCurrency, formatPercent, getChangeColor } from '../../lib';
 import api from '../../lib/api';
 import { Skeleton } from '../ui';
+import { toAssetClickPayload } from './shared';
 
 function TriangleUp() {
   return (
@@ -50,15 +51,7 @@ export function MoversCard({ onAssetClick }) {
         {items.map((item) => (
           <div
             key={item.asset_id}
-            onClick={() => onAssetClick?.({
-              id: item.asset_id,
-              symbol: item.symbol,
-              name: item.name,
-              asset_class: item.asset_class,
-              current_price: item.current_price,
-              day_change_pct: item.day_change_pct,
-              currency: item.currency,
-            })}
+            onClick={() => onAssetClick?.(toAssetClickPayload(item))}
             className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-[var(--bg-tertiary)] -mx-2 px-2 rounded transition-colors"
           >
             <div className="flex-1 min-w-0">

@@ -23,6 +23,7 @@ class SellResult:
     new_cost_basis: Decimal
     total_cost_basis_sold: Decimal
     is_closed: bool
+    realized_pnl_usd: Decimal | None = None
 
 
 class TransactionError(Exception):

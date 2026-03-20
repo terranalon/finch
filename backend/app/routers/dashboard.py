@@ -14,10 +14,9 @@ from app.dependencies.user_scope import get_user_account_ids
 from app.models.user import User
 from app.schemas.dashboard import BenchmarkResponse, DashboardSummaryResponse, MoversResponse
 from app.schemas.market_pulse import MarketPulseResponse
-from app.services.market_data.yfinance_client import YFinanceClient
 from app.services.portfolio import sparkline_service
 from app.services.portfolio.dashboard_service import DashboardService
-from app.services.portfolio.market_pulse_service import get_market_pulse
+from app.services.portfolio.market_pulse_service import get_benchmark_data, get_market_pulse
 from app.services.portfolio.types import (
     AccountValue,
     DashboardSummary,
@@ -95,57 +94,13 @@ async def get_benchmark_performance(
     start_date: date | None = Query(None, description="Custom range start (YYYY-MM-DD)"),
     end_date: date | None = Query(None, description="Custom range end (YYYY-MM-DD)"),
 ):
-    """
-    Get benchmark historical performance data.
+    """Get benchmark historical performance data.
 
     Returns daily closing prices and cumulative % change from period start,
     designed to align with portfolio TWR calculations.
-
-    Accepts either a named period or a custom date range via start_date/end_date.
     """
-    default_name = "S&P 500 ETF"
-
-    try:
-        client = YFinanceClient()
-        if start_date and end_date:
-            rows = client.get_history_for_range(symbol, start_date, end_date)
-        else:
-            rows = client.get_historical_data(symbol, period=period)
-
-        if not rows:
-            logger.warning(f"No historical data found for benchmark {symbol}")
-            return {
-                "symbol": symbol,
-                "name": default_name,
-                "data": [],
-                "error": "No data available",
-            }
-
-        # Get benchmark name from ticker info
-        try:
-            info = client.get_ticker_info(symbol)
-            name = info.name if info and info.name else default_name
-        except Exception:
-            name = default_name
-
-        # Calculate performance relative to first data point
-        start_price = float(rows[0].close)
-        data = [
-            {
-                "date": row.date.isoformat(),
-                "price": round(float(row.close), 2),
-                "performance": round(((float(row.close) - start_price) / start_price) * 100, 2)
-                if start_price > 0
-                else 0,
-            }
-            for row in rows
-        ]
-
-        return {"symbol": symbol, "name": name, "data": data}
-
-    except Exception as e:
-        logger.error(f"Error fetching benchmark data for {symbol}: {e}")
-        return {"symbol": symbol, "name": default_name, "data": [], "error": str(e)}
+    result = get_benchmark_data(symbol, period, start_date, end_date)
+    return dataclasses.asdict(result)
 
 
 @router.get("/sparklines")
@@ -172,8 +127,7 @@ async def get_market_pulse_data(
     current_user: User = Depends(get_current_user),
 ) -> MarketPulseResponse:
     """Get live market index prices and sparklines for the dashboard pulse card."""
-    client = YFinanceClient()
-    items = get_market_pulse(client)
+    items = get_market_pulse()
     return {"items": [dataclasses.asdict(item) for item in items]}
 
 

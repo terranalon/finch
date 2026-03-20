@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { cn, formatCurrency, ASSET_COLORS } from '../../lib';
+import { formatCurrency, ASSET_COLORS } from '../../lib';
 import { Skeleton } from '../ui';
 
 const FALLBACK_COLOR = '#64748B';
@@ -68,7 +68,7 @@ export function AllocationDonutCard({ allocation, totalValue, currency, loading 
             <span className="text-[11px] text-[var(--text-secondary)]">
               {entry.name}
             </span>
-            <span className={cn('text-[11px] font-mono tabular-nums', 'text-[var(--text-tertiary)]')}>
+            <span className="text-[11px] font-mono tabular-nums text-[var(--text-tertiary)]">
               {entry.pct.toFixed(0)}%
             </span>
           </div>

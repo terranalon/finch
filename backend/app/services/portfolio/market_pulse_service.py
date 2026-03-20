@@ -1,8 +1,9 @@
-"""Market pulse service - fetches live market index data."""
+"""Market pulse and benchmark services - live market data for the dashboard."""
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 
 from app.services.market_data.yfinance_client import YFinanceClient
 
@@ -56,12 +57,9 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
     symbols = list(MARKET_SYMBOLS.keys())
 
     # Single fetch: 5-day sparklines in parallel (provides price + prev_close + chart)
-    sparklines: dict[str, list[float]] = {}
     with ThreadPoolExecutor(max_workers=min(len(symbols), 8)) as pool:
-        sparkline_futures = {
-            symbol: pool.submit(_fetch_sparkline, client, symbol) for symbol in symbols
-        }
-        sparklines = {symbol: fut.result() for symbol, fut in sparkline_futures.items()}
+        futures = {symbol: pool.submit(_fetch_sparkline, client, symbol) for symbol in symbols}
+        sparklines = {symbol: fut.result() for symbol, fut in futures.items()}
 
     items: list[MarketPulseItem] = []
     for symbol, name in MARKET_SYMBOLS.items():
@@ -92,3 +90,82 @@ def get_market_pulse(client: YFinanceClient | None = None) -> list[MarketPulseIt
         )
 
     return items
+
+
+# ------------------------------------------------------------------
+# Benchmark
+# ------------------------------------------------------------------
+
+_DEFAULT_BENCHMARK_NAME = "S&P 500 ETF"
+
+
+@dataclass
+class BenchmarkDataPoint:
+    """Single benchmark data point with cumulative performance."""
+
+    date: str
+    price: float
+    performance: float
+
+
+@dataclass
+class BenchmarkResult:
+    """Result of a benchmark data fetch."""
+
+    symbol: str
+    name: str
+    data: list[BenchmarkDataPoint] = field(default_factory=list)
+    error: str | None = None
+
+
+def get_benchmark_data(
+    symbol: str = "SPY",
+    period: str = "1mo",
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> BenchmarkResult:
+    """Fetch benchmark historical performance data.
+
+    Returns daily closing prices and cumulative % change from period start,
+    designed to align with portfolio TWR calculations.
+
+    Accepts either a named period or a custom date range via start_date/end_date.
+    """
+    try:
+        client = YFinanceClient()
+        if start_date and end_date:
+            rows = client.get_history_for_range(symbol, start_date, end_date)
+        else:
+            rows = client.get_historical_data(symbol, period=period)
+
+        if not rows:
+            logger.warning("No historical data found for benchmark %s", symbol)
+            return BenchmarkResult(
+                symbol=symbol, name=_DEFAULT_BENCHMARK_NAME, error="No data available"
+            )
+
+        try:
+            info = client.get_ticker_info(symbol)
+            name = info.name if info and info.name else _DEFAULT_BENCHMARK_NAME
+        except Exception:
+            name = _DEFAULT_BENCHMARK_NAME
+
+        start_price = float(rows[0].close)
+        data = [
+            BenchmarkDataPoint(
+                date=row.date.isoformat(),
+                price=round(float(row.close), 2),
+                performance=(
+                    round(((float(row.close) - start_price) / start_price) * 100, 2)
+                    if start_price > 0
+                    else 0.0
+                ),
+            )
+            for row in rows
+        ]
+
+        return BenchmarkResult(symbol=symbol, name=name, data=data)
+
+    except Exception as e:
+        logger.error("Error fetching benchmark data for %s: %s", symbol, e)
+        return BenchmarkResult(symbol=symbol, name=_DEFAULT_BENCHMARK_NAME, error=str(e))

@@ -1,7 +1,6 @@
 """Transactions API router - CRUD operations with business logic."""
 
 from datetime import date
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import desc
@@ -16,7 +15,6 @@ from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.transaction import Transaction as TransactionSchema
 from app.schemas.transaction import TransactionCreateRequest, TransactionUpdate
-from app.services.portfolio.realized_pnl_service import compute_realized_pnl_usd
 from app.services.portfolio.transaction_service import TransactionService
 from app.services.portfolio.transaction_types import TransactionError
 
@@ -168,15 +166,14 @@ async def create_transaction(
                 transaction.date,
             )
         elif transaction.type == "Sell":
-            sell_result = svc.process_sell(holding, transaction.quantity)
-            if transaction.price_per_unit and transaction.quantity:
-                db_transaction.realized_pnl_usd = compute_realized_pnl_usd(
-                    sell_quantity=transaction.quantity,
-                    sell_price_per_unit=transaction.price_per_unit,
-                    sell_fees=transaction.fees or Decimal("0"),
-                    total_cost_basis_sold=sell_result.total_cost_basis_sold,
-                    currency_rate_to_usd=db_transaction.currency_rate_to_usd_at_date,
-                )
+            sell_result = svc.process_sell(
+                holding,
+                transaction.quantity,
+                sell_price_per_unit=transaction.price_per_unit,
+                sell_fees=transaction.fees,
+                currency_rate_to_usd=db_transaction.currency_rate_to_usd_at_date,
+            )
+            db_transaction.realized_pnl_usd = sell_result.realized_pnl_usd
 
         db.commit()
         loaded = _load_transaction_with_relations(db, db_transaction.id)

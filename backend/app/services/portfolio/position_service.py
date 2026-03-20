@@ -66,7 +66,7 @@ class PositionService:
 
         # Batch market-cap fetch (latest AssetDailyMetrics per asset)
         asset_ids = list(positions_map.keys())
-        market_caps = self._fetch_market_caps(asset_ids)
+        market_caps = self._price_repo.find_latest_market_caps(asset_ids)
 
         # Batch 7-day change calculation
         week_changes = self._calc_week_changes(asset_ids, positions_map)
@@ -90,10 +90,6 @@ class PositionService:
         total = len(results)
         return results[skip : skip + limit], total
 
-    def _fetch_market_caps(self, asset_ids: list[int]) -> dict[int, Decimal]:
-        """Batch-fetch latest market cap from asset_daily_metrics."""
-        return self._price_repo.find_latest_market_caps(asset_ids)
-
     def _calc_week_changes(
         self,
         asset_ids: list[int],
@@ -103,7 +99,7 @@ class PositionService:
         if not asset_ids:
             return {}
 
-        recent_prices = self._price_repo.find_latest_by_assets(asset_ids, limit_per_asset=8)
+        recent_prices = self._price_repo.find_latest_by_assets(asset_ids, limit_per_asset=14)
         week_ago = date.today() - timedelta(days=7)
 
         result: dict[int, Decimal] = {}

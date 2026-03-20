@@ -14,6 +14,22 @@ from app.services.repositories.transaction_repository import TransactionReposito
 
 logger = logging.getLogger(__name__)
 
+# Transaction types that don't affect FIFO lot state
+_NON_LOT_TYPES = frozenset(
+    {
+        "Deposit",
+        "Withdrawal",
+        "Dividend",
+        "Tax",
+        "Fee",
+        "Transfer",
+        "Custody Fee",
+        "Interest",
+        "Forex Conversion",
+        "Credit",
+    }
+)
+
 
 def compute_realized_pnl_usd(
     *,
@@ -100,18 +116,7 @@ class RealizedPnlService:
                 )
                 updated += 1
 
-            elif txn.type not in (
-                "Deposit",
-                "Withdrawal",
-                "Dividend",
-                "Tax",
-                "Fee",
-                "Transfer",
-                "Custody Fee",
-                "Interest",
-                "Forex Conversion",
-                "Credit",
-            ):
+            elif txn.type not in _NON_LOT_TYPES:
                 logger.warning(
                     "Unrecognized transaction type %r for holding %d (txn %d) — "
                     "may affect FIFO lot state",
@@ -143,11 +148,10 @@ class RealizedPnlService:
             sold = min(available, remaining)
             lot["remaining"] -= sold
 
-            cost_per_unit = lot.get("cost_per_unit") or Decimal("0")
-            cost = sold * cost_per_unit
+            cost = sold * lot["cost_per_unit"]
 
-            lot_qty = lot.get("quantity") or Decimal("0")
-            lot_fees = lot.get("fees") or Decimal("0")
+            lot_qty = lot["quantity"]
+            lot_fees = lot["fees"]
             if lot_qty > 0:
                 fee_proportion = (sold / lot_qty) * lot_fees
                 cost += fee_proportion

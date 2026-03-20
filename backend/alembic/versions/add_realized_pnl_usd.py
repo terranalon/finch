@@ -17,9 +17,9 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.add_column("transactions", sa.Column("realized_pnl_usd", sa.Numeric(15, 2), nullable=True))
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_column("transactions", "realized_pnl_usd")

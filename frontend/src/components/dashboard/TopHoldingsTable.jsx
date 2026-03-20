@@ -1,26 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { cn, formatCurrency, formatPercent, getChangeColor, ASSET_COLORS } from '../../lib';
+import { cn, formatCurrency, formatPercent, getChangeColor } from '../../lib';
 import api from '../../lib/api';
 import { Skeleton } from '../ui';
-
-function SortArrow({ dir }) {
-  return <span className="text-[10px] ml-0.5 opacity-60">{dir === 'asc' ? '\u25B2' : '\u25BC'}</span>;
-}
-
-function FavoriteStar({ isFavorite, onClick }) {
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={cn(
-        'text-sm leading-none transition-all cursor-pointer select-none hover:scale-110',
-        isFavorite ? 'text-[#F59E0B]' : 'text-[var(--text-faint)] hover:text-[#F59E0B]'
-      )}
-    >
-      {isFavorite ? '\u2605' : '\u2606'}
-    </button>
-  );
-}
+import { SortArrow, FavoriteStar, toAssetClickPayload } from './shared';
 
 export function TopHoldingsTable({ holdings, totalValue, loading, currency, onAssetClick, favoriteOverrides = {}, onFavoriteToggle }) {
   const [sortKey, setSortKey] = useState('weight');
@@ -133,15 +116,7 @@ export function TopHoldingsTable({ holdings, totalValue, loading, currency, onAs
             {sorted.map((h) => (
               <tr
                 key={h.id}
-                onClick={() => onAssetClick?.({
-                  id: h.asset_id,
-                  symbol: h.symbol,
-                  name: h.name,
-                  asset_class: h.asset_class,
-                  current_price: h.current_price,
-                  day_change_pct: h.day_change_pct,
-                  currency: h.currency,
-                })}
+                onClick={() => onAssetClick?.(toAssetClickPayload(h))}
                 className="table-row-hover"
               >
                 <td className="table-cell pr-0">

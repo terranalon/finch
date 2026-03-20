@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn, formatCurrency, formatPercent, formatNumber, formatDate, getChangeColor, getChangeIndicator } from '../../lib';
 import { useChartColors } from '../../hooks/useChartColors';
+import { useSlideover } from '../../hooks/useSlideover';
 import { usePortfolio } from '../../contexts';
 import api from '../../lib/api';
 import { Skeleton } from '../ui';
@@ -67,27 +68,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
   const [isFavorite, setIsFavorite] = useState(false);
   const colors = useChartColors();
 
-  // Lock body scroll when open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
-
-  // Escape key closes sidebar
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') onClose?.();
-  }, [onClose]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen, handleKeyDown]);
+  useSlideover(isOpen, onClose);
 
   // Fetch position details (account breakdown, P&L)
   useEffect(() => {
