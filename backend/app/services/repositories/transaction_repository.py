@@ -221,3 +221,30 @@ class TransactionRepository:
             .first()
         )
         return Decimal(str(row.total)) if row and row.total is not None else Decimal("0")
+
+    def sum_sell_cost_basis_usd(self, account_ids: Sequence[int]) -> Decimal:
+        """Sum cost basis sold (in USD) for all sell transactions with realized P&L.
+
+        Derived from: proceeds_usd - realized_pnl_usd, where
+        proceeds_usd = abs(qty) * price_per_unit * coalesce(rate, 1) - fees * coalesce(rate, 1).
+        """
+        proceeds_usd = (
+            func.abs(Transaction.quantity) * Transaction.price_per_unit
+            - func.coalesce(Transaction.fees, 0)
+        ) * func.coalesce(Transaction.currency_rate_to_usd_at_date, 1)
+
+        cost_basis_sold_expr = proceeds_usd - Transaction.realized_pnl_usd
+
+        row = (
+            self._db.query(func.sum(cost_basis_sold_expr).label("total"))
+            .join(Holding, Transaction.holding_id == Holding.id)
+            .filter(
+                Holding.account_id.in_(account_ids),
+                Transaction.type == "Sell",
+                Transaction.realized_pnl_usd.isnot(None),
+                Transaction.quantity.isnot(None),
+                Transaction.price_per_unit.isnot(None),
+            )
+            .first()
+        )
+        return Decimal(str(row.total)) if row and row.total is not None else Decimal("0")

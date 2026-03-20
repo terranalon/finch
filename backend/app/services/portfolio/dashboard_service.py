@@ -77,7 +77,12 @@ class DashboardService:
         # Combine unrealized P&L (active positions) + realized P&L (sold positions)
         realized_pnl_usd = self._txn_repo.sum_realized_pnl_usd(account_ids)
         total_pnl_usd = unrealized_pnl_usd + realized_pnl_usd
-        pnl_pct = (total_pnl_usd / cost_basis_usd * 100) if cost_basis_usd > 0 else None
+
+        # Denominator must include cost basis of sold portions (not just active holdings)
+        # so the percentage is consistent with the numerator that includes realized P&L
+        sold_cost_basis_usd = self._txn_repo.sum_sell_cost_basis_usd(account_ids)
+        total_cost_basis_usd = cost_basis_usd + sold_cost_basis_usd
+        pnl_pct = (total_pnl_usd / total_cost_basis_usd * 100) if total_cost_basis_usd > 0 else None
 
         return DashboardSummary(
             total_value_usd=total_usd,

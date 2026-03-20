@@ -38,16 +38,24 @@ def compute_realized_pnl_usd(
     sell_fees: Decimal,
     total_cost_basis_sold: Decimal,
     currency_rate_to_usd: Decimal | None,
-) -> Decimal:
+) -> Decimal | None:
     """Compute realized P&L in USD for a single sell transaction.
 
     Used by both the manual sell path (router) and the FIFO backfill service.
+    Returns None when currency_rate_to_usd is missing (cannot convert to USD).
     """
+    if currency_rate_to_usd is None:
+        logger.warning(
+            "Missing currency_rate_to_usd for sell (qty=%s, price=%s); "
+            "cannot compute realized P&L in USD",
+            sell_quantity,
+            sell_price_per_unit,
+        )
+        return None
     gross_proceeds = sell_quantity * sell_price_per_unit
     net_proceeds = gross_proceeds - sell_fees
     realized_native = net_proceeds - total_cost_basis_sold
-    rate = currency_rate_to_usd if currency_rate_to_usd is not None else Decimal("1")
-    return realized_native * rate
+    return realized_native * currency_rate_to_usd
 
 
 class RealizedPnlService:
@@ -107,14 +115,16 @@ class RealizedPnlService:
                 sell_qty = abs(txn.quantity or Decimal("0"))
                 cost_basis_sold = self._consume_lots(lots, sell_qty)
 
-                txn.realized_pnl_usd = compute_realized_pnl_usd(
+                pnl = compute_realized_pnl_usd(
                     sell_quantity=sell_qty,
                     sell_price_per_unit=txn.price_per_unit or Decimal("0"),
                     sell_fees=txn.fees or Decimal("0"),
                     total_cost_basis_sold=cost_basis_sold,
                     currency_rate_to_usd=txn.currency_rate_to_usd_at_date,
                 )
-                updated += 1
+                if pnl is not None:
+                    txn.realized_pnl_usd = pnl
+                    updated += 1
 
             elif txn.type not in _NON_LOT_TYPES:
                 logger.warning(
