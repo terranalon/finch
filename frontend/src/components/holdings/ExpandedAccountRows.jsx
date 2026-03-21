@@ -1,5 +1,16 @@
 import { cn, formatCurrency, formatPercent, formatNumber, getChangeColor, getChangeIndicator } from '../../lib';
 
+const VALUE_CLASS = 'text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]';
+
+function MetricCell({ label, value }) {
+  return (
+    <div>
+      <p className="text-[10px] text-[var(--text-faint)] mb-0.5">{label}</p>
+      <p className={VALUE_CLASS}>{value}</p>
+    </div>
+  );
+}
+
 export function ExpandedAccountRows({ accounts, currency, assetClass, colSpan = 12 }) {
   const isCrypto = assetClass === 'Crypto';
 
@@ -26,24 +37,18 @@ export function ExpandedAccountRows({ accounts, currency, assetClass, colSpan = 
                   </span>
                 </div>
                 <div className="flex items-center gap-6 text-right">
-                  <div>
-                    <p className="text-[10px] text-[var(--text-faint)] mb-0.5">Qty</p>
-                    <p className="text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]">
-                      {formatNumber(acct.quantity, { decimals: isCrypto ? 4 : 0 })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--text-faint)] mb-0.5">Cost Basis</p>
-                    <p className="text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]">
-                      {formatCurrency(acct.cost_basis_native, currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--text-faint)] mb-0.5">Value</p>
-                    <p className="text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]">
-                      {formatCurrency(acct.market_value_native, currency)}
-                    </p>
-                  </div>
+                  <MetricCell
+                    label="Qty"
+                    value={formatNumber(acct.quantity, { decimals: isCrypto ? 4 : 0 })}
+                  />
+                  <MetricCell
+                    label="Cost Basis"
+                    value={formatCurrency(acct.cost_basis_native, currency)}
+                  />
+                  <MetricCell
+                    label="Value"
+                    value={formatCurrency(acct.market_value_native, currency)}
+                  />
                   <div className="min-w-[80px]">
                     <p className="text-[10px] text-[var(--text-faint)] mb-0.5">P&L</p>
                     <p className={cn('text-[13px] font-mono tabular-nums font-medium', getChangeColor(acct.pnl_native))}>

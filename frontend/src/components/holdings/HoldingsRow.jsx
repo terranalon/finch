@@ -26,13 +26,14 @@ function StarIcon({ filled }) {
   );
 }
 
+const FALLBACK_COLORS = Object.values(ASSET_COLORS);
+
 function getIconColor(symbol, assetClass) {
   if (ASSET_COLORS[assetClass]) return ASSET_COLORS[assetClass];
   // Deterministic color from symbol hash
-  const colors = ['#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#06B6D4', '#EC4899', '#EF4444'];
   let hash = 0;
   for (let i = 0; i < symbol.length; i++) hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
+  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
 }
 
 export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, onToggleFavorite }) {

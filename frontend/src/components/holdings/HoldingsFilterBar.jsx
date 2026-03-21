@@ -39,7 +39,7 @@ function CheckIcon() {
 
 function FilterSection({ label, collapsed, onToggle, items, selectedValues, onItemToggle, getLabel, getValue }) {
   return (
-    <div className={cn('mb-3.5 last:mb-0')}>
+    <div className="mb-3.5 last:mb-0">
       <button
         onClick={onToggle}
         className="flex items-center justify-between w-full text-[10px] font-semibold text-[var(--text-faint)] uppercase tracking-wide py-1 cursor-pointer select-none hover:text-[var(--text-tertiary)] transition-colors"
@@ -168,7 +168,7 @@ export function HoldingsFilterBar({
             <div className="flex items-center justify-between mb-3.5">
               <span className="text-sm font-semibold text-[var(--text-primary)]">Filters</span>
               <button
-                onClick={() => { onClearAll(); }}
+                onClick={onClearAll}
                 className="text-[11px] text-accent hover:underline cursor-pointer"
               >
                 Clear all

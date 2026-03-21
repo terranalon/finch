@@ -1,36 +1,19 @@
 import { cn } from '../../lib';
 
-function ChevronLeftIcon() {
+function NavIcon({ d }) {
   return (
     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
   );
 }
 
-function ChevronRightIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-    </svg>
-  );
-}
-
-function DoubleLeftIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5" />
-    </svg>
-  );
-}
-
-function DoubleRightIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
-    </svg>
-  );
-}
+const NAV_PATHS = {
+  first: 'm18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5',
+  prev: 'M15.75 19.5 8.25 12l7.5-7.5',
+  next: 'm8.25 4.5 7.5 7.5-7.5 7.5',
+  last: 'm5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5',
+};
 
 function PageButton({ onClick, disabled, children, title }) {
   return (
@@ -92,19 +75,19 @@ export function PaginationFooter({ currentPage, totalItems, pageSize, onPageChan
         {totalPages > 1 && (
           <div className="flex items-center gap-0.5">
             <PageButton onClick={() => goTo(1)} disabled={currentPage === 1} title="First page">
-              <DoubleLeftIcon />
+              <NavIcon d={NAV_PATHS.first} />
             </PageButton>
             <PageButton onClick={() => goTo(currentPage - 1)} disabled={currentPage === 1} title="Previous page">
-              <ChevronLeftIcon />
+              <NavIcon d={NAV_PATHS.prev} />
             </PageButton>
             <span className="text-xs text-[var(--text-tertiary)] px-2">
               {currentPage} / {totalPages}
             </span>
             <PageButton onClick={() => goTo(currentPage + 1)} disabled={currentPage >= totalPages} title="Next page">
-              <ChevronRightIcon />
+              <NavIcon d={NAV_PATHS.next} />
             </PageButton>
             <PageButton onClick={() => goTo(totalPages)} disabled={currentPage >= totalPages} title="Last page">
-              <DoubleRightIcon />
+              <NavIcon d={NAV_PATHS.last} />
             </PageButton>
           </div>
         )}

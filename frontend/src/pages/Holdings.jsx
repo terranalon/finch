@@ -10,7 +10,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { cn, api } from '../lib';
+import { api } from '../lib';
 import { useCurrency, usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { Card, Skeleton, SkeletonTableRow } from '../components/ui';
@@ -28,7 +28,10 @@ export default function Holdings() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // URL ?symbol= deep-link refs
   const hasHandledSymbolParam = useRef(false);
+  const pendingSymbolRef = useRef(null);
 
   // Filter options derived from data
   const assetClasses = useMemo(() => {
@@ -60,11 +63,12 @@ export default function Holdings() {
   // Asset sidebar
   const [sidebarAsset, setSidebarAsset] = useState(null);
 
-  // Fetch data
+  // Fetch data (also resets filter state so filters re-initialize from fresh data)
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
+      setFiltersInitialized(false);
       const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
       try {
         const [posRes, accRes] = await Promise.all([
@@ -96,14 +100,10 @@ export default function Holdings() {
     }
   }, [loading, positions, accounts, assetClasses, sectors, filtersInitialized]);
 
-  // Reset filters on currency change
-  useEffect(() => { setFiltersInitialized(false); }, [currency]);
-
   // Reset page on filter change
   useEffect(() => { setCurrentPage(1); }, [searchQuery, selectedAccounts, selectedClasses, selectedSectors]);
 
-  // URL ?symbol= pre-selection
-  const pendingSymbolRef = useRef(null);
+  // URL ?symbol= pre-selection: open sidebar and scroll to row
   useEffect(() => {
     const symbol = searchParams.get('symbol');
     if (symbol && positions.length > 0 && !hasHandledSymbolParam.current) {
@@ -147,20 +147,21 @@ export default function Holdings() {
 
   // Filter + sort
   const filteredPositions = useMemo(() => {
-    let result = positions.filter((p) => {
+    // When all items are selected, skip the filter check (nothing is excluded).
+    // When none are selected, exclude everything.
+    const isAccountFiltered = selectedAccounts.length > 0 && selectedAccounts.length < accounts.length;
+    const isClassFiltered = selectedClasses.length > 0 && selectedClasses.length < assetClasses.length;
+    const isSectorFiltered = selectedSectors.length > 0 && selectedSectors.length < sectors.length;
+    const hasEmptyFilter = selectedAccounts.length === 0 || selectedClasses.length === 0 || selectedSectors.length === 0;
+
+    let result = hasEmptyFilter ? [] : positions.filter((p) => {
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (!p.symbol.toLowerCase().includes(q) && !p.name?.toLowerCase().includes(q)) return false;
       }
-      if (selectedAccounts.length > 0 && selectedAccounts.length < accounts.length) {
-        if (!p.accounts.some((a) => selectedAccounts.includes(a.account_id))) return false;
-      } else if (selectedAccounts.length === 0) return false;
-      if (selectedClasses.length > 0 && selectedClasses.length < assetClasses.length) {
-        if (!selectedClasses.includes(p.asset_class)) return false;
-      } else if (selectedClasses.length === 0) return false;
-      if (selectedSectors.length > 0 && selectedSectors.length < sectors.length) {
-        if (!selectedSectors.includes(p.category)) return false;
-      } else if (selectedSectors.length === 0) return false;
+      if (isAccountFiltered && !p.accounts.some((a) => selectedAccounts.includes(a.account_id))) return false;
+      if (isClassFiltered && !selectedClasses.includes(p.asset_class)) return false;
+      if (isSectorFiltered && !selectedSectors.includes(p.category)) return false;
       return true;
     });
 
@@ -202,7 +203,7 @@ export default function Holdings() {
 
   // Totals from ALL filtered positions (not just current page)
   const totals = useMemo(() => {
-    const result = filteredPositions.reduce(
+    const { costBasis, marketValue, pnl } = filteredPositions.reduce(
       (acc, p) => ({
         costBasis: acc.costBasis + (p.total_cost_basis_native || 0),
         marketValue: acc.marketValue + (p.total_market_value_native || 0),
@@ -210,17 +211,14 @@ export default function Holdings() {
       }),
       { costBasis: 0, marketValue: 0, pnl: 0 }
     );
-    result.pnlPct = result.costBasis > 0 ? (result.pnl / result.costBasis) * 100 : 0;
-    return result;
+    const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+    return { costBasis, marketValue, pnl, pnlPct };
   }, [filteredPositions]);
 
   const handleSort = useCallback((field) => {
     setSortField((prev) => {
-      if (prev === field) {
-        setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setSortDirection('desc');
+      if (prev === field) setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+      else setSortDirection('desc');
       return field;
     });
   }, []);
@@ -260,9 +258,18 @@ export default function Holdings() {
             <table className="w-full">
               <thead>
                 <tr>
-                  {['', '', '', 'Symbol', 'Name', 'Price', 'Qty', 'Avg Cost', 'Cost Basis', 'Value', 'P&L', 'Accts'].map((h, i) => (
-                    <th key={i} className={cn('table-header', i >= 5 && 'text-right', i === 11 && 'text-center')}>{h}</th>
-                  ))}
+                  <th className="table-header" />
+                  <th className="table-header" />
+                  <th className="table-header" />
+                  <th className="table-header">Symbol</th>
+                  <th className="table-header">Name</th>
+                  <th className="table-header text-right">Price</th>
+                  <th className="table-header text-right">Qty</th>
+                  <th className="table-header text-right">Avg Cost</th>
+                  <th className="table-header text-right">Cost Basis</th>
+                  <th className="table-header text-right">Value</th>
+                  <th className="table-header text-right">P&L</th>
+                  <th className="table-header text-center">Accts</th>
                 </tr>
               </thead>
               <tbody>

@@ -41,6 +41,8 @@ export function HoldingsTable({
   emptyMessage,
   onClearFilters,
 }) {
+  const sortProps = { sortField, sortDirection, onSort };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -49,14 +51,14 @@ export function HoldingsTable({
             <th className="table-header w-[36px]" />
             <th className="table-header w-[20px]" />
             <th className="table-header w-[32px] pr-0" />
-            <SortableHeader field="symbol" label="Symbol" sortField={sortField} sortDirection={sortDirection} onSort={onSort} />
-            <SortableHeader field="name" label="Name" sortField={sortField} sortDirection={sortDirection} onSort={onSort} />
-            <SortableHeader field="current_price" label="Price" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
-            <SortableHeader field="total_quantity" label="Qty" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
-            <SortableHeader field="avg_cost_per_unit_native" label="Avg Cost" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
-            <SortableHeader field="total_cost_basis_native" label="Cost Basis" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
-            <SortableHeader field="total_market_value_native" label="Value" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
-            <SortableHeader field="total_pnl_native" label="P&L" sortField={sortField} sortDirection={sortDirection} onSort={onSort} align="right" />
+            <SortableHeader field="symbol" label="Symbol" {...sortProps} />
+            <SortableHeader field="name" label="Name" {...sortProps} />
+            <SortableHeader field="current_price" label="Price" {...sortProps} align="right" />
+            <SortableHeader field="total_quantity" label="Qty" {...sortProps} align="right" />
+            <SortableHeader field="avg_cost_per_unit_native" label="Avg Cost" {...sortProps} align="right" />
+            <SortableHeader field="total_cost_basis_native" label="Cost Basis" {...sortProps} align="right" />
+            <SortableHeader field="total_market_value_native" label="Value" {...sortProps} align="right" />
+            <SortableHeader field="total_pnl_native" label="P&L" {...sortProps} align="right" />
             <th className="table-header text-center w-[60px]">Accts</th>
           </tr>
         </thead>
