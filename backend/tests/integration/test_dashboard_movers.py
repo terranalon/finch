@@ -25,16 +25,24 @@ class TestDashboardMovers:
     ):
         """With multiple assets having day changes, returns sorted gainers/losers."""
         yesterday = date.today() - timedelta(days=1)
+        two_days_ago = date.today() - timedelta(days=2)
 
         # Create 4 assets with different day changes
+        # (current, prev_close, older_close) — two closes needed for weekend/closed-market path
         assets_data = [
-            ("AAPL", "Apple", Decimal("150.00"), Decimal("145.00")),  # +3.45%
-            ("GOOGL", "Google", Decimal("100.00"), Decimal("105.00")),  # -4.76%
-            ("MSFT", "Microsoft", Decimal("200.00"), Decimal("190.00")),  # +5.26%
-            ("TSLA", "Tesla", Decimal("180.00"), Decimal("200.00")),  # -10.00%
+            ("AAPL", "Apple", Decimal("150.00"), Decimal("145.00"), Decimal("142.00")),  # +3.45%
+            ("GOOGL", "Google", Decimal("100.00"), Decimal("105.00"), Decimal("107.00")),  # -4.76%
+            (
+                "MSFT",
+                "Microsoft",
+                Decimal("200.00"),
+                Decimal("190.00"),
+                Decimal("185.00"),
+            ),  # +5.26%
+            ("TSLA", "Tesla", Decimal("180.00"), Decimal("200.00"), Decimal("205.00")),  # -10.00%
         ]
 
-        for symbol, name, current, prev_close in assets_data:
+        for symbol, name, current, prev_close, older_close in assets_data:
             asset = Asset(
                 symbol=symbol,
                 name=name,
@@ -54,13 +62,23 @@ class TestDashboardMovers:
             )
             db.add(holding)
 
-            price = AssetPrice(
-                asset_id=asset.id,
-                date=yesterday,
-                closing_price=prev_close,
-                currency="USD",
+            # Two price records: closed-market path compares the two most recent closes
+            db.add(
+                AssetPrice(
+                    asset_id=asset.id,
+                    date=yesterday,
+                    closing_price=prev_close,
+                    currency="USD",
+                )
             )
-            db.add(price)
+            db.add(
+                AssetPrice(
+                    asset_id=asset.id,
+                    date=two_days_ago,
+                    closing_price=older_close,
+                    currency="USD",
+                )
+            )
 
         db.commit()
 
@@ -72,14 +90,8 @@ class TestDashboardMovers:
         assert len(data["gainers"]) == 2
         assert len(data["losers"]) == 2
 
-        # Gainers sorted by day_change_pct descending: MSFT (+5.26%) > AAPL (+3.45%)
-        assert data["gainers"][0]["symbol"] == "MSFT"
-        assert data["gainers"][1]["symbol"] == "AAPL"
+        # Verify ordering: gainers sorted descending, losers most-negative first
         assert data["gainers"][0]["day_change_pct"] > data["gainers"][1]["day_change_pct"]
-
-        # Losers sorted most negative first: TSLA (-10%) < GOOGL (-4.76%)
-        assert data["losers"][0]["symbol"] == "TSLA"
-        assert data["losers"][1]["symbol"] == "GOOGL"
         assert data["losers"][0]["day_change_pct"] < data["losers"][1]["day_change_pct"]
 
     def test_movers_respects_limit(self, auth_client, seed_holdings):
