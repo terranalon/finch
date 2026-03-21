@@ -149,7 +149,7 @@ export default function Activity() {
   return (
     <PageContainer>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-[22px] font-bold tracking-tight text-[var(--text-primary)]">Activity</h1>
+        <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Activity</h1>
         <div className="flex items-center gap-[10px]">
           <div className="relative w-[260px]">
             <SearchIcon className="absolute left-[10px] top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-faint)] pointer-events-none" />

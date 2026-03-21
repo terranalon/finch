@@ -33,16 +33,16 @@ function formatShortDate(dateStr) {
 // Mirrors the STYLE_CONFIG in TransactionCard for consistency.
 const STYLE_CONFIG = {
   trade: {
-    BUY: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', icon: ArrowDownIcon, sign: '-' },
-    SELL: { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-600 dark:text-red-400', icon: ArrowUpIcon, sign: '+' },
+    BUY: { bg: 'bg-[var(--positive-muted)]', text: 'text-[var(--positive)]', icon: ArrowDownIcon, sign: '-' },
+    SELL: { bg: 'bg-[var(--negative-muted)]', text: 'text-[var(--negative)]', icon: ArrowUpIcon, sign: '+' },
   },
-  dividend: { bg: 'bg-teal-50 dark:bg-teal-950/40', text: 'text-teal-600 dark:text-teal-400', icon: BanknotesIcon, sign: '+' },
-  forex: { bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-400', icon: ArrowsRightLeftIcon },
+  dividend: { bg: 'bg-[var(--teal-muted)]', text: 'text-[var(--teal)]', icon: BanknotesIcon, sign: '+' },
+  forex: { bg: 'bg-[var(--violet-muted)]', text: 'text-[var(--violet)]', icon: ArrowsRightLeftIcon },
   cash: {
-    DEPOSIT: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', icon: PlusCircleIcon, sign: '+' },
-    INTEREST: { bg: 'bg-green-50 dark:bg-green-950/40', text: 'text-green-600 dark:text-green-400', icon: BanknotesIcon, sign: '+' },
-    FEE: { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-600 dark:text-red-400', icon: ReceiptPercentIcon, sign: '-' },
-    WITHDRAWAL: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400', icon: MinusCircleIcon, sign: '-' },
+    DEPOSIT: { bg: 'bg-[var(--blue-muted)]', text: 'text-[var(--blue)]', icon: PlusCircleIcon, sign: '+' },
+    INTEREST: { bg: 'bg-[var(--positive-muted)]', text: 'text-[var(--positive)]', icon: BanknotesIcon, sign: '+' },
+    FEE: { bg: 'bg-[var(--negative-muted)]', text: 'text-[var(--negative)]', icon: ReceiptPercentIcon, sign: '-' },
+    WITHDRAWAL: { bg: 'bg-[var(--amber-muted)]', text: 'text-[var(--amber)]', icon: MinusCircleIcon, sign: '-' },
   },
 };
 
@@ -63,7 +63,7 @@ function getStyle(tx) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-primary)]">
+    <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-primary)] last:border-b-0">
       <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
       <span className="text-[13px] font-medium font-mono text-[var(--text-primary)]">{value}</span>
     </div>
@@ -72,13 +72,13 @@ function DetailRow({ label, value }) {
 
 function DetailHeader({ icon: Icon, style, title, subtitle }) {
   return (
-    <div className="flex items-center gap-3 mb-6">
+    <div className="flex items-center gap-3 mb-5">
       <div className={cn('w-[44px] h-[44px] rounded-xl flex items-center justify-center', style.bg)}>
         <Icon className={cn('w-[22px] h-[22px]', style.text)} />
       </div>
       <div>
-        <h2 className="text-xl font-semibold text-[var(--text-primary)]">{title}</h2>
-        <p className="text-sm text-[var(--text-secondary)]">{subtitle}</p>
+        <h2 className="text-lg font-bold text-[var(--text-primary)]">{title}</h2>
+        <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{subtitle}</p>
       </div>
     </div>
   );
@@ -86,15 +86,15 @@ function DetailHeader({ icon: Icon, style, title, subtitle }) {
 
 function SummaryCard({ label, sign, amount, currency, style, convertedAmount, convertedCurrency }) {
   return (
-    <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
+    <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-5">
       <div className="flex justify-between items-center">
-        <span className="text-sm text-[var(--text-secondary)]">{label}</span>
+        <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
         <div className="text-right">
           <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.text)}>
             {sign}{formatCurrency(amount, currency)}
           </span>
           {convertedAmount != null && (
-            <p className="text-sm text-[var(--text-tertiary)] font-mono">
+            <p className="text-xs text-[var(--text-faint)] font-mono mt-1">
               {formatCurrency(convertedAmount, convertedCurrency)}
             </p>
           )}
@@ -216,9 +216,9 @@ function ForexDetails({ tx, style }) {
         title={`${tx.from_currency} \u2192 ${tx.to_currency}`}
         subtitle="Currency Exchange"
       />
-      <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
+      <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-5">
         <div className="flex justify-between items-center mb-3">
-          <span className="text-sm text-[var(--text-secondary)]">You Received</span>
+          <span className="text-xs text-[var(--text-tertiary)]">You Received</span>
           <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.text)}>
             {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
           </span>
@@ -318,19 +318,19 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         onClick={onClose}
       />
       <div
-        className="fixed top-0 h-full w-[420px] bg-[var(--bg-secondary)] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
+        className="fixed top-0 h-full w-[420px] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
         style={{ right: visible ? 0 : -420 }}
       >
-        <div className="sticky top-0 bg-[var(--bg-secondary)] p-4 border-b border-[var(--border-primary)] flex justify-between items-center">
-          <span className="text-sm text-[var(--text-tertiary)]">Transaction Details</span>
+        <div className="sticky top-0 bg-[var(--bg-secondary)] py-4 px-5 border-b border-[var(--border-primary)] flex justify-between items-center">
+          <span className="text-sm font-bold text-[var(--text-primary)]">Transaction Details</span>
           <button
             onClick={onClose}
             className="w-7 h-7 flex items-center justify-center rounded-md bg-[var(--bg-tertiary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer"
           >
-            <XMarkIcon className="w-4 h-4 text-[var(--text-secondary)]" />
+            <XMarkIcon className="w-4 h-4 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-5">
           {renderDetails(tx, style, hasOriginal, onClose)}
         </div>
       </div>

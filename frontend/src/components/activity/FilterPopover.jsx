@@ -32,7 +32,7 @@ function FilterSection({ title, expanded, onToggle, className, children }) {
       </button>
 
       {expanded && (
-        <div className="mt-2 flex flex-col gap-0.5">
+        <div className="mt-2 flex flex-col gap-1">
           {children}
         </div>
       )}
@@ -86,7 +86,7 @@ export function FilterPopover({
         className={cn(
           'w-[34px] h-[34px] flex items-center justify-center',
           'bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg',
-          'text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
+          'text-[var(--text-tertiary)] hover:border-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors cursor-pointer'
         )}
       >
         <FilterIcon className="w-4 h-4" />
@@ -101,7 +101,7 @@ export function FilterPopover({
       {isOpen && (
         <div className="absolute top-full right-0 mt-1 w-[260px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50">
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-primary)]">
-            <span className="text-xs font-semibold text-[var(--text-primary)]">Filters</span>
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">Filters</span>
             {activeFilterCount > 0 && (
               <button
                 onClick={handleClearAll}

@@ -15,9 +15,9 @@ function PageButton({ onClick, disabled, title, children }) {
       disabled={disabled}
       title={title}
       className={cn(
-        'w-7 h-7 flex items-center justify-center bg-[var(--bg-tertiary)] rounded-md',
+        'w-7 h-7 flex items-center justify-center bg-[var(--bg-tertiary)] rounded-md text-[var(--text-secondary)]',
         'hover:bg-[var(--border-primary)] transition-colors',
-        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+        disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'
       )}
     >
       {children}
@@ -46,7 +46,7 @@ export function PaginationFooter({
 
   return (
     <div className="flex items-center gap-4 py-4 mt-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <span className="text-xs text-[var(--text-tertiary)]">Show:</span>
         <select
           value={pageSize}
@@ -67,7 +67,7 @@ export function PaginationFooter({
       </p>
 
       {totalPages > 1 && (
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-0.5 ml-auto">
           <PageButton onClick={() => handlePageChange(1)} disabled={isFirstPage} title="First page">
             <ChevronDoubleLeftIcon className="w-3.5 h-3.5" />
           </PageButton>

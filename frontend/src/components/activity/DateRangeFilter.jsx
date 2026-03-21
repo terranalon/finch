@@ -68,7 +68,7 @@ export function DateRangeFilter({ value, onChange }) {
           'flex items-center gap-1.5 px-3 py-[7px] rounded-lg cursor-pointer',
           'bg-[var(--bg-tertiary)] border border-[var(--border-primary)]',
           'text-xs font-medium text-[var(--text-secondary)]',
-          'hover:bg-[var(--bg-tertiary)] transition-colors',
+          'hover:border-[var(--text-faint)] transition-colors',
           isCustomActive && 'border-accent'
         )}
       >
@@ -78,15 +78,15 @@ export function DateRangeFilter({ value, onChange }) {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50 py-1">
+        <div className="absolute top-full right-0 mt-2 min-w-[220px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50 p-2">
           {DATE_RANGES.map((preset) => (
             <button
               key={preset.id}
               onClick={() => handlePresetSelect(preset)}
               className={cn(
-                'w-full px-3 py-2 text-xs text-left transition-colors cursor-pointer rounded-md mx-auto',
+                'w-full px-2.5 py-[7px] text-xs text-left transition-colors cursor-pointer rounded-md mx-auto',
                 isPresetActive(preset.id)
-                  ? 'bg-accent/10 text-accent'
+                  ? 'bg-accent/10 text-accent font-semibold'
                   : 'hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
               )}
             >
