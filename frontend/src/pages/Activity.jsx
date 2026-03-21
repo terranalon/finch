@@ -102,7 +102,7 @@ export default function Activity() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer className="mx-0 max-w-none">
         <PageHeader title="Activity" />
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
           <Skeleton className="h-9 w-64" />
@@ -130,7 +130,7 @@ export default function Activity() {
 
   if (error) {
     return (
-      <PageContainer>
+      <PageContainer className="mx-0 max-w-none">
         <PageHeader title="Activity" />
         <div className="text-center py-12">
           <p className="text-negative mb-2">Error loading activity</p>
@@ -147,7 +147,7 @@ export default function Activity() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer className="mx-0 max-w-none">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Activity</h1>
         <div className="flex items-center gap-[10px]">
