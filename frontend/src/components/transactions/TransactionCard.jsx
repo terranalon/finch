@@ -229,16 +229,16 @@ function renderDetailedTradeContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
+        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
           {tx.side}
         </span>
-        <span className="font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1 font-mono tabular-nums">
+      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1 font-mono tabular-nums">
         {tx.quantity} × {formatCurrency(tx.price, currency)}
       </p>
       {tx.fee > 0 && (
-        <p className="text-xs text-[var(--text-tertiary)] mt-1">
+        <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
           Fee: {formatCurrency(tx.fee, currency)}
         </p>
       )}
@@ -250,12 +250,12 @@ function renderDetailedDividendContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
+        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
           DIVIDEND
         </span>
-        <span className="font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
+      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1">{tx.description}</p>
     </>
   );
 }
@@ -264,14 +264,14 @@ function renderDetailedForexContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
+        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
           FX
         </span>
-        <span className="font-semibold text-[var(--text-primary)]">
+        <span className="text-[13px] font-semibold text-[var(--text-primary)]">
           {tx.from_currency} {'\u2192'} {tx.to_currency}
         </span>
       </div>
-      <p className="text-xs text-[var(--text-tertiary)] mt-1">
+      <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
         Rate: {formatRate(tx.exchange_rate)}
         {tx.fee > 0 && (
           <span> · Fee: {getCurrencySymbol(tx.from_currency)}{tx.fee}</span>
@@ -285,13 +285,13 @@ function renderDetailedCashContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
+        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
           {tx.cash_type || tx.activity_type}
         </span>
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
+      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1">{tx.description}</p>
       {tx.fee > 0 && (
-        <p className="text-xs text-[var(--text-tertiary)] mt-1">
+        <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
           Fee: {formatCurrency(tx.fee, currency)}
         </p>
       )}
@@ -331,7 +331,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
             {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.total} currency={currency} />}
@@ -343,7 +343,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
             +{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
@@ -353,7 +353,7 @@ function renderDetailedAmount(tx, style, currency) {
     case 'forex':
       return (
         <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
             {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
           </p>
           <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
@@ -366,7 +366,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
             {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
@@ -419,7 +419,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
           </div>
         </div>
         <div className="text-right">
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
             {getCompactAmount(tx, txCurrency, style)}
           </p>
           {isConverted && (
@@ -437,23 +437,23 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
     <div
       onClick={onClick}
       className={cn(
-        'flex items-start justify-between p-4 bg-[var(--bg-secondary)] rounded-lg',
-        'border border-[var(--border-primary)] shadow-sm dark:shadow-none',
-        onClick && 'hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
+        'flex items-start justify-between px-4 py-3.5 gap-3',
+        'bg-[var(--bg-card)] border border-[var(--border-subtle,var(--border-primary))] rounded-lg',
+        onClick && 'hover:bg-[var(--bg-card-hover,var(--bg-tertiary))] transition-colors cursor-pointer'
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn('p-2 rounded-lg', style.bg)}>
-          <Icon className={cn('size-4', style.text)} />
+        <div className={cn('w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0', style.bg)}>
+          <Icon className={cn('w-[18px] h-[18px]', style.text)} />
         </div>
         <div>
           {renderDetailedContent(tx, style, txCurrency)}
           {tx.account_name && (
-            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{tx.account_name}</p>
+            <p className="text-[11px] text-[var(--text-faint,var(--text-tertiary))] mt-0.5">{tx.account_name}</p>
           )}
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right flex-shrink-0 flex flex-col justify-center self-stretch">
         {renderDetailedAmount(tx, style, txCurrency)}
       </div>
     </div>
