@@ -75,57 +75,57 @@ function ReceiptPercentIcon({ className }) {
 const STYLE_CONFIG = {
   trade: {
     BUY: {
-      bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-      text: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-[var(--positive-muted)]',
+      text: 'text-[var(--positive)]',
       icon: ArrowDownIcon,
       sign: '-',
     },
     SELL: {
-      bg: 'bg-red-50 dark:bg-red-950/40',
-      text: 'text-red-600 dark:text-red-400',
+      bg: 'bg-[var(--negative-muted)]',
+      text: 'text-[var(--negative)]',
       icon: ArrowUpIcon,
       sign: '+',
     },
   },
   dividend: {
-    bg: 'bg-teal-50 dark:bg-teal-950/40',
-    text: 'text-teal-600 dark:text-teal-400',
+    bg: 'bg-[var(--teal-muted)]',
+    text: 'text-[var(--teal)]',
     icon: BanknotesIcon,
     sign: '+',
   },
   forex: {
-    bg: 'bg-violet-50 dark:bg-violet-950/40',
-    text: 'text-violet-600 dark:text-violet-400',
+    bg: 'bg-[var(--violet-muted)]',
+    text: 'text-[var(--violet)]',
     icon: ArrowsRightLeftIcon,
   },
   cash: {
     DEPOSIT: {
-      bg: 'bg-blue-50 dark:bg-blue-950/40',
-      text: 'text-blue-600 dark:text-blue-400',
+      bg: 'bg-[var(--blue-muted)]',
+      text: 'text-[var(--blue)]',
       icon: PlusCircleIcon,
       sign: '+',
     },
     WITHDRAWAL: {
-      bg: 'bg-amber-50 dark:bg-amber-950/40',
-      text: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-[var(--amber-muted)]',
+      text: 'text-[var(--amber)]',
       icon: MinusCircleIcon,
       sign: '-',
     },
     FEE: {
-      bg: 'bg-red-50 dark:bg-red-950/40',
-      text: 'text-red-600 dark:text-red-400',
+      bg: 'bg-[var(--negative-muted)]',
+      text: 'text-[var(--negative)]',
       icon: ReceiptPercentIcon,
       sign: '-',
     },
     INTEREST: {
-      bg: 'bg-green-50 dark:bg-green-950/40',
-      text: 'text-green-600 dark:text-green-400',
+      bg: 'bg-[var(--positive-muted)]',
+      text: 'text-[var(--positive)]',
       icon: BanknotesIcon,
       sign: '+',
     },
     TRANSFER: {
-      bg: 'bg-slate-50 dark:bg-slate-950/40',
-      text: 'text-slate-600 dark:text-slate-400',
+      bg: 'bg-[var(--slate-muted)]',
+      text: 'text-[var(--slate-clr)]',
       icon: ArrowsRightLeftIcon,
       sign: '',
     },
@@ -225,22 +225,31 @@ function getCompactAmount(tx, currency, style) {
 // DETAILED VARIANT HELPERS
 // ============================================
 
+const BADGE_CLASS = 'text-[10px] font-bold uppercase tracking-wide leading-[1.6] px-1.5 py-px rounded';
+const DETAIL_TEXT_CLASS = 'text-[12px] text-[var(--text-tertiary)] mt-0.5 truncate';
+const FEE_TEXT_CLASS = 'text-[12px] text-[var(--text-faint)] mt-1';
+const AMOUNT_CLASS = 'text-[15px] font-bold font-mono tabular-nums';
+
+function DetailBadge({ label, style }) {
+  return (
+    <span className={cn(BADGE_CLASS, style.bg, style.text)}>
+      {label}
+    </span>
+  );
+}
+
 function renderDetailedTradeContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
-          {tx.side}
-        </span>
+        <DetailBadge label={tx.side} style={style} />
         <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
       </div>
-      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1 font-mono tabular-nums">
+      <p className={cn(DETAIL_TEXT_CLASS, 'font-mono tabular-nums')}>
         {tx.quantity} × {formatCurrency(tx.price, currency)}
       </p>
       {tx.fee > 0 && (
-        <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
-          Fee: {formatCurrency(tx.fee, currency)}
-        </p>
+        <p className={FEE_TEXT_CLASS}>Fee: {formatCurrency(tx.fee, currency)}</p>
       )}
     </>
   );
@@ -250,12 +259,10 @@ function renderDetailedDividendContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
-          DIVIDEND
-        </span>
+        <DetailBadge label="DIVIDEND" style={style} />
         <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
       </div>
-      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1">{tx.description}</p>
+      <p className={DETAIL_TEXT_CLASS}>{tx.description}</p>
     </>
   );
 }
@@ -264,14 +271,12 @@ function renderDetailedForexContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
-          FX
-        </span>
+        <DetailBadge label="FX" style={style} />
         <span className="text-[13px] font-semibold text-[var(--text-primary)]">
           {tx.from_currency} {'\u2192'} {tx.to_currency}
         </span>
       </div>
-      <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
+      <p className={FEE_TEXT_CLASS}>
         Rate: {formatRate(tx.exchange_rate)}
         {tx.fee > 0 && (
           <span> · Fee: {getCurrencySymbol(tx.from_currency)}{tx.fee}</span>
@@ -285,15 +290,11 @@ function renderDetailedCashContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-px rounded', style.bg, style.text)}>
-          {tx.cash_type || tx.activity_type}
-        </span>
+        <DetailBadge label={tx.cash_type || tx.activity_type} style={style} />
       </div>
-      <p className="text-[12px] text-[var(--text-muted,var(--text-secondary))] mt-1">{tx.description}</p>
+      <p className={DETAIL_TEXT_CLASS}>{tx.description}</p>
       {tx.fee > 0 && (
-        <p className="text-[12px] text-[var(--text-muted,var(--text-tertiary))] mt-1">
-          Fee: {formatCurrency(tx.fee, currency)}
-        </p>
+        <p className={FEE_TEXT_CLASS}>Fee: {formatCurrency(tx.fee, currency)}</p>
       )}
     </>
   );
@@ -316,7 +317,7 @@ function renderDetailedContent(tx, style, currency) {
 
 function ConvertedAmountLine({ amount, currency }) {
   return (
-    <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+    <p className="text-[10px] text-[var(--text-faint)] font-mono mt-px">
       {formatCurrency(Math.abs(amount), currency)}
     </p>
   );
@@ -331,7 +332,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.total} currency={currency} />}
@@ -343,7 +344,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             +{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
@@ -353,7 +354,7 @@ function renderDetailedAmount(tx, style, currency) {
     case 'forex':
       return (
         <>
-          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
           </p>
           <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
@@ -366,7 +367,7 @@ function renderDetailedAmount(tx, style, currency) {
       const primaryCurrency = converted ? tx.original_currency : currency;
       return (
         <>
-          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
           </p>
           {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
@@ -419,7 +420,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
           </div>
         </div>
         <div className="text-right">
-          <p className={cn('text-[15px] font-bold font-mono tabular-nums', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             {getCompactAmount(tx, txCurrency, style)}
           </p>
           {isConverted && (
@@ -438,18 +439,18 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
       onClick={onClick}
       className={cn(
         'flex items-start justify-between px-4 py-3.5 gap-3',
-        'bg-[var(--bg-card)] border border-[var(--border-subtle,var(--border-primary))] rounded-lg',
-        onClick && 'hover:bg-[var(--bg-card-hover,var(--bg-tertiary))] transition-colors cursor-pointer'
+        'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg',
+        onClick && 'hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 min-w-0">
         <div className={cn('w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0', style.bg)}>
           <Icon className={cn('w-[18px] h-[18px]', style.text)} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           {renderDetailedContent(tx, style, txCurrency)}
           {tx.account_name && (
-            <p className="text-[11px] text-[var(--text-faint,var(--text-tertiary))] mt-0.5">{tx.account_name}</p>
+            <p className="text-[11px] text-[var(--text-faint)] mt-0.5">{tx.account_name}</p>
           )}
         </div>
       </div>

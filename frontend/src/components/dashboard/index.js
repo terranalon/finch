@@ -7,6 +7,5 @@ export { MarketPulseCard } from './MarketPulseCard';
 export { RecentActivityCard } from './RecentActivityCard';
 export { AllocationDonutCard } from './AllocationDonutCard';
 export { AssetDetailSidebar } from './AssetDetailSidebar';
-export { TradeDetailSidebar } from './TradeDetailSidebar';
 export { MoversCard } from './MoversCard';
 export { QuickStatsCard } from './QuickStatsCard';

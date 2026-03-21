@@ -4,11 +4,11 @@ import { PageContainer, PageHeader } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import {
   ActivityTimeline,
-  TransactionDetailPanel,
   DateRangeFilter,
   FilterPopover,
   PaginationFooter,
 } from '../components/activity';
+import { TransactionDetailSidebar } from '../components/transactions';
 import { SearchIcon } from '../components/activity/icons';
 
 const TRANSACTION_TYPES = ['Trade', 'Dividend', 'Forex', 'Cash'];
@@ -189,7 +189,7 @@ export default function Activity() {
         onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
       />
 
-      <TransactionDetailPanel
+      <TransactionDetailSidebar
         transaction={selectedTransaction}
         currency={currency}
         onClose={() => setSelectedTransaction(null)}

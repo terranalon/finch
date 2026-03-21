@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, hasConversion } from '../../lib';
 import { useSlideover } from '../../hooks/useSlideover';
 import {
-  XMarkIcon,
   ArrowUpIcon,
   ArrowDownIcon,
   BanknotesIcon,
@@ -12,7 +10,7 @@ import {
   MinusCircleIcon,
   ReceiptPercentIcon,
   ExternalLinkIcon,
-} from './icons';
+} from '../activity/icons';
 
 const CURRENCY_SYMBOLS = { USD: '$', EUR: '\u20AC', GBP: '\u00A3', ILS: '\u20AA', JPY: '\u00A5', CHF: 'CHF ' };
 
@@ -29,8 +27,14 @@ function formatShortDate(dateStr) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Style config keyed by transaction type (and sub-type where applicable).
-// Mirrors the STYLE_CONFIG in TransactionCard for consistency.
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
 const STYLE_CONFIG = {
   trade: {
     BUY: { bg: 'bg-[var(--positive-muted)]', text: 'text-[var(--positive)]', icon: ArrowDownIcon, sign: '-' },
@@ -63,9 +67,9 @@ function getStyle(tx) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-primary)] last:border-b-0">
-      <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
-      <span className="text-[13px] font-medium font-mono text-[var(--text-primary)]">{value}</span>
+    <div className="flex justify-between items-center py-3 border-b border-[var(--border-primary)] last:border-b-0">
+      <span className="text-[12px] text-[var(--text-tertiary)]">{label}</span>
+      <span className="text-[12px] font-medium text-[var(--text-primary)] text-right max-w-[60%] truncate">{value}</span>
     </div>
   );
 }
@@ -76,8 +80,8 @@ function DetailHeader({ icon: Icon, style, title, subtitle }) {
       <div className={cn('w-[44px] h-[44px] rounded-xl flex items-center justify-center', style.bg)}>
         <Icon className={cn('w-[22px] h-[22px]', style.text)} />
       </div>
-      <div>
-        <h2 className="text-lg font-bold text-[var(--text-primary)]">{title}</h2>
+      <div className="min-w-0">
+        <h2 className="text-lg font-bold text-[var(--text-primary)] truncate">{title}</h2>
         <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{subtitle}</p>
       </div>
     </div>
@@ -124,8 +128,7 @@ function ViewAssetButton({ symbol, onClose }) {
 }
 
 function getPrimaryAmount(tx, hasOriginal, amountField) {
-  const rawAmount = hasOriginal ? tx.original_amount : tx[amountField];
-  return Math.abs(rawAmount);
+  return Math.abs(hasOriginal ? tx.original_amount : tx[amountField]);
 }
 
 function getPrimaryCurrency(tx, hasOriginal) {
@@ -155,15 +158,13 @@ function TradeDetails({ tx, style, hasOriginal, onClose }) {
         <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
         <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
         <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
-        {tx.fee > 0 && (
-          <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-        )}
+        {tx.fee > 0 && <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />}
         <DetailRow label="Date" value={formatShortDate(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
         {tx.notes && (
           <div className="pt-3">
             <p className="text-xs text-[var(--text-tertiary)] mb-1">Notes</p>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.notes}</p>
+            <p className="text-[12px] text-[var(--text-secondary)]">{tx.notes}</p>
           </div>
         )}
       </div>
@@ -190,16 +191,10 @@ function DividendDetails({ tx, style, hasOriginal, onClose }) {
       />
       <div>
         <DetailRow label="Description" value={tx.description} />
-        {tx.shares_held && (
-          <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
-        )}
-        {tx.dividend_per_share && (
-          <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />
-        )}
+        {tx.shares_held && <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />}
+        {tx.dividend_per_share && <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />}
         <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
-        {tx.ex_date && (
-          <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
-        )}
+        {tx.ex_date && <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />}
         <DetailRow label="Account" value={tx.account_name} />
       </div>
       <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
@@ -223,7 +218,7 @@ function ForexDetails({ tx, style }) {
             {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
           </span>
         </div>
-        <div className="flex justify-between items-center text-sm">
+        <div className="flex justify-between items-center text-[12px]">
           <span className="text-[var(--text-tertiary)]">You Converted</span>
           <span className="font-mono tabular-nums text-[var(--text-secondary)]">
             {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
@@ -232,9 +227,7 @@ function ForexDetails({ tx, style }) {
       </div>
       <div>
         <DetailRow label="Exchange Rate" value={`1 ${tx.from_currency} = ${formatRate(tx.exchange_rate)} ${tx.to_currency}`} />
-        {tx.fee > 0 && (
-          <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />
-        )}
+        {tx.fee > 0 && <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />}
         <DetailRow label="Date" value={formatShortDate(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
       </div>
@@ -261,12 +254,8 @@ function CashDetails({ tx, style, hasOriginal }) {
       />
       <div>
         <DetailRow label="Type" value={displayType} />
-        {tx.fee > 0 && (
-          <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-        )}
-        {tx.reference && (
-          <DetailRow label="Reference" value={tx.reference} />
-        )}
+        {tx.fee > 0 && <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />}
+        {tx.reference && <DetailRow label="Reference" value={tx.reference} />}
         <DetailRow label="Date" value={formatShortDate(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
       </div>
@@ -289,19 +278,9 @@ function renderDetails(tx, style, hasOriginal, onClose) {
   }
 }
 
-export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
+export function TransactionDetailSidebar({ transaction: tx, currency, onClose }) {
   const isOpen = !!tx;
-  const [visible, setVisible] = useState(false);
-
   useSlideover(isOpen, onClose);
-
-  useEffect(() => {
-    if (isOpen) {
-      requestAnimationFrame(() => setVisible(true));
-    } else {
-      setVisible(false);
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -311,26 +290,20 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
   return (
     <>
       <div
-        className={cn(
-          'fixed inset-0 bg-black/50 z-40 transition-opacity',
-          visible ? 'opacity-100' : 'opacity-0'
-        )}
+        className="fixed inset-0 z-40 bg-black/40 transition-opacity"
         onClick={onClose}
       />
-      <div
-        className="fixed top-0 h-full w-[420px] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
-        style={{ right: visible ? 0 : -420 }}
-      >
-        <div className="sticky top-0 bg-[var(--bg-secondary)] py-4 px-5 border-b border-[var(--border-primary)] flex justify-between items-center">
+      <div className="fixed top-0 right-0 z-50 h-dvh w-[380px] max-w-[90vw] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] shadow-2xl flex flex-col animate-slide-in-right">
+        <div className="px-6 pt-5 pb-4 border-b border-[var(--border-primary)] flex-shrink-0 flex items-center justify-between">
           <span className="text-sm font-bold text-[var(--text-primary)]">Transaction Details</span>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-md bg-[var(--bg-tertiary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex-shrink-0"
           >
-            <XMarkIcon className="w-4 h-4 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
+            <CloseIcon />
           </button>
         </div>
-        <div className="p-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5">
           {renderDetails(tx, style, hasOriginal, onClose)}
         </div>
       </div>
