@@ -166,38 +166,36 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
       <div className="fixed top-0 right-0 z-50 h-dvh w-[420px] max-w-[90vw] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] shadow-2xl flex flex-col animate-slide-in-right">
         {/* Header (sticky) */}
         <div className="px-6 pt-5 pb-4 border-b border-[var(--border-primary)] flex-shrink-0">
-          <div className="flex items-start justify-between mb-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-lg font-bold truncate">{name}</h2>
-              <button
-                onClick={toggleFavorite}
-                className="p-0.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer flex-shrink-0"
-                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <StarIcon
-                  className={cn(
-                    'w-5 h-5 transition-colors',
-                    isFavorite ? 'text-amber-500' : 'text-[var(--text-tertiary)] hover:text-amber-400'
-                  )}
-                  filled={isFavorite}
-                />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-              <Link
-                to={`/assets/${asset.id}`}
-                onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
-              >
-                View Details <ExternalLinkIcon />
-              </Link>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-              >
-                <CloseIcon />
-              </button>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <Link
+              to={`/assets/${asset.id}`}
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
+            >
+              View Details <ExternalLinkIcon />
+            </Link>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <h2 className="text-lg font-bold truncate">{name}</h2>
+            <button
+              onClick={toggleFavorite}
+              className="p-0.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer flex-shrink-0"
+              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <StarIcon
+                className={cn(
+                  'w-5 h-5 transition-colors',
+                  isFavorite ? 'text-amber-500' : 'text-[var(--text-tertiary)] hover:text-amber-400'
+                )}
+                filled={isFavorite}
+              />
+            </button>
           </div>
           <p className="text-[12px] text-[var(--text-tertiary)]">
             {symbol}
