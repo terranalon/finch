@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { useCurrency, usePortfolio } from '../contexts';
 import { api, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
 
+async function fetchJson(endpoint, label) {
+  const res = await api(endpoint);
+  if (!res.ok) throw new Error(`Failed to fetch ${label}: ${res.statusText}`);
+  return res.json();
+}
+
 export function useActivityData() {
   const { currency: globalCurrency } = useCurrency();
   const { selectedPortfolioId, portfolioCurrency } = usePortfolio();
@@ -23,29 +29,15 @@ export function useActivityData() {
       const currencyParam = currency ? `&display_currency=${currency}` : '';
 
       try {
-        const [accountsRes, tradesRes, dividendsRes, forexRes, cashRes] = await Promise.all([
-          api(`/accounts?is_active=true${portfolioParam}`),
-          api(`/transactions/trades?limit=500${portfolioParam}${currencyParam}`),
-          api(`/transactions/dividends?limit=500${portfolioParam}${currencyParam}`),
-          api(`/transactions/forex?limit=500${portfolioParam}`),
-          api(`/transactions/cash?limit=500${portfolioParam}${currencyParam}`),
+        const [accountsData, tradesData, dividendsData, forexData, cashData] = await Promise.all([
+          fetchJson(`/accounts?is_active=true${portfolioParam}`, 'accounts'),
+          fetchJson(`/transactions/trades?limit=500${portfolioParam}${currencyParam}`, 'trades'),
+          fetchJson(`/transactions/dividends?limit=500${portfolioParam}${currencyParam}`, 'dividends'),
+          fetchJson(`/transactions/forex?limit=500${portfolioParam}`, 'forex'),
+          fetchJson(`/transactions/cash?limit=500${portfolioParam}${currencyParam}`, 'cash'),
         ]);
 
         if (cancelled) return;
-
-        if (!accountsRes.ok) throw new Error(`Failed to fetch accounts: ${accountsRes.statusText}`);
-        if (!tradesRes.ok) throw new Error(`Failed to fetch trades: ${tradesRes.statusText}`);
-        if (!dividendsRes.ok) throw new Error(`Failed to fetch dividends: ${dividendsRes.statusText}`);
-        if (!forexRes.ok) throw new Error(`Failed to fetch forex: ${forexRes.statusText}`);
-        if (!cashRes.ok) throw new Error(`Failed to fetch cash: ${cashRes.statusText}`);
-
-        const [accountsData, tradesData, dividendsData, forexData, cashData] = await Promise.all([
-          accountsRes.json(),
-          tradesRes.json(),
-          dividendsRes.json(),
-          forexRes.json(),
-          cashRes.json(),
-        ]);
 
         const allTransactions = [
           ...tradesData.items.map(transformTrade),

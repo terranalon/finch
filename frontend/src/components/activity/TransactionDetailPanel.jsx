@@ -14,29 +14,92 @@ import {
   ExternalLinkIcon,
 } from './icons';
 
-const getCurrencySymbol = (code) => {
-  const symbols = { USD: '$', EUR: '\u20AC', GBP: '\u00A3', ILS: '\u20AA', JPY: '\u00A5', CHF: 'CHF ' };
-  return symbols[code] || code + ' ';
-};
+const CURRENCY_SYMBOLS = { USD: '$', EUR: '\u20AC', GBP: '\u00A3', ILS: '\u20AA', JPY: '\u00A5', CHF: 'CHF ' };
 
-const formatRate = (rate) => {
+function getCurrencySymbol(code) {
+  return CURRENCY_SYMBOLS[code] || code + ' ';
+}
+
+function formatRate(rate) {
   return parseFloat(rate.toFixed(4)).toString();
+}
+
+function formatShortDate(dateStr) {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Style config keyed by transaction type (and sub-type where applicable).
+// Mirrors the STYLE_CONFIG in TransactionCard for consistency.
+const STYLE_CONFIG = {
+  trade: {
+    BUY: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', icon: ArrowDownIcon, sign: '-' },
+    SELL: { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-600 dark:text-red-400', icon: ArrowUpIcon, sign: '+' },
+  },
+  dividend: { bg: 'bg-teal-50 dark:bg-teal-950/40', text: 'text-teal-600 dark:text-teal-400', icon: BanknotesIcon, sign: '+' },
+  forex: { bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-400', icon: ArrowsRightLeftIcon },
+  cash: {
+    DEPOSIT: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', icon: PlusCircleIcon, sign: '+' },
+    INTEREST: { bg: 'bg-green-50 dark:bg-green-950/40', text: 'text-green-600 dark:text-green-400', icon: BanknotesIcon, sign: '+' },
+    FEE: { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-600 dark:text-red-400', icon: ReceiptPercentIcon, sign: '-' },
+    WITHDRAWAL: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400', icon: MinusCircleIcon, sign: '-' },
+  },
 };
 
-const formatShortDate = (dateStr) => {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
+function getStyle(tx) {
+  switch (tx.type) {
+    case 'trade':
+      return STYLE_CONFIG.trade[tx.side] || STYLE_CONFIG.trade.BUY;
+    case 'dividend':
+      return STYLE_CONFIG.dividend;
+    case 'forex':
+      return STYLE_CONFIG.forex;
+    case 'cash':
+      return STYLE_CONFIG.cash[tx.activity_type] || STYLE_CONFIG.cash.WITHDRAWAL;
+    default:
+      return STYLE_CONFIG.cash.DEPOSIT;
+  }
+}
 
 function DetailRow({ label, value }) {
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-subtle,var(--border))]">
       <span className="text-xs text-[var(--text-muted)]">{label}</span>
       <span className="text-[13px] font-medium font-mono text-[var(--text-primary)]">{value}</span>
+    </div>
+  );
+}
+
+function DetailHeader({ icon: Icon, style, title, subtitle }) {
+  return (
+    <div className="flex items-center gap-3 mb-6">
+      <div className={cn('w-[44px] h-[44px] rounded-xl flex items-center justify-center', style.bg)}>
+        <Icon className={cn('w-[22px] h-[22px]', style.text)} />
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold text-[var(--text-primary)]">{title}</h2>
+        <p className="text-sm text-[var(--text-secondary)]">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, sign, amount, currency, style, convertedAmount, convertedCurrency }) {
+  return (
+    <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-[var(--text-secondary)]">{label}</span>
+        <div className="text-right">
+          <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.text)}>
+            {sign}{formatCurrency(amount, currency)}
+          </span>
+          {convertedAmount != null && (
+            <p className="text-sm text-[var(--text-muted)] font-mono">
+              {formatCurrency(convertedAmount, convertedCurrency)}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -60,6 +123,172 @@ function ViewAssetButton({ symbol, onClose }) {
   );
 }
 
+function getPrimaryAmount(tx, hasOriginal, amountField) {
+  const rawAmount = hasOriginal ? tx.original_amount : tx[amountField];
+  return Math.abs(rawAmount);
+}
+
+function getPrimaryCurrency(tx, hasOriginal) {
+  return hasOriginal ? tx.original_currency : tx.currency;
+}
+
+function TradeDetails({ tx, style, hasOriginal, onClose }) {
+  const isBuy = tx.side === 'BUY';
+  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'total');
+  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+  const subtotal = tx.total - (tx.fee || 0);
+
+  return (
+    <>
+      <DetailHeader icon={style.icon} style={style} title={tx.symbol} subtitle={tx.name} />
+      <SummaryCard
+        label={`Total ${isBuy ? 'Cost' : 'Proceeds'}`}
+        sign={style.sign}
+        amount={primaryAmount}
+        currency={primaryCurrency}
+        style={style}
+        convertedAmount={hasOriginal ? Math.abs(tx.total) : null}
+        convertedCurrency={tx.currency}
+      />
+      <div>
+        <DetailRow label="Transaction Type" value={isBuy ? 'Buy' : 'Sell'} />
+        <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
+        <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
+        <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
+        {tx.fee > 0 && (
+          <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
+        )}
+        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Account" value={tx.account_name} />
+        {tx.notes && (
+          <div className="pt-3">
+            <p className="text-xs text-[var(--text-muted)] mb-1">Notes</p>
+            <p className="text-sm text-[var(--text-secondary)]">{tx.notes}</p>
+          </div>
+        )}
+      </div>
+      <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
+    </>
+  );
+}
+
+function DividendDetails({ tx, style, hasOriginal, onClose }) {
+  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'amount');
+  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+
+  return (
+    <>
+      <DetailHeader icon={style.icon} style={style} title={tx.symbol} subtitle={tx.name} />
+      <SummaryCard
+        label="Dividend Received"
+        sign="+"
+        amount={primaryAmount}
+        currency={primaryCurrency}
+        style={style}
+        convertedAmount={hasOriginal ? Math.abs(tx.amount) : null}
+        convertedCurrency={tx.currency}
+      />
+      <div>
+        <DetailRow label="Description" value={tx.description} />
+        {tx.shares_held && (
+          <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
+        )}
+        {tx.dividend_per_share && (
+          <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />
+        )}
+        <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
+        {tx.ex_date && (
+          <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
+        )}
+        <DetailRow label="Account" value={tx.account_name} />
+      </div>
+      <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
+    </>
+  );
+}
+
+function ForexDetails({ tx, style }) {
+  return (
+    <>
+      <DetailHeader
+        icon={style.icon}
+        style={style}
+        title={`${tx.from_currency} \u2192 ${tx.to_currency}`}
+        subtitle="Currency Exchange"
+      />
+      <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-sm text-[var(--text-secondary)]">You Received</span>
+          <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.text)}>
+            {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-[var(--text-muted)]">You Converted</span>
+          <span className="font-mono tabular-nums text-[var(--text-secondary)]">
+            {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
+          </span>
+        </div>
+      </div>
+      <div>
+        <DetailRow label="Exchange Rate" value={`1 ${tx.from_currency} = ${formatRate(tx.exchange_rate)} ${tx.to_currency}`} />
+        {tx.fee > 0 && (
+          <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />
+        )}
+        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Account" value={tx.account_name} />
+      </div>
+    </>
+  );
+}
+
+function CashDetails({ tx, style, hasOriginal }) {
+  const displayType = tx.cash_type || (tx.activity_type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal');
+  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'amount');
+  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+
+  return (
+    <>
+      <DetailHeader icon={style.icon} style={style} title={displayType} subtitle={tx.description} />
+      <SummaryCard
+        label="Amount"
+        sign={style.sign}
+        amount={primaryAmount}
+        currency={primaryCurrency}
+        style={style}
+        convertedAmount={hasOriginal ? Math.abs(tx.amount) : null}
+        convertedCurrency={tx.currency}
+      />
+      <div>
+        <DetailRow label="Type" value={displayType} />
+        {tx.fee > 0 && (
+          <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
+        )}
+        {tx.reference && (
+          <DetailRow label="Reference" value={tx.reference} />
+        )}
+        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Account" value={tx.account_name} />
+      </div>
+    </>
+  );
+}
+
+function renderDetails(tx, style, hasOriginal, onClose) {
+  switch (tx.type) {
+    case 'trade':
+      return <TradeDetails tx={tx} style={style} hasOriginal={hasOriginal} onClose={onClose} />;
+    case 'dividend':
+      return <DividendDetails tx={tx} style={style} hasOriginal={hasOriginal} onClose={onClose} />;
+    case 'forex':
+      return <ForexDetails tx={tx} style={style} />;
+    case 'cash':
+      return <CashDetails tx={tx} style={style} hasOriginal={hasOriginal} />;
+    default:
+      return null;
+  }
+}
+
 export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
   const isOpen = !!tx;
   const [visible, setVisible] = useState(false);
@@ -76,255 +305,11 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
 
   if (!isOpen) return null;
 
+  const style = getStyle(tx);
   const hasOriginal = hasConversion(tx);
-
-  const renderTradeDetails = () => {
-    const isBuy = tx.side === 'BUY';
-    const primaryTotal = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.total);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-    const subtotal = tx.total - (tx.fee || 0);
-
-    return (
-      <>
-        <div className="flex items-center gap-3 mb-6">
-          <div className={cn(
-            'w-[44px] h-[44px] rounded-xl flex items-center justify-center',
-            isBuy ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-red-50 dark:bg-red-950/40'
-          )}>
-            {isBuy ? (
-              <ArrowDownIcon className="w-[22px] h-[22px] text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <ArrowUpIcon className="w-[22px] h-[22px] text-red-600 dark:text-red-400" />
-            )}
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
-          </div>
-        </div>
-
-        <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Total {isBuy ? 'Cost' : 'Proceeds'}</span>
-            <div className="text-right">
-              <span className={cn(
-                'text-[22px] font-bold font-mono tabular-nums',
-                isBuy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-              )}>
-                {isBuy ? '-' : '+'}{formatCurrency(primaryTotal, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-muted)] font-mono">
-                  {formatCurrency(Math.abs(tx.total), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <DetailRow label="Transaction Type" value={isBuy ? 'Buy' : 'Sell'} />
-          <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
-          <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
-          <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
-          {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-          )}
-          <DetailRow label="Date" value={formatShortDate(tx.date)} />
-          <DetailRow label="Account" value={tx.account_name} />
-          {tx.notes && (
-            <div className="pt-3">
-              <p className="text-xs text-[var(--text-muted)] mb-1">Notes</p>
-              <p className="text-sm text-[var(--text-secondary)]">{tx.notes}</p>
-            </div>
-          )}
-        </div>
-
-        <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
-      </>
-    );
-  };
-
-  const renderDividendDetails = () => {
-    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-
-    return (
-      <>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-[44px] h-[44px] rounded-xl flex items-center justify-center bg-teal-50 dark:bg-teal-950/40">
-            <BanknotesIcon className="w-[22px] h-[22px] text-teal-600 dark:text-teal-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
-          </div>
-        </div>
-
-        <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Dividend Received</span>
-            <div className="text-right">
-              <span className="text-[22px] font-bold font-mono tabular-nums text-teal-600 dark:text-teal-400">
-                +{formatCurrency(primaryAmount, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-muted)] font-mono">
-                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <DetailRow label="Description" value={tx.description} />
-          {tx.shares_held && (
-            <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
-          )}
-          {tx.dividend_per_share && (
-            <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />
-          )}
-          <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
-          {tx.ex_date && (
-            <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
-          )}
-          <DetailRow label="Account" value={tx.account_name} />
-        </div>
-
-        <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
-      </>
-    );
-  };
-
-  const renderForexDetails = () => (
-    <>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-[44px] h-[44px] rounded-xl flex items-center justify-center bg-violet-50 dark:bg-violet-950/40">
-          <ArrowsRightLeftIcon className="w-[22px] h-[22px] text-violet-600 dark:text-violet-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-            {tx.from_currency} {'\u2192'} {tx.to_currency}
-          </h2>
-          <p className="text-sm text-[var(--text-secondary)]">Currency Exchange</p>
-        </div>
-      </div>
-
-      <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <span className="text-sm text-[var(--text-secondary)]">You Received</span>
-          <span className="text-[22px] font-bold font-mono tabular-nums text-violet-600 dark:text-violet-400">
-            {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
-          </span>
-        </div>
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-[var(--text-muted)]">You Converted</span>
-          <span className="font-mono tabular-nums text-[var(--text-secondary)]">
-            {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
-          </span>
-        </div>
-      </div>
-
-      <div>
-        <DetailRow label="Exchange Rate" value={`1 ${tx.from_currency} = ${formatRate(tx.exchange_rate)} ${tx.to_currency}`} />
-        {tx.fee > 0 && (
-          <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />
-        )}
-        <DetailRow label="Date" value={formatShortDate(tx.date)} />
-        <DetailRow label="Account" value={tx.account_name} />
-      </div>
-    </>
-  );
-
-  const renderCashDetails = () => {
-    const isDeposit = tx.activity_type === 'DEPOSIT';
-    const isFee = tx.activity_type === 'FEE';
-    const isInterest = tx.activity_type === 'INTEREST';
-    const displayType = tx.cash_type || (isDeposit ? 'Deposit' : 'Withdrawal');
-    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-
-    const getStyleConfig = () => {
-      if (isDeposit) {
-        return {
-          bgColor: 'bg-blue-50 dark:bg-blue-950/40',
-          textColor: 'text-blue-600 dark:text-blue-400',
-          icon: <PlusCircleIcon className="w-[22px] h-[22px] text-blue-600 dark:text-blue-400" />,
-          sign: '+',
-        };
-      } else if (isInterest) {
-        return {
-          bgColor: 'bg-green-50 dark:bg-green-950/40',
-          textColor: 'text-green-600 dark:text-green-400',
-          icon: <BanknotesIcon className="w-[22px] h-[22px] text-green-600 dark:text-green-400" />,
-          sign: '+',
-        };
-      } else if (isFee) {
-        return {
-          bgColor: 'bg-red-50 dark:bg-red-950/40',
-          textColor: 'text-red-600 dark:text-red-400',
-          icon: <ReceiptPercentIcon className="w-[22px] h-[22px] text-red-600 dark:text-red-400" />,
-          sign: '-',
-        };
-      } else {
-        return {
-          bgColor: 'bg-amber-50 dark:bg-amber-950/40',
-          textColor: 'text-amber-600 dark:text-amber-400',
-          icon: <MinusCircleIcon className="w-[22px] h-[22px] text-amber-600 dark:text-amber-400" />,
-          sign: '-',
-        };
-      }
-    };
-
-    const style = getStyleConfig();
-
-    return (
-      <>
-        <div className="flex items-center gap-3 mb-6">
-          <div className={cn('w-[44px] h-[44px] rounded-xl flex items-center justify-center', style.bgColor)}>
-            {style.icon}
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{displayType}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.description}</p>
-          </div>
-        </div>
-
-        <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Amount</span>
-            <div className="text-right">
-              <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.textColor)}>
-                {style.sign}{formatCurrency(primaryAmount, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-muted)] font-mono">
-                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <DetailRow label="Type" value={displayType} />
-          {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-          )}
-          {tx.reference && (
-            <DetailRow label="Reference" value={tx.reference} />
-          )}
-          <DetailRow label="Date" value={formatShortDate(tx.date)} />
-          <DetailRow label="Account" value={tx.account_name} />
-        </div>
-      </>
-    );
-  };
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className={cn(
           'fixed inset-0 bg-black/50 z-40 transition-opacity',
@@ -332,13 +317,10 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         )}
         onClick={onClose}
       />
-
-      {/* Panel */}
       <div
         className="fixed top-0 h-full w-[420px] bg-[var(--bg-card,var(--bg-primary))] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
         style={{ right: visible ? 0 : -420 }}
       >
-        {/* Close button */}
         <div className="sticky top-0 bg-[var(--bg-card,var(--bg-primary))] p-4 border-b border-[var(--border)] flex justify-between items-center">
           <span className="text-sm text-[var(--text-muted)]">Transaction Details</span>
           <button
@@ -348,13 +330,8 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
             <XMarkIcon className="w-4 h-4 text-[var(--text-secondary)]" />
           </button>
         </div>
-
-        {/* Content */}
         <div className="p-6">
-          {tx.type === 'trade' && renderTradeDetails()}
-          {tx.type === 'dividend' && renderDividendDetails()}
-          {tx.type === 'forex' && renderForexDetails()}
-          {tx.type === 'cash' && renderCashDetails()}
+          {renderDetails(tx, style, hasOriginal, onClose)}
         </div>
       </div>
     </>

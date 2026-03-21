@@ -11,6 +11,23 @@ const DATE_RANGES = [
   { id: 'ytd', label: 'Year to Date', days: 'ytd' },
 ];
 
+const DATE_INPUT_CLASS =
+  'w-full px-2 py-1.5 rounded text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-accent transition-colors';
+
+function DateInput({ label, value, onChange }) {
+  return (
+    <div className="flex-1">
+      <label className="text-[11px] text-[var(--text-muted)] mb-1 block">{label}</label>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={DATE_INPUT_CLASS}
+      />
+    </div>
+  );
+}
+
 export function DateRangeFilter({ value, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(value.type === 'custom');
@@ -26,20 +43,22 @@ export function DateRangeFilter({ value, onChange }) {
     setIsOpen(false);
   };
 
+  const canApplyCustom = customStart && customEnd;
+
   const handleCustomApply = () => {
-    if (customStart && customEnd) {
-      onChange({
-        type: 'custom',
-        startDate: customStart,
-        endDate: customEnd,
-        label: `${customStart} - ${customEnd}`,
-      });
-      setIsOpen(false);
-    }
+    if (!canApplyCustom) return;
+    onChange({
+      type: 'custom',
+      startDate: customStart,
+      endDate: customEnd,
+      label: `${customStart} - ${customEnd}`,
+    });
+    setIsOpen(false);
   };
 
   const displayLabel = value.label || 'All Time';
   const isCustomActive = value.type === 'custom';
+  const isPresetActive = (presetId) => value.type === 'preset' && value.preset === presetId;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -66,7 +85,7 @@ export function DateRangeFilter({ value, onChange }) {
               onClick={() => handlePresetSelect(preset)}
               className={cn(
                 'w-full px-3 py-2 text-xs text-left transition-colors cursor-pointer rounded-md mx-auto',
-                value.type === 'preset' && value.preset === preset.id
+                isPresetActive(preset.id)
                   ? 'bg-accent/10 text-accent'
                   : 'hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)]'
               )}
@@ -93,31 +112,15 @@ export function DateRangeFilter({ value, onChange }) {
           {showCustom && (
             <div className="px-3 py-3 space-y-3">
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-[11px] text-[var(--text-muted)] mb-1 block">From</label>
-                  <input
-                    type="date"
-                    value={customStart}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-accent transition-colors"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] text-[var(--text-muted)] mb-1 block">To</label>
-                  <input
-                    type="date"
-                    value={customEnd}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded text-[11px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[var(--text-primary)] focus:outline-none focus:border-accent transition-colors"
-                  />
-                </div>
+                <DateInput label="From" value={customStart} onChange={setCustomStart} />
+                <DateInput label="To" value={customEnd} onChange={setCustomEnd} />
               </div>
               <button
                 onClick={handleCustomApply}
-                disabled={!customStart || !customEnd}
+                disabled={!canApplyCustom}
                 className={cn(
                   'w-full py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer',
-                  customStart && customEnd
+                  canApplyCustom
                     ? 'bg-accent text-white hover:bg-accent/90'
                     : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-not-allowed'
                 )}
