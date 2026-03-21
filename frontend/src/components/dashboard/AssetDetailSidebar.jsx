@@ -167,28 +167,21 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
         {/* Header (sticky) */}
         <div className="px-6 pt-5 pb-4 border-b border-[var(--border-primary)] flex-shrink-0">
           <div className="flex items-start justify-between mb-1">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="text-lg font-bold truncate">{name}</h2>
-                <button
-                  onClick={toggleFavorite}
-                  className="p-0.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-                  title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                >
-                  <StarIcon
-                    className={cn(
-                      'w-5 h-5 transition-colors',
-                      isFavorite ? 'text-amber-500' : 'text-[var(--text-tertiary)] hover:text-amber-400'
-                    )}
-                    filled={isFavorite}
-                  />
-                </button>
-              </div>
-              <p className="text-[12px] text-[var(--text-tertiary)]">
-                {symbol}
-                {category && ` \u00B7 ${category}`}
-                {industry && ` \u00B7 ${industry}`}
-              </p>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-lg font-bold truncate">{name}</h2>
+              <button
+                onClick={toggleFavorite}
+                className="p-0.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer flex-shrink-0"
+                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <StarIcon
+                  className={cn(
+                    'w-5 h-5 transition-colors',
+                    isFavorite ? 'text-amber-500' : 'text-[var(--text-tertiary)] hover:text-amber-400'
+                  )}
+                  filled={isFavorite}
+                />
+              </button>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-3">
               <Link
@@ -206,6 +199,11 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
               </button>
             </div>
           </div>
+          <p className="text-[12px] text-[var(--text-tertiary)]">
+            {symbol}
+            {category && ` \u00B7 ${category}`}
+            {industry && ` \u00B7 ${industry}`}
+          </p>
 
           {/* Price */}
           <div className="mt-3">
