@@ -28,9 +28,9 @@ const basePosition = {
   day_change_pct: 1.23,
   total_quantity: 100,
   avg_cost_per_unit_native: 150.0,
-  total_cost_basis_native: 15000.0,
-  total_market_value_native: 17550.0,
-  total_pnl_native: 2550.0,
+  total_cost_basis: 15000.0,
+  total_market_value: 17550.0,
+  total_pnl: 2550.0,
   total_pnl_pct: 17.0,
   account_count: 2,
   accounts: [],
@@ -43,6 +43,7 @@ function renderRow(props = {}) {
     onToggleExpand: vi.fn(),
     onRowClick: vi.fn(),
     onToggleFavorite: vi.fn(),
+    displayCurrency: 'USD',
     ...props,
   };
   return render(

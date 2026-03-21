@@ -49,7 +49,7 @@ export default function Holdings() {
   const [selectedSectors, setSelectedSectors] = useState([]);
 
   // Sort state
-  const [sortField, setSortField] = useState('total_market_value_native');
+  const [sortField, setSortField] = useState('total_market_value');
   const [sortDirection, setSortDirection] = useState('desc');
 
   // Pagination state
@@ -199,9 +199,9 @@ export default function Holdings() {
   const totals = useMemo(() => {
     const { costBasis, marketValue, pnl } = filteredPositions.reduce(
       (acc, p) => ({
-        costBasis: acc.costBasis + (p.total_cost_basis_native || 0),
-        marketValue: acc.marketValue + (p.total_market_value_native || 0),
-        pnl: acc.pnl + (p.total_pnl_native || 0),
+        costBasis: acc.costBasis + (p.total_cost_basis || 0),
+        marketValue: acc.marketValue + (p.total_market_value || 0),
+        pnl: acc.pnl + (p.total_pnl || 0),
       }),
       { costBasis: 0, marketValue: 0, pnl: 0 }
     );
@@ -329,6 +329,7 @@ export default function Holdings() {
           onToggleFavorite={toggleFavorite}
           totals={totals}
           currency={currency}
+          displayCurrency={currency}
           emptyMessage={positions.length === 0 ? 'No holdings found' : 'No holdings match your filters'}
           onClearFilters={positions.length > 0 ? clearAllFilters : undefined}
         />

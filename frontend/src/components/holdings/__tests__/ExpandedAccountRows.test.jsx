@@ -19,9 +19,9 @@ const accounts = [
     institution: 'Interactive Brokers',
     account_type: 'Margin',
     quantity: 60,
-    cost_basis_native: 9000,
-    market_value_native: 10500,
-    pnl_native: 1500,
+    cost_basis: 9000,
+    market_value: 10500,
+    pnl: 1500,
     pnl_pct: 16.67,
   },
   {
@@ -30,9 +30,9 @@ const accounts = [
     institution: 'Kraken',
     account_type: 'Crypto',
     quantity: 40,
-    cost_basis_native: 6000,
-    market_value_native: 7050,
-    pnl_native: 1050,
+    cost_basis: 6000,
+    market_value: 7050,
+    pnl: 1050,
     pnl_pct: 17.5,
   },
 ];
@@ -43,7 +43,7 @@ function renderExpanded(props = {}) {
       <tbody>
         <ExpandedAccountRows
           accounts={accounts}
-          currency="USD"
+          displayCurrency="USD"
           assetClass="Equity"
           colSpan={12}
           {...props}

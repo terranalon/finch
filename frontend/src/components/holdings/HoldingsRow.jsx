@@ -36,11 +36,11 @@ function getIconColor(symbol, assetClass) {
   return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
 }
 
-export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, onToggleFavorite }) {
+export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, onToggleFavorite, displayCurrency }) {
   const isCash = position.asset_class === 'Cash';
   const isCrypto = position.asset_class === 'Crypto';
   const dayColor = getChangeColor(position.day_change_pct);
-  const pnlColor = getChangeColor(position.total_pnl_native);
+  const pnlColor = getChangeColor(position.total_pnl);
 
   const handleRowClick = (e) => {
     if (e.target.closest('[data-no-detail]')) return;
@@ -129,24 +129,24 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
         {isCash ? '\u2014' : formatCurrency(position.avg_cost_per_unit_native, position.currency)}
       </td>
 
-      {/* 9. Cost Basis */}
+      {/* 9. Cost Basis (display currency) */}
       <td className="py-3 px-2 text-right font-mono tabular-nums text-[var(--text-secondary)] text-[13px]">
-        {isCash ? '\u2014' : formatCurrency(position.total_cost_basis_native, position.currency)}
+        {isCash ? '\u2014' : formatCurrency(position.total_cost_basis, displayCurrency)}
       </td>
 
-      {/* 10. Value */}
+      {/* 10. Value (display currency) */}
       <td className="py-3 px-2 text-right font-mono tabular-nums font-semibold text-[var(--text-primary)] text-[13px]">
-        {formatCurrency(position.total_market_value_native, position.currency)}
+        {formatCurrency(position.total_market_value, displayCurrency)}
       </td>
 
-      {/* 11. P&L */}
+      {/* 11. P&L (display currency) */}
       <td className="py-3 px-2 text-right whitespace-nowrap">
         {isCash ? (
           <span className="text-[var(--text-faint)]">{'\u2014'}</span>
         ) : (
           <>
             <p className={cn('font-mono tabular-nums font-semibold text-[13px]', pnlColor)}>
-              {getChangeIndicator(position.total_pnl_native)} {formatCurrency(Math.abs(position.total_pnl_native), position.currency)}
+              {getChangeIndicator(position.total_pnl)} {formatCurrency(Math.abs(position.total_pnl), displayCurrency)}
             </p>
             <p className={cn('text-[11px] tabular-nums', pnlColor)}>
               {formatPercent(position.total_pnl_pct)}

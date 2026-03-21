@@ -41,6 +41,7 @@ export function HoldingsTable({
   onToggleFavorite,
   totals,
   currency,
+  displayCurrency,
   emptyMessage,
   onClearFilters,
 }) {
@@ -59,9 +60,9 @@ export function HoldingsTable({
             <SortableHeader field="current_price" label="Price" {...sortProps} align="right" />
             <SortableHeader field="total_quantity" label="Qty" {...sortProps} align="right" />
             <SortableHeader field="avg_cost_per_unit_native" label="Avg Cost" {...sortProps} align="right" />
-            <SortableHeader field="total_cost_basis_native" label="Cost Basis" {...sortProps} align="right" />
-            <SortableHeader field="total_market_value_native" label="Value" {...sortProps} align="right" />
-            <SortableHeader field="total_pnl_native" label="P&L" {...sortProps} align="right" />
+            <SortableHeader field="total_cost_basis" label="Cost Basis" {...sortProps} align="right" />
+            <SortableHeader field="total_market_value" label="Value" {...sortProps} align="right" />
+            <SortableHeader field="total_pnl" label="P&L" {...sortProps} align="right" />
             <th className={cn(HEADER_BASE, 'text-center w-[48px]')}>Accts</th>
           </tr>
         </thead>
@@ -77,11 +78,12 @@ export function HoldingsTable({
                   onToggleExpand={() => onToggleExpand(position.asset_id)}
                   onRowClick={() => onRowClick(position)}
                   onToggleFavorite={() => onToggleFavorite(position.asset_id)}
+                  displayCurrency={displayCurrency}
                 />
                 {isExpanded && position.accounts?.length > 0 && (
                   <ExpandedAccountRows
                     accounts={position.accounts}
-                    currency={position.currency}
+                    displayCurrency={displayCurrency}
                     assetClass={position.asset_class}
                   />
                 )}

@@ -20,8 +20,8 @@ const singlePosition = {
   category: 'Tech', industry: 'Hardware', currency: 'USD',
   is_favorite: false, current_price: 175, day_change_pct: 1.2,
   total_quantity: 100, avg_cost_per_unit_native: 150,
-  total_cost_basis_native: 15000, total_market_value_native: 17500,
-  total_pnl_native: 2500, total_pnl_pct: 16.67, account_count: 1,
+  total_cost_basis: 15000, total_market_value: 17500,
+  total_pnl: 2500, total_pnl_pct: 16.67, account_count: 1,
   accounts: [],
 };
 
@@ -38,6 +38,7 @@ function renderTable(props = {}) {
       onToggleFavorite={vi.fn()}
       totals={{ costBasis: 15000, marketValue: 17500, pnl: 2500, pnlPct: 16.67 }}
       currency="USD"
+      displayCurrency="USD"
       {...props}
     />
   );

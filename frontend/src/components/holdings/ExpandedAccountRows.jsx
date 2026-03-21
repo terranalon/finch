@@ -11,7 +11,7 @@ function MetricCell({ label, value }) {
   );
 }
 
-export function ExpandedAccountRows({ accounts, currency, assetClass, colSpan = 12 }) {
+export function ExpandedAccountRows({ accounts, displayCurrency, assetClass, colSpan = 12 }) {
   const isCrypto = assetClass === 'Crypto';
 
   return (
@@ -43,16 +43,16 @@ export function ExpandedAccountRows({ accounts, currency, assetClass, colSpan = 
                   />
                   <MetricCell
                     label="Cost Basis"
-                    value={formatCurrency(acct.cost_basis_native, currency)}
+                    value={formatCurrency(acct.cost_basis, displayCurrency)}
                   />
                   <MetricCell
                     label="Value"
-                    value={formatCurrency(acct.market_value_native, currency)}
+                    value={formatCurrency(acct.market_value, displayCurrency)}
                   />
                   <div className="min-w-[80px]">
                     <p className="text-[10px] text-[var(--text-faint)] mb-0.5">P&L</p>
-                    <p className={cn(METRIC_VALUE, getChangeColor(acct.pnl_native))}>
-                      {getChangeIndicator(acct.pnl_native)} {formatPercent(acct.pnl_pct)}
+                    <p className={cn(METRIC_VALUE, getChangeColor(acct.pnl))}>
+                      {getChangeIndicator(acct.pnl)} {formatPercent(acct.pnl_pct)}
                     </p>
                   </div>
                 </div>
