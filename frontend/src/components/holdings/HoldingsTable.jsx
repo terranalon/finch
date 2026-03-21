@@ -4,12 +4,15 @@ import { HoldingsRow } from './HoldingsRow';
 import { ExpandedAccountRows } from './ExpandedAccountRows';
 import { HoldingsSummaryRow } from './HoldingsSummaryRow';
 
+const HEADER_BASE = 'py-[10px] px-2 text-left font-semibold text-[11px] leading-none uppercase tracking-wide text-[var(--text-faint)] border-b border-[var(--border-primary)] whitespace-nowrap';
+
 function SortableHeader({ field, label, sortField, sortDirection, onSort, align = 'left' }) {
   const isActive = sortField === field;
   return (
     <th
       className={cn(
-        'table-header cursor-pointer hover:text-[var(--text-tertiary)] transition-colors select-none whitespace-nowrap',
+        HEADER_BASE,
+        'cursor-pointer hover:text-[var(--text-tertiary)] transition-colors select-none',
         align === 'right' && 'text-right',
         isActive && 'text-[var(--text-secondary)]'
       )}
@@ -48,9 +51,9 @@ export function HoldingsTable({
       <table className="w-full">
         <thead>
           <tr>
-            <th className="table-header w-[36px]" />
-            <th className="table-header w-[20px]" />
-            <th className="table-header w-[32px] pr-0" />
+            <th className={cn(HEADER_BASE, 'w-[28px]')} />
+            <th className={cn(HEADER_BASE, 'w-[24px] px-1')} />
+            <th className={cn(HEADER_BASE, 'w-[32px] pr-0 pl-1')} />
             <SortableHeader field="symbol" label="Symbol" {...sortProps} />
             <SortableHeader field="name" label="Name" {...sortProps} />
             <SortableHeader field="current_price" label="Price" {...sortProps} align="right" />
@@ -59,7 +62,7 @@ export function HoldingsTable({
             <SortableHeader field="total_cost_basis_native" label="Cost Basis" {...sortProps} align="right" />
             <SortableHeader field="total_market_value_native" label="Value" {...sortProps} align="right" />
             <SortableHeader field="total_pnl_native" label="P&L" {...sortProps} align="right" />
-            <th className="table-header text-center w-[60px]">Accts</th>
+            <th className={cn(HEADER_BASE, 'text-center w-[48px]')}>Accts</th>
           </tr>
         </thead>
 

@@ -4,7 +4,7 @@ const LABEL_CLASS = 'block text-[10px] text-[var(--text-faint)] uppercase tracki
 
 function SummaryCell({ label, children }) {
   return (
-    <td className="table-cell text-right">
+    <td className="py-2 px-2 text-right">
       <span className={LABEL_CLASS}>{label}</span>
       {children}
     </td>
@@ -16,14 +16,14 @@ export function HoldingsSummaryRow({ costBasis, marketValue, pnl, pnlPct, curren
 
   return (
     <tr className="border-t-2 border-[var(--border-primary)] bg-[var(--bg-tertiary)]">
-      <td colSpan={6} className="table-cell py-2.5">
+      <td colSpan={6} className="py-2 px-2">
         <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
           All Holdings
         </span>
       </td>
 
-      <td className="table-cell" />
-      <td className="table-cell" />
+      <td className="py-2 px-2" />
+      <td className="py-2 px-2" />
 
       <SummaryCell label="Cost Basis">
         <span className="font-mono tabular-nums text-[13px] font-bold text-[var(--text-secondary)]">
@@ -44,7 +44,7 @@ export function HoldingsSummaryRow({ costBasis, marketValue, pnl, pnlPct, curren
         </span>
       </SummaryCell>
 
-      <td className="table-cell" />
+      <td className="py-2 px-2" />
     </tr>
   );
 }

@@ -122,7 +122,7 @@ export function HoldingsFilterBar({
   return (
     <div className="flex items-center gap-3">
       {/* Search */}
-      <div className="relative flex-1 max-w-md">
+      <div className="relative w-[260px]">
         <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]">
           <SearchIcon />
         </div>
@@ -132,7 +132,7 @@ export function HoldingsFilterBar({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           className={cn(
-            'w-full pl-9 pr-4 py-2 rounded-lg text-[13px]',
+            'w-full pl-9 pr-4 h-9 rounded-lg text-[13px] leading-none',
             'bg-[var(--bg-tertiary)] border border-[var(--border-primary)]',
             'text-[var(--text-primary)] placeholder:text-[var(--text-faint)]',
             'focus:outline-none focus:border-accent transition-colors'

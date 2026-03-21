@@ -57,7 +57,7 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
       )}
     >
       {/* 1. Expand */}
-      <td className="table-cell w-[36px] text-center">
+      <td className="py-3 pl-2 pr-0 w-[28px] text-center">
         <button
           data-no-detail
           title="Expand"
@@ -69,7 +69,7 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
       </td>
 
       {/* 2. Star */}
-      <td className="w-[20px] px-1">
+      <td className="py-3 px-1 w-[24px]">
         <button
           data-no-detail
           title={position.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -84,9 +84,9 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
       </td>
 
       {/* 3. Icon */}
-      <td className="w-[32px] pr-0">
+      <td className="py-3 pr-0 pl-1 w-[32px]">
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
           style={{ background: getIconColor(position.symbol, position.asset_class) }}
         >
           {position.symbol.slice(0, 2).toUpperCase()}
@@ -94,61 +94,61 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
       </td>
 
       {/* 4. Symbol */}
-      <td className="table-cell pl-2">
-        <span className="font-mono font-semibold text-[var(--text-primary)]">
+      <td className="py-3 pl-2 pr-1">
+        <span className="font-mono font-semibold text-[var(--text-primary)] text-[13px]">
           {position.symbol}
         </span>
       </td>
 
       {/* 5. Name */}
-      <td className="table-cell">
-        <p className="text-[var(--text-primary)] truncate max-w-[200px]" title={position.name}>
+      <td className="py-3 px-1">
+        <p className="text-[var(--text-primary)] truncate max-w-[160px] text-[13px]" title={position.name}>
           {position.name}
         </p>
       </td>
 
       {/* 6. Price + day change */}
-      <td className="table-cell text-right whitespace-nowrap">
-        <p className="font-mono tabular-nums text-[var(--text-primary)]">
+      <td className="py-3 px-2 text-right whitespace-nowrap">
+        <p className="font-mono tabular-nums text-[var(--text-primary)] text-[13px]">
           {formatCurrency(position.current_price, position.currency)}
         </p>
         {!isCash && position.day_change_pct != null && (
-          <p className={cn('text-xs tabular-nums', dayColor)}>
+          <p className={cn('text-[11px] tabular-nums', dayColor)}>
             {getChangeIndicator(position.day_change_pct)} {formatPercent(position.day_change_pct)}
           </p>
         )}
       </td>
 
       {/* 7. Qty */}
-      <td className="table-cell text-right font-mono tabular-nums text-[var(--text-primary)]">
+      <td className="py-3 px-2 text-right font-mono tabular-nums text-[var(--text-secondary)] text-[13px]">
         {formatNumber(position.total_quantity, { decimals: isCrypto ? 4 : 0 })}
       </td>
 
       {/* 8. Avg Cost */}
-      <td className="table-cell text-right font-mono tabular-nums text-[var(--text-primary)]">
+      <td className="py-3 px-2 text-right font-mono tabular-nums text-[var(--text-tertiary)] text-[13px]">
         {isCash ? '\u2014' : formatCurrency(position.avg_cost_per_unit_native, position.currency)}
       </td>
 
       {/* 9. Cost Basis */}
-      <td className="table-cell text-right font-mono tabular-nums text-[var(--text-primary)]">
+      <td className="py-3 px-2 text-right font-mono tabular-nums text-[var(--text-secondary)] text-[13px]">
         {isCash ? '\u2014' : formatCurrency(position.total_cost_basis_native, position.currency)}
       </td>
 
       {/* 10. Value */}
-      <td className="table-cell text-right font-mono tabular-nums font-medium text-[var(--text-primary)]">
+      <td className="py-3 px-2 text-right font-mono tabular-nums font-semibold text-[var(--text-primary)] text-[13px]">
         {formatCurrency(position.total_market_value_native, position.currency)}
       </td>
 
       {/* 11. P&L */}
-      <td className="table-cell text-right whitespace-nowrap">
+      <td className="py-3 px-2 text-right whitespace-nowrap">
         {isCash ? (
-          <span className="text-[var(--text-tertiary)]">{'\u2014'}</span>
+          <span className="text-[var(--text-faint)]">{'\u2014'}</span>
         ) : (
           <>
-            <p className={cn('font-mono tabular-nums font-medium', pnlColor)}>
+            <p className={cn('font-mono tabular-nums font-semibold text-[13px]', pnlColor)}>
               {getChangeIndicator(position.total_pnl_native)} {formatCurrency(Math.abs(position.total_pnl_native), position.currency)}
             </p>
-            <p className={cn('text-xs tabular-nums', pnlColor)}>
+            <p className={cn('text-[11px] tabular-nums', pnlColor)}>
               {formatPercent(position.total_pnl_pct)}
             </p>
           </>
@@ -156,8 +156,8 @@ export function HoldingsRow({ position, isExpanded, onToggleExpand, onRowClick, 
       </td>
 
       {/* 12. Accts badge */}
-      <td className="table-cell text-center">
-        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent/10 text-accent text-xs font-semibold">
+      <td className="py-3 px-2 text-center">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-accent/10 text-accent text-[10px] font-semibold">
           {position.account_count}
         </span>
       </td>
