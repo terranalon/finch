@@ -20,12 +20,12 @@ function FilterSection({ title, expanded, onToggle, className, children }) {
         onClick={onToggle}
         className="flex items-center justify-between w-full cursor-pointer"
       >
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+        <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
           {title}
         </span>
         <ChevronDownIcon
           className={cn(
-            'w-3 h-3 text-[var(--text-muted)] transition-transform',
+            'w-3 h-3 text-[var(--text-tertiary)] transition-transform',
             !expanded && '-rotate-90'
           )}
         />
@@ -42,13 +42,13 @@ function FilterSection({ title, expanded, onToggle, className, children }) {
 
 function FilterCheckbox({ checked, onChange, label }) {
   return (
-    <label className="flex items-center gap-1.5 px-2 py-[5px] rounded-md text-xs text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-elevated)]">
+    <label className="flex items-center gap-1.5 px-2 py-[5px] rounded-md text-xs text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-tertiary)]">
       <input
         type="checkbox"
         checked={checked}
         onChange={onChange}
         className="w-[13px] h-[13px]"
-        style={{ accentColor: 'var(--accent)' }}
+        style={{ accentColor: 'var(--accent-primary)' }}
       />
       {label}
     </label>
@@ -85,8 +85,8 @@ export function FilterPopover({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           'w-[34px] h-[34px] flex items-center justify-center',
-          'bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg',
-          'text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer'
+          'bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg',
+          'text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
         )}
       >
         <FilterIcon className="w-4 h-4" />
@@ -99,8 +99,8 @@ export function FilterPopover({
       )}
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-1 w-[260px] bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border)]">
+        <div className="absolute top-full right-0 mt-1 w-[260px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] z-50">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-primary)]">
             <span className="text-xs font-semibold text-[var(--text-primary)]">Filters</span>
             {activeFilterCount > 0 && (
               <button
@@ -132,7 +132,7 @@ export function FilterPopover({
               title="Accounts"
               expanded={accountsExpanded}
               onToggle={() => setAccountsExpanded(!accountsExpanded)}
-              className="border-t border-[var(--border)]"
+              className="border-t border-[var(--border-primary)]"
             >
               {accounts.map((account) => (
                 <FilterCheckbox

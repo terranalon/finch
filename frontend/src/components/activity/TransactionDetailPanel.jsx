@@ -63,8 +63,8 @@ function getStyle(tx) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-subtle,var(--border))]">
-      <span className="text-xs text-[var(--text-muted)]">{label}</span>
+    <div className="flex justify-between items-center py-2.5 border-b border-[var(--border-primary)]">
+      <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
       <span className="text-[13px] font-medium font-mono text-[var(--text-primary)]">{value}</span>
     </div>
   );
@@ -86,7 +86,7 @@ function DetailHeader({ icon: Icon, style, title, subtitle }) {
 
 function SummaryCard({ label, sign, amount, currency, style, convertedAmount, convertedCurrency }) {
   return (
-    <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+    <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
       <div className="flex justify-between items-center">
         <span className="text-sm text-[var(--text-secondary)]">{label}</span>
         <div className="text-right">
@@ -94,7 +94,7 @@ function SummaryCard({ label, sign, amount, currency, style, convertedAmount, co
             {sign}{formatCurrency(amount, currency)}
           </span>
           {convertedAmount != null && (
-            <p className="text-sm text-[var(--text-muted)] font-mono">
+            <p className="text-sm text-[var(--text-tertiary)] font-mono">
               {formatCurrency(convertedAmount, convertedCurrency)}
             </p>
           )}
@@ -112,7 +112,7 @@ function ViewAssetButton({ symbol, onClose }) {
       onClick={() => { onClose(); navigate(`/assets/${encodeURIComponent(symbol)}`); }}
       className={cn(
         'flex items-center justify-center gap-1.5 w-full py-2.5 mt-5',
-        'bg-[var(--accent-muted,rgba(59,130,246,0.15))] text-accent border border-accent',
+        'bg-accent/15 text-accent border border-accent',
         'rounded-lg text-[13px] font-semibold cursor-pointer',
         'hover:bg-accent hover:text-white transition-colors'
       )}
@@ -162,7 +162,7 @@ function TradeDetails({ tx, style, hasOriginal, onClose }) {
         <DetailRow label="Account" value={tx.account_name} />
         {tx.notes && (
           <div className="pt-3">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Notes</p>
+            <p className="text-xs text-[var(--text-tertiary)] mb-1">Notes</p>
             <p className="text-sm text-[var(--text-secondary)]">{tx.notes}</p>
           </div>
         )}
@@ -216,7 +216,7 @@ function ForexDetails({ tx, style }) {
         title={`${tx.from_currency} \u2192 ${tx.to_currency}`}
         subtitle="Currency Exchange"
       />
-      <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+      <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
         <div className="flex justify-between items-center mb-3">
           <span className="text-sm text-[var(--text-secondary)]">You Received</span>
           <span className={cn('text-[22px] font-bold font-mono tabular-nums', style.text)}>
@@ -224,7 +224,7 @@ function ForexDetails({ tx, style }) {
           </span>
         </div>
         <div className="flex justify-between items-center text-sm">
-          <span className="text-[var(--text-muted)]">You Converted</span>
+          <span className="text-[var(--text-tertiary)]">You Converted</span>
           <span className="font-mono tabular-nums text-[var(--text-secondary)]">
             {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
           </span>
@@ -318,14 +318,14 @@ export function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
         onClick={onClose}
       />
       <div
-        className="fixed top-0 h-full w-[420px] bg-[var(--bg-card,var(--bg-primary))] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
+        className="fixed top-0 h-full w-[420px] bg-[var(--bg-secondary)] z-50 shadow-xl overflow-y-auto transition-[right] duration-[250ms] ease-out"
         style={{ right: visible ? 0 : -420 }}
       >
-        <div className="sticky top-0 bg-[var(--bg-card,var(--bg-primary))] p-4 border-b border-[var(--border)] flex justify-between items-center">
-          <span className="text-sm text-[var(--text-muted)]">Transaction Details</span>
+        <div className="sticky top-0 bg-[var(--bg-secondary)] p-4 border-b border-[var(--border-primary)] flex justify-between items-center">
+          <span className="text-sm text-[var(--text-tertiary)]">Transaction Details</span>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-md bg-[var(--bg-elevated)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[var(--bg-tertiary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer"
           >
             <XMarkIcon className="w-4 h-4 text-[var(--text-secondary)]" />
           </button>

@@ -8,7 +8,7 @@ export function ActivityTimeline({ groupedTransactions, currency, onTransactionC
   if (dateKeys.length === 0) {
     return (
       <div className="text-center py-12">
-        <CalendarIcon className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" />
+        <CalendarIcon className="w-12 h-12 mx-auto text-[var(--text-tertiary)] mb-4" />
         <h3 className="text-lg font-medium text-[var(--text-primary)]">No transactions found</h3>
         <p className="text-[var(--text-secondary)] mt-1">
           Try adjusting your filters to see more results.
@@ -22,7 +22,7 @@ export function ActivityTimeline({ groupedTransactions, currency, onTransactionC
       {dateKeys.map((date) => (
         <div key={date}>
           <DateGroupHeader date={date} />
-          <div className="ml-4 pl-4 border-l-2 border-[var(--border)] flex flex-col gap-[10px]">
+          <div className="ml-4 pl-4 border-l-2 border-[var(--border-primary)] flex flex-col gap-[10px]">
             {groupedTransactions[date].map((tx) => (
               <TransactionCard
                 key={tx.id}

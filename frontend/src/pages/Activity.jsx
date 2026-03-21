@@ -118,7 +118,7 @@ export default function Activity() {
                 <Skeleton className="w-2 h-2 rounded-full" />
                 <Skeleton className="h-3 w-48" />
               </div>
-              <div className="ml-4 pl-4 border-l-2 border-[var(--border)] flex flex-col gap-[10px]">
+              <div className="ml-4 pl-4 border-l-2 border-[var(--border-primary)] flex flex-col gap-[10px]">
                 {[1, 2].map((j) => <Skeleton key={j} className="h-[72px] w-full rounded-lg" />)}
               </div>
             </div>
@@ -158,7 +158,7 @@ export default function Activity() {
               placeholder="Search by symbol or name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full py-2 pl-[34px] pr-3 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-accent transition-colors"
+              className="w-full py-2 pl-[34px] pr-3 bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-accent transition-colors"
             />
           </div>
           <DateRangeFilter value={dateRange} onChange={setDateRange} />
