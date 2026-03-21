@@ -47,7 +47,6 @@ export default function Holdings() {
   const [selectedAccounts, setSelectedAccounts] = useState([]);
   const [selectedClasses, setSelectedClasses] = useState([]);
   const [selectedSectors, setSelectedSectors] = useState([]);
-  const [filtersInitialized, setFiltersInitialized] = useState(false);
 
   // Sort state
   const [sortField, setSortField] = useState('total_market_value_native');
@@ -63,12 +62,11 @@ export default function Holdings() {
   // Asset sidebar
   const [sidebarAsset, setSidebarAsset] = useState(null);
 
-  // Fetch data (also resets filter state so filters re-initialize from fresh data)
+  // Fetch data and initialize filters from fresh data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      setFiltersInitialized(false);
       const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
       try {
         const [posRes, accRes] = await Promise.all([
@@ -78,8 +76,14 @@ export default function Holdings() {
         if (!posRes.ok) throw new Error(`Failed to fetch positions: ${posRes.statusText}`);
         if (!accRes.ok) throw new Error(`Failed to fetch accounts: ${accRes.statusText}`);
         const [posData, accData] = await Promise.all([posRes.json(), accRes.json()]);
-        setPositions(posData.items);
-        setAccounts(accData.items);
+        const items = posData.items;
+        const accts = accData.items;
+        setPositions(items);
+        setAccounts(accts);
+        // Initialize all filters to "select all"
+        setSelectedAccounts(accts.map((a) => a.id));
+        setSelectedClasses([...new Set(items.map((p) => p.asset_class).filter(Boolean))].sort());
+        setSelectedSectors([...new Set(items.map((p) => p.category).filter(Boolean))].sort());
       } catch (err) {
         console.error('Error fetching holdings data:', err);
         setError(err.message);
@@ -89,16 +93,6 @@ export default function Holdings() {
     };
     fetchData();
   }, [currency, selectedPortfolioId]);
-
-  // Initialize filters when data loads
-  useEffect(() => {
-    if (!loading && positions.length > 0 && accounts.length > 0 && !filtersInitialized) {
-      setSelectedAccounts(accounts.map((a) => a.id));
-      setSelectedClasses([...assetClasses]);
-      setSelectedSectors([...sectors]);
-      setFiltersInitialized(true);
-    }
-  }, [loading, positions, accounts, assetClasses, sectors, filtersInitialized]);
 
   // Reset page on filter change
   useEffect(() => { setCurrentPage(1); }, [searchQuery, selectedAccounts, selectedClasses, selectedSectors]);
@@ -166,8 +160,8 @@ export default function Holdings() {
     });
 
     result.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
+      const aVal = a[sortField];
+      const bVal = b[sortField];
       if (aVal == null) return 1;
       if (bVal == null) return -1;
       if (typeof aVal === 'string') {
@@ -216,12 +210,9 @@ export default function Holdings() {
   }, [filteredPositions]);
 
   const handleSort = useCallback((field) => {
-    setSortField((prev) => {
-      if (prev === field) setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-      else setSortDirection('desc');
-      return field;
-    });
-  }, []);
+    setSortDirection((d) => (field === sortField && d === 'desc') ? 'asc' : 'desc');
+    setSortField(field);
+  }, [sortField]);
 
   const toggleExpand = useCallback((assetId) => {
     setExpandedRows((prev) => {

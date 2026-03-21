@@ -1,6 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { vi } from 'vitest';
 
 vi.mock('../../../lib', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
@@ -12,26 +11,31 @@ vi.mock('../../../lib', () => ({
 
 import { HoldingsSummaryRow } from '../HoldingsSummaryRow';
 
+function renderSummary(props = {}) {
+  return render(
+    <table>
+      <tfoot>
+        <HoldingsSummaryRow
+          costBasis={50000}
+          marketValue={60000}
+          pnl={10000}
+          pnlPct={20}
+          currency="USD"
+          {...props}
+        />
+      </tfoot>
+    </table>
+  );
+}
+
 describe('HoldingsSummaryRow', () => {
   it('renders "All Holdings" label', () => {
-    render(
-      <table>
-        <tfoot>
-          <HoldingsSummaryRow costBasis={50000} marketValue={60000} pnl={10000} pnlPct={20} currency="USD" />
-        </tfoot>
-      </table>
-    );
+    renderSummary();
     expect(screen.getByText('All Holdings')).toBeInTheDocument();
   });
 
   it('renders cost basis, market value, and P&L', () => {
-    render(
-      <table>
-        <tfoot>
-          <HoldingsSummaryRow costBasis={50000} marketValue={60000} pnl={10000} pnlPct={20} currency="USD" />
-        </tfoot>
-      </table>
-    );
+    renderSummary();
     expect(screen.getByText('Cost Basis')).toBeInTheDocument();
     expect(screen.getByText('Market Value')).toBeInTheDocument();
     expect(screen.getByText('Total P&L')).toBeInTheDocument();

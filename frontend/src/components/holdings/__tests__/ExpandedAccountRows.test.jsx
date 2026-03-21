@@ -1,6 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { vi } from 'vitest';
 
 vi.mock('../../../lib', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
@@ -67,9 +66,8 @@ describe('ExpandedAccountRows', () => {
     expect(screen.getByText(/Margin/)).toBeInTheDocument();
   });
 
-  it('renders quantity, cost basis, value, and P&L for each account', () => {
+  it('renders cost basis and market value for each account', () => {
     renderExpanded();
-    // Check for formatted values
     expect(screen.getByText('$9000.00')).toBeInTheDocument();
     expect(screen.getByText('$10500.00')).toBeInTheDocument();
   });

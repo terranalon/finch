@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-// Must mock before importing component
 vi.mock('../../../lib', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
   formatCurrency: (v) => `$${Number(v).toFixed(2)}`,
@@ -101,9 +100,8 @@ describe('HoldingsRow', () => {
 
   it('shows dash for P&L when asset_class is Cash', () => {
     renderRow({ position: { ...basePosition, asset_class: 'Cash' } });
-    // Cash assets show dash instead of P&L values
     const cells = document.querySelectorAll('td');
-    const pnlCell = cells[10]; // P&L column (0-indexed)
+    const pnlCell = cells[10];
     expect(pnlCell.textContent).toContain('\u2014');
   });
 });

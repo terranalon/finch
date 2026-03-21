@@ -1,12 +1,12 @@
 import { cn, formatCurrency, formatPercent, formatNumber, getChangeColor, getChangeIndicator } from '../../lib';
 
-const VALUE_CLASS = 'text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]';
+const METRIC_VALUE = 'text-[13px] font-mono tabular-nums font-medium text-[var(--text-primary)]';
 
 function MetricCell({ label, value }) {
   return (
     <div>
       <p className="text-[10px] text-[var(--text-faint)] mb-0.5">{label}</p>
-      <p className={VALUE_CLASS}>{value}</p>
+      <p className={METRIC_VALUE}>{value}</p>
     </div>
   );
 }
@@ -51,7 +51,7 @@ export function ExpandedAccountRows({ accounts, currency, assetClass, colSpan = 
                   />
                   <div className="min-w-[80px]">
                     <p className="text-[10px] text-[var(--text-faint)] mb-0.5">P&L</p>
-                    <p className={cn('text-[13px] font-mono tabular-nums font-medium', getChangeColor(acct.pnl_native))}>
+                    <p className={cn(METRIC_VALUE, getChangeColor(acct.pnl_native))}>
                       {getChangeIndicator(acct.pnl_native)} {formatPercent(acct.pnl_pct)}
                     </p>
                   </div>
