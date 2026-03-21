@@ -82,7 +82,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Right Column */}
-      <div className="px-5 pb-5 min-[900px]:p-5 min-[900px]:pl-0 min-[900px]:w-[300px] min-[900px]:min-w-[280px] min-[900px]:shrink-0 flex flex-col gap-3.5 min-[900px]:overflow-y-auto min-[900px]:h-full [scrollbar-width:thin]">
+      <div className="px-5 pb-5 min-[900px]:py-5 min-[900px]:pr-5 min-[900px]:pl-0 min-[900px]:w-[300px] min-[900px]:shrink-0 flex flex-col gap-3.5 min-[900px]:overflow-y-auto min-[900px]:h-full [scrollbar-width:thin]">
         <MarketPulseCard />
 
         <RecentActivityCard onTradeClick={handleTradeClick} />
