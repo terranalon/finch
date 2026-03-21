@@ -16,6 +16,28 @@ from app.services.repositories.snapshot_repository import SnapshotRepository
 logger = logging.getLogger(__name__)
 
 
+def filter_incomplete_snapshots(rows: list, *, threshold: float = 0.7) -> list:
+    """Filter out dates with incomplete account coverage or zero values.
+
+    Compares each date's account count against its local ±2 neighborhood
+    to adapt to account additions over time while catching days where
+    snapshot generation partially failed.
+
+    Rows must have `date`, `total_usd`, and `account_count` attributes.
+    """
+    chronological = sorted(rows, key=lambda r: r.date)
+    counts = [r.account_count for r in chronological]
+    kept = []
+    for i, row in enumerate(chronological):
+        if not row.total_usd or row.total_usd <= 0:
+            continue
+        window = counts[max(0, i - 2) : i] + counts[i + 1 : i + 3]
+        local_max = max(window) if window else row.account_count
+        if row.account_count >= local_max * threshold:
+            kept.append(row)
+    return kept
+
+
 def update_snapshot_status(db: Session, account_id: int, status: str | None) -> None:
     """Update the snapshot_status field for an account.
 
@@ -219,7 +241,11 @@ class SnapshotService:
         limit: int = 90,
         allowed_account_ids: list[int] | None = None,
     ) -> list[dict]:
-        """Get aggregated portfolio history across all accounts."""
+        """Get aggregated portfolio history across all accounts.
+
+        Filters out dates with incomplete account coverage to avoid
+        chart anomalies when some accounts are missing snapshots.
+        """
         repo = SnapshotRepository(db)
         results = repo.find_aggregated_portfolio_history(
             start_date=start_date,
@@ -228,13 +254,20 @@ class SnapshotService:
             account_ids=allowed_account_ids,
         )
 
+        if not results:
+            return []
+
+        kept = filter_incomplete_snapshots(results)
+
+        # Return newest-first (matching repository order)
         return [
             {
                 "date": row.date.isoformat(),
                 "value_usd": float(row.total_usd),
                 "value_ils": float(row.total_ils),
+                "account_count": row.account_count,
             }
-            for row in results
+            for row in reversed(kept)
         ]
 
     def backfill_historical_snapshots(

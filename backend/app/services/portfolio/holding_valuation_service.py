@@ -5,6 +5,7 @@ It replaces duplicated inline code in dashboard.py, positions.py, and
 snapshot_service._value_holdings().
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -15,6 +16,8 @@ from app.models import Asset
 from app.services.market_data.price_fetcher import PriceFetcher
 from app.services.portfolio.types import HoldingValue
 from app.services.shared.currency_service import CurrencyService
+
+logger = logging.getLogger(__name__)
 
 
 class HoldingValuationService:
@@ -151,4 +154,14 @@ class HoldingValuationService:
     ) -> Decimal:
         """Convert between currencies, falling back to the original amount."""
         rate = self._currency.get_exchange_rate(from_currency, to_currency, valuation_date)
-        return amount * rate if rate else amount
+        if rate:
+            return amount * rate
+        logger.error(
+            "Currency conversion failed: %s -> %s on %s (amount=%s). "
+            "Returning unconverted amount — snapshot values will be incorrect.",
+            from_currency,
+            to_currency,
+            valuation_date,
+            amount,
+        )
+        return amount

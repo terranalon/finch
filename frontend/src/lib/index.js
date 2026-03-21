@@ -25,4 +25,6 @@ export {
   transformDividend,
   transformForex,
   transformCash,
+  hasConversion,
 } from './transforms';
+export { ASSET_COLORS } from './constants';

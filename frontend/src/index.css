@@ -30,6 +30,12 @@
     --positive-bg: #D1FAE5;
     --negative: #DC2626;
     --negative-bg: #FEE2E2;
+
+    /* Sidebar */
+    --sidebar-active-bg: rgba(37, 99, 235, 0.08);
+    --sidebar-active-text: #2563EB;
+    --text-faint: #94A3B8;
+    --warning: #F59E0B;
   }
 
   .dark {
@@ -57,6 +63,12 @@
     --positive-bg: #064E3B;
     --negative: #EF4444;
     --negative-bg: #7F1D1D;
+
+    /* Sidebar */
+    --sidebar-active-bg: rgba(59, 130, 246, 0.1);
+    --sidebar-active-text: #3B82F6;
+    --text-faint: #475569;
+    --warning: #F59E0B;
   }
 
   html {
@@ -147,5 +159,14 @@
 
   .table-row-hover {
     @apply hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors;
+  }
+
+  /* Slide-in animation for asset detail sidebar */
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  .animate-slide-in-right {
+    animation: slide-in-right 0.2s ease-out;
   }
 }

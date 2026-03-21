@@ -33,6 +33,21 @@ class ExchangeRateRepository:
             .first()
         )
 
+    def find_most_recent_before(
+        self, from_currency: str, to_currency: str, before_date: date
+    ) -> ExchangeRate | None:
+        """Find the most recent exchange rate before a given date (forward-fill)."""
+        return (
+            self._db.query(ExchangeRate)
+            .filter(
+                ExchangeRate.from_currency == from_currency,
+                ExchangeRate.to_currency == to_currency,
+                ExchangeRate.date < before_date,
+            )
+            .order_by(ExchangeRate.date.desc())
+            .first()
+        )
+
     def find_dates_in_range(
         self, from_currency: str, to_currency: str, start_date: date, end_date: date
     ) -> set[date]:

@@ -49,13 +49,14 @@ class SnapshotRepository:
     def find_aggregated_performance(self, account_ids: list[int], days: int = 30) -> list[tuple]:
         """Aggregated portfolio value by date, most recent first, limited to N days.
 
-        Returns list of Row(date, total_usd, total_ils).
+        Returns list of Row(date, total_usd, total_ils, account_count).
         """
         return (
             self._db.query(  # ty: ignore[invalid-return-type] -- Row[tuple] is structurally equivalent to tuple
                 HistoricalSnapshot.date,
                 func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"),
                 func.sum(HistoricalSnapshot.total_value_ils).label("total_ils"),
+                func.count(HistoricalSnapshot.account_id.distinct()).label("account_count"),
             )
             .filter(HistoricalSnapshot.account_id.in_(account_ids))
             .group_by(HistoricalSnapshot.date)
@@ -92,12 +93,14 @@ class SnapshotRepository:
     ) -> list[tuple]:
         """Aggregated portfolio history across accounts.
 
-        Returns list of Row(date, total_usd, total_ils).
+        Returns list of Row(date, total_usd, total_ils, account_count).
+        The account_count lets callers filter out dates with incomplete snapshots.
         """
         query = self._db.query(
             HistoricalSnapshot.date,
             func.sum(HistoricalSnapshot.total_value_usd).label("total_usd"),
             func.sum(HistoricalSnapshot.total_value_ils).label("total_ils"),
+            func.count(HistoricalSnapshot.account_id.distinct()).label("account_count"),
         ).join(Account, HistoricalSnapshot.account_id == Account.id)
 
         if account_ids is not None:

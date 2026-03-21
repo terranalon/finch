@@ -83,6 +83,8 @@ def format_position(p: PositionResult) -> dict:
         "day_change_pct": to_float(p.day_change_pct),
         "day_change_date": p.day_change_date,
         "is_market_closed": p.is_market_closed,
+        "market_cap": to_float(p.market_cap),
+        "week_change_pct": to_float(p.week_change_pct),
         "total_quantity": to_float(p.total_quantity),
         "total_cost_basis_native": to_float(p.total_cost_basis_native),
         "total_market_value_native": to_float(p.total_market_value_native),

@@ -2,11 +2,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { ThemeProvider, CurrencyProvider, AuthProvider, PortfolioProvider, useAuth } from './contexts'
-import { Navbar } from './components/layout'
+import { DashboardLayout } from './components/layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
 // Pages
-import Overview from './pages/Overview'
+import DashboardPage from './pages/DashboardPage'
 import Holdings from './pages/Holdings'
 import Activity from './pages/Activity'
 import Accounts from './pages/Accounts'
@@ -56,24 +56,14 @@ function PublicRoute({ children }) {
   return children;
 }
 
-// Main app layout with navbar
-function AppLayout({ children }) {
-  return (
-    <div className="min-h-dvh bg-[var(--bg-primary)]">
-      <Navbar />
-      {children}
-    </div>
-  );
-}
-
 // Protected route with onboarding guard and app layout
 function GuardedLayout({ children }) {
   return (
     <ProtectedRoute>
       <OnboardingGuard>
-        <AppLayout>
+        <DashboardLayout>
           {children}
-        </AppLayout>
+        </DashboardLayout>
       </OnboardingGuard>
     </ProtectedRoute>
   );
@@ -123,7 +113,7 @@ function App() {
                   <AuthSwitchRoute
                     authenticated={
                       <GuardedLayout>
-                        <Overview />
+                        <DashboardPage />
                       </GuardedLayout>
                     }
                     unauthenticated={<LandingPage />}

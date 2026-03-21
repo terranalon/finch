@@ -51,6 +51,10 @@ class PositionResponse(BaseModel):
     day_change_date: str | None = None
     is_market_closed: bool = False
 
+    # Market data
+    market_cap: JsonDecimal | None = None
+    week_change_pct: JsonDecimal | None = None
+
     # Aggregated values (native currency)
     total_quantity: JsonDecimal
     total_cost_basis_native: JsonDecimal

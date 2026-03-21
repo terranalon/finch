@@ -9,79 +9,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { cn, formatCurrency, api, deleteDataSource, transformTrade, transformDividend, transformForex, transformCash } from '../lib';
+import { calculateTWR } from '../lib/twr';
 import { usePortfolio } from '../contexts';
 import { PageContainer } from '../components/layout';
 import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
 import { TransactionCard } from '../components/transactions';
-
-/**
- * Calculate Time-Weighted Return using Modified Dietz method
- * This excludes the effect of cash flows (deposits/withdrawals) from returns
- *
- * @param {Array} snapshots - Array of {date, value} objects, sorted by date ascending
- * @param {Array} cashFlows - Array of {date, amount} objects (positive = deposit, negative = withdrawal)
- * @returns {Array} Array of {date, value, performance} objects
- */
-function calculateTWR(snapshots, cashFlows) {
-  if (!snapshots || snapshots.length === 0) return [];
-
-  const result = [];
-  const startDate = new Date(snapshots[0].date);
-  const startValue = snapshots[0].value;
-
-  // Create a map of cash flows by date for quick lookup
-  const cashFlowMap = new Map();
-  if (cashFlows && cashFlows.length > 0) {
-    cashFlows.forEach((cf) => {
-      const dateKey = cf.date.split('T')[0]; // Normalize to YYYY-MM-DD
-      const existing = cashFlowMap.get(dateKey) || 0;
-      cashFlowMap.set(dateKey, existing + cf.amount);
-    });
-  }
-
-  // For each snapshot, calculate cumulative TWR from start
-  snapshots.forEach((snapshot, index) => {
-    const currentDate = new Date(snapshot.date);
-    const currentValue = snapshot.value;
-
-    if (index === 0) {
-      // First point is always 0% (baseline)
-      result.push({ ...snapshot, performance: 0 });
-      return;
-    }
-
-    // Calculate total days in period
-    const totalDays = Math.max(1, (currentDate - startDate) / (1000 * 60 * 60 * 24));
-
-    // Sum all cash flows and their weighted contributions
-    let totalCashFlow = 0;
-    let weightedCashFlow = 0;
-
-    cashFlowMap.forEach((amount, dateStr) => {
-      const cfDate = new Date(dateStr);
-      if (cfDate > startDate && cfDate <= currentDate) {
-        totalCashFlow += amount;
-        // Weight = proportion of period remaining after cash flow
-        const daysFromStart = (cfDate - startDate) / (1000 * 60 * 60 * 24);
-        const weight = (totalDays - daysFromStart) / totalDays;
-        weightedCashFlow += amount * weight;
-      }
-    });
-
-    // Modified Dietz formula:
-    // Return = (Ending Value - Beginning Value - Cash Flows) / (Beginning Value + Weighted Cash Flows)
-    const denominator = startValue + weightedCashFlow;
-    let performance = 0;
-
-    if (denominator > 0) {
-      performance = ((currentValue - startValue - totalCashFlow) / denominator) * 100;
-    }
-
-    result.push({ ...snapshot, performance });
-  });
-
-  return result;
-}
 
 // ============================================
 // ICONS
@@ -1737,7 +1669,7 @@ export default function AccountDetail() {
         const [positionsRes, tradesRes, dividendsRes, forexRes, cashRes, coverageRes, brokerRes, snapshotsRes] = await Promise.all([
           api(`/positions?display_currency=${accountCurrency}`),
           api(`/transactions/trades?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
-          api(`/transactions/dividends?account_id=${id}&limit=500`),
+          api(`/transactions/dividends?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
           api(`/transactions/forex?account_id=${id}&limit=500`),
           api(`/transactions/cash?account_id=${id}&limit=500&display_currency=${accountCurrency}`),
           api(`/broker-data/coverage/${id}`),

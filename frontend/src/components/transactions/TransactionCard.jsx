@@ -6,7 +6,7 @@
  * - "compact": Single row for Account tab lists (minimal, inline layout)
  */
 
-import { cn, formatCurrency } from '../../lib';
+import { cn, formatCurrency, hasConversion } from '../../lib';
 
 // ============================================
 // ICONS
@@ -197,15 +197,25 @@ function getCompactDescription(tx) {
 }
 
 function getCompactAmount(tx, currency, style) {
+  const converted = hasConversion(tx);
   switch (tx.type) {
-    case 'trade':
-      return `${style.sign}${formatCurrency(Math.abs(tx.total), currency)}`;
-    case 'dividend':
-      return `+${formatCurrency(Math.abs(tx.amount), currency)}`;
+    case 'trade': {
+      const amt = converted ? tx.original_amount : tx.total;
+      const cur = converted ? tx.original_currency : currency;
+      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
+    }
+    case 'dividend': {
+      const amt = converted ? tx.original_amount : tx.amount;
+      const cur = converted ? tx.original_currency : currency;
+      return `+${formatCurrency(Math.abs(amt), cur)}`;
+    }
     case 'forex':
       return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
-    case 'cash':
-      return `${style.sign}${formatCurrency(Math.abs(tx.amount), currency)}`;
+    case 'cash': {
+      const amt = converted ? tx.original_amount : tx.amount;
+      const cur = converted ? tx.original_currency : currency;
+      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
+    }
     default:
       return '';
   }
@@ -271,7 +281,7 @@ function renderDetailedForexContent(tx, style) {
   );
 }
 
-function renderDetailedCashContent(tx, style) {
+function renderDetailedCashContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
@@ -280,6 +290,11 @@ function renderDetailedCashContent(tx, style) {
         </span>
       </div>
       <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
+      {tx.fee > 0 && (
+        <p className="text-xs text-[var(--text-tertiary)] mt-1">
+          Fee: {formatCurrency(tx.fee, currency)}
+        </p>
+      )}
     </>
   );
 }
@@ -293,26 +308,48 @@ function renderDetailedContent(tx, style, currency) {
     case 'forex':
       return renderDetailedForexContent(tx, style);
     case 'cash':
-      return renderDetailedCashContent(tx, style);
+      return renderDetailedCashContent(tx, style, currency);
     default:
       return null;
   }
 }
 
+function ConvertedAmountLine({ amount, currency }) {
+  return (
+    <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+      {formatCurrency(Math.abs(amount), currency)}
+    </p>
+  );
+}
+
 function renderDetailedAmount(tx, style, currency) {
+  const converted = hasConversion(tx);
+
   switch (tx.type) {
-    case 'trade':
+    case 'trade': {
+      const primaryAmount = converted ? tx.original_amount : tx.total;
+      const primaryCurrency = converted ? tx.original_currency : currency;
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          {style.sign}{formatCurrency(Math.abs(tx.total), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
+          </p>
+          {converted && <ConvertedAmountLine amount={tx.total} currency={currency} />}
+        </>
       );
-    case 'dividend':
+    }
+    case 'dividend': {
+      const primaryAmount = converted ? tx.original_amount : tx.amount;
+      const primaryCurrency = converted ? tx.original_currency : currency;
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          +{formatCurrency(Math.abs(tx.amount), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            +{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
+          </p>
+          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
+        </>
       );
+    }
     case 'forex':
       return (
         <>
@@ -324,12 +361,18 @@ function renderDetailedAmount(tx, style, currency) {
           </p>
         </>
       );
-    case 'cash':
+    case 'cash': {
+      const primaryAmount = converted ? tx.original_amount : tx.amount;
+      const primaryCurrency = converted ? tx.original_currency : currency;
       return (
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          {style.sign}{formatCurrency(Math.abs(tx.amount), currency)}
-        </p>
+        <>
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
+          </p>
+          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
+        </>
       );
+    }
     default:
       return null;
   }
@@ -352,6 +395,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
   const style = getStyle(tx);
   const Icon = style.icon;
   const txCurrency = tx.currency || currency || 'USD';
+  const isConverted = hasConversion(tx);
 
   // Compact variant - single row
   if (variant === 'compact') {
@@ -374,9 +418,16 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
             <p className="text-xs text-[var(--text-tertiary)]">{formatDateShort(tx.date)}</p>
           </div>
         </div>
-        <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-          {getCompactAmount(tx, txCurrency, style)}
-        </p>
+        <div className="text-right">
+          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+            {getCompactAmount(tx, txCurrency, style)}
+          </p>
+          {isConverted && (
+            <p className="text-xs text-[var(--text-tertiary)] font-mono">
+              {formatCurrency(Math.abs(tx.type === 'trade' ? tx.total : tx.amount), txCurrency)}
+            </p>
+          )}
+        </div>
       </div>
     );
   }

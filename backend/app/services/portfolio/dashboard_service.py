@@ -5,14 +5,16 @@ top holdings, performance) in USD. Display-currency conversion is the
 router's responsibility.
 """
 
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import Asset
+from app.models import Asset, AssetPrice, Holding
 from app.services.portfolio.holding_valuation_service import HoldingValuationService
 from app.services.portfolio.position_service import PositionService
+from app.services.portfolio.snapshot_service import filter_incomplete_snapshots
 from app.services.portfolio.types import (
     AccountValue,
     AllocationItem,
@@ -22,9 +24,12 @@ from app.services.portfolio.types import (
     PositionResult,
     TopHolding,
 )
-from app.services.repositories import AccountRepository, HoldingRepository
+from app.services.repositories import AccountRepository, HoldingRepository, PriceRepository
 from app.services.repositories.snapshot_repository import SnapshotRepository
+from app.services.repositories.transaction_repository import TransactionRepository
 from app.services.shared.currency_service import CurrencyService
+
+logger = logging.getLogger(__name__)
 
 
 class DashboardService:
@@ -37,6 +42,8 @@ class DashboardService:
         self._account_repo = AccountRepository(db)
         self._holding_repo = HoldingRepository(db)
         self._snapshot_repo = SnapshotRepository(db)
+        self._price_repo = PriceRepository(db)
+        self._txn_repo = TransactionRepository(db)
 
     def get_summary(self, account_ids: list[int]) -> DashboardSummary:
         """Build a complete dashboard summary.
@@ -44,13 +51,38 @@ class DashboardService:
         All monetary values are computed in USD and ILS.
         Display-currency conversion is the router's responsibility.
         """
-        accounts = self._build_accounts(account_ids)
+        # Single DB query for all holdings - shared across accounts, allocation,
+        # cost/cash, and top holdings (eliminates N+1 per-account queries)
+        rows = self._holding_repo.find_active_with_assets_and_accounts(account_ids)
+
+        # Pre-compute valuations once — shared across all 4 sub-methods
+        valuations: dict[int, HoldingValue] = {}
+        for holding, asset, _account_name in rows:
+            hv = self._value_asset_holding(asset, holding.quantity)
+            if hv is not None:
+                valuations[holding.id] = hv
+
+        accounts = self._build_accounts(account_ids, rows, valuations)
         total_usd = sum((a.value_usd for a in accounts), Decimal("0"))
         total_ils = sum((a.value_ils for a in accounts), Decimal("0"))
 
         day_change_usd, day_change_pct, prev_close_usd = self._calc_day_change(
             account_ids, total_usd
         )
+
+        cost_basis_usd, unrealized_pnl_usd, cash_usd = self._aggregate_cost_and_cash(
+            rows, valuations
+        )
+
+        # Combine unrealized P&L (active positions) + realized P&L (sold positions)
+        realized_pnl_usd = self._txn_repo.sum_realized_pnl_usd(account_ids)
+        total_pnl_usd = unrealized_pnl_usd + realized_pnl_usd
+
+        # Denominator must include cost basis of sold portions (not just active holdings)
+        # so the percentage is consistent with the numerator that includes realized P&L
+        sold_cost_basis_usd = self._txn_repo.sum_sell_cost_basis_usd(account_ids)
+        total_cost_basis_usd = cost_basis_usd + sold_cost_basis_usd
+        pnl_pct = (total_pnl_usd / total_cost_basis_usd * 100) if total_cost_basis_usd > 0 else None
 
         return DashboardSummary(
             total_value_usd=total_usd,
@@ -59,9 +91,15 @@ class DashboardService:
             day_change_pct=day_change_pct,
             previous_close_value_usd=prev_close_usd,
             accounts=accounts,
-            asset_allocation=self._calc_allocation(account_ids),
-            top_holdings=self._calc_top_holdings(account_ids),
+            asset_allocation=self._calc_allocation(rows, valuations),
+            top_holdings=self._calc_top_holdings(rows, valuations),
             historical_performance=self._get_performance(account_ids),
+            total_cost_basis_usd=cost_basis_usd,
+            total_cash_usd=cash_usd,
+            total_return_usd=total_pnl_usd,
+            total_return_pct=pnl_pct,
+            unrealized_pnl_usd=unrealized_pnl_usd,
+            realized_pnl_usd=realized_pnl_usd,
         )
 
     _MAX_POSITIONS = 10_000  # upper bound for fetching all positions
@@ -99,25 +137,50 @@ class DashboardService:
             last_fetched_price=asset.last_fetched_price,
         )
 
+    def _to_usd(self, amount: Decimal, currency: str) -> Decimal:
+        """Convert an amount to USD at today's rate (for current portfolio view)."""
+        if currency == "USD":
+            return amount
+        rate = self._currency.get_exchange_rate(currency, "USD")
+        if rate is None:
+            logger.warning(
+                "No %s/USD exchange rate available, returning unconverted amount",
+                currency,
+            )
+            return amount
+        return amount * rate
+
+    def _cost_basis_usd(self, holding: Holding, asset: Asset) -> Decimal:
+        """Convert a holding's cost basis to USD."""
+        return self._to_usd(holding.cost_basis or Decimal("0"), asset.currency or "USD")
+
     # ------------------------------------------------------------------
     # Private section builders
     # ------------------------------------------------------------------
 
-    def _build_accounts(self, account_ids: list[int]) -> list[AccountValue]:
+    def _build_accounts(
+        self,
+        account_ids: list[int],
+        rows: list[tuple[Holding, Asset, str]],
+        valuations: dict[int, HoldingValue],
+    ) -> list[AccountValue]:
         accounts = self._account_repo.find_active_by_ids(account_ids)
-
         usd_ils = self._currency.get_exchange_rate("USD", "ILS")
+
+        # Group pre-fetched valuations and count holdings by account_id
+        value_by_account: dict[int, Decimal] = {}
+        count_by_account: dict[int, int] = {}
+        for holding, _asset, _account_name in rows:
+            hv = valuations.get(holding.id)
+            if hv is not None:
+                value_by_account[holding.account_id] = (
+                    value_by_account.get(holding.account_id, Decimal("0")) + hv.market_value_usd
+                )
+            count_by_account[holding.account_id] = count_by_account.get(holding.account_id, 0) + 1
 
         result: list[AccountValue] = []
         for account in accounts:
-            holdings = self._holding_repo.find_active_by_account(account.id)
-
-            account_usd = Decimal("0")
-            for holding in holdings:
-                hv = self._value_asset_holding(holding.asset, holding.quantity)
-                if hv is not None:
-                    account_usd += hv.market_value_usd
-
+            account_usd = value_by_account.get(account.id, Decimal("0"))
             account_ils = account_usd * usd_ils if usd_ils else account_usd
 
             result.append(
@@ -129,6 +192,8 @@ class DashboardService:
                     currency=account.currency,
                     value_usd=account_usd,
                     value_ils=account_ils,
+                    broker_type=account.broker_type,
+                    holding_count=count_by_account.get(account.id, 0),
                 )
             )
         return result
@@ -146,12 +211,14 @@ class DashboardService:
 
         return None, None, prev_usd
 
-    def _calc_allocation(self, account_ids: list[int]) -> list[AllocationItem]:
-        holdings_with_assets = self._holding_repo.find_active_with_assets(account_ids)
-
+    def _calc_allocation(
+        self,
+        rows: list[tuple[Holding, Asset, str]],
+        valuations: dict[int, HoldingValue],
+    ) -> list[AllocationItem]:
         buckets: dict[str, dict] = {}
-        for holding, asset in holdings_with_assets:
-            hv = self._value_asset_holding(asset, holding.quantity)
+        for holding, asset, _account_name in rows:
+            hv = valuations.get(holding.id)
             if hv is None:
                 continue
 
@@ -167,29 +234,80 @@ class DashboardService:
         items.sort(key=lambda x: x.total_value, reverse=True)
         return items
 
-    def _calc_top_holdings(self, account_ids: list[int], limit: int = 10) -> list[TopHolding]:
-        rows = self._holding_repo.find_active_with_assets_and_accounts(account_ids)
+    def _aggregate_cost_and_cash(
+        self,
+        rows: list[tuple[Holding, Asset, str]],
+        valuations: dict[int, HoldingValue],
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """Aggregate cost basis, unrealized P&L, and cash from pre-fetched data.
+
+        Uses the same rows/valuations already loaded by get_summary(),
+        avoiding a redundant full-holdings query through PositionService.
+
+        Returns (total_cost_basis_usd, total_unrealized_pnl_usd, total_cash_usd).
+        """
+        cost_basis = Decimal("0")
+        pnl = Decimal("0")
+        cash = Decimal("0")
+
+        for holding, asset, _account_name in rows:
+            hv = valuations.get(holding.id)
+            if hv is None:
+                continue
+
+            if hv.is_cash:
+                cash += hv.market_value_usd
+            else:
+                cb_usd = self._cost_basis_usd(holding, asset)
+                cost_basis += cb_usd
+                pnl += hv.market_value_usd - cb_usd
+
+        return cost_basis, pnl, cash
+
+    def _calc_top_holdings(
+        self,
+        rows: list[tuple[Holding, Asset, str]],
+        valuations: dict[int, HoldingValue],
+        limit: int = 5,
+    ) -> list[TopHolding]:
+        # Batch-fetch previous closes for all non-cash assets (single query)
+        non_cash_asset_ids = list(
+            {
+                asset.id
+                for _holding, asset, _account_name in rows
+                if asset.asset_class != "Cash"
+                and asset.last_fetched_price
+                and asset.last_fetched_price > 0
+            }
+        )
+        prev_closes = self._price_repo.find_previous_closes(non_cash_asset_ids, date.today())
 
         items: list[TopHolding] = []
         for holding, asset, account_name in rows:
-            hv = self._value_asset_holding(asset, holding.quantity)
+            hv = valuations.get(holding.id)
             if hv is None:
                 continue
 
             price = Decimal("1") if hv.is_cash else (asset.last_fetched_price or Decimal("0"))
+            day_change_pct = _calc_day_change_pct(asset, prev_closes) if not hv.is_cash else None
+            cost_basis_usd = self._cost_basis_usd(holding, asset)
+
             items.append(
                 TopHolding(
                     holding_id=holding.id,
+                    asset_id=asset.id,
                     symbol=asset.symbol,
                     name=asset.name,
                     asset_class=asset.asset_class,
                     account_name=account_name,
                     quantity=holding.quantity,
-                    cost_basis=holding.cost_basis,
+                    cost_basis=cost_basis_usd,
                     current_price=price,
                     currency=asset.currency or "USD",
                     market_value_usd=hv.market_value_usd,
-                )
+                    day_change_pct=day_change_pct,
+                    is_favorite=asset.is_favorite,
+                ),
             )
 
         items.sort(key=lambda x: x.market_value_usd, reverse=True)
@@ -198,11 +316,25 @@ class DashboardService:
     def _get_performance(self, account_ids: list[int], days: int = 30) -> list[PerformancePoint]:
         rows = self._snapshot_repo.find_aggregated_performance(account_ids, days)
 
+        if not rows:
+            return []
+
+        kept = filter_incomplete_snapshots(rows)
         return [
             PerformancePoint(
                 date=str(r.date),
-                value_usd=float(r.total_usd or 0),
+                value_usd=float(r.total_usd),
                 value_ils=float(r.total_ils or 0),
             )
-            for r in reversed(rows)
+            for r in kept
         ]
+
+
+def _calc_day_change_pct(asset: Asset, prev_closes: dict[int, AssetPrice]) -> Decimal | None:
+    """Calculate day change percentage from asset price vs previous close."""
+    if not asset.last_fetched_price or asset.last_fetched_price <= 0:
+        return None
+    prev = prev_closes.get(asset.id)
+    if prev is None or not prev.closing_price or prev.closing_price <= 0:
+        return None
+    return (asset.last_fetched_price - prev.closing_price) / prev.closing_price * 100

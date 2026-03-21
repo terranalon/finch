@@ -248,6 +248,33 @@ class TestPositionResponse:
         assert position.current_value == Decimal("1500")
         assert position.total_market_value == Decimal("1500")
 
+    def test_market_cap_and_week_change_default_none(self):
+        """New market fields default to None."""
+        position = PositionResponse(
+            asset_id=1,
+            symbol="AAPL",
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
+        )
+        assert position.market_cap is None
+        assert position.week_change_pct is None
+
+    def test_market_cap_and_week_change_populated(self):
+        """New market fields serialize as floats."""
+        position = PositionResponse(
+            asset_id=1,
+            symbol="AAPL",
+            total_quantity=Decimal("10"),
+            total_cost_basis_native=Decimal("1400"),
+            total_cost_basis=Decimal("1400"),
+            market_cap=Decimal("2500000000000"),
+            week_change_pct=Decimal("3.45"),
+        )
+        data = position.model_dump(mode="json")
+        assert data["market_cap"] == 2500000000000.0
+        assert data["week_change_pct"] == 3.45
+
     def test_pnl_calculations_nullable(self):
         """P&L fields can be null when price data unavailable."""
         position = PositionResponse(

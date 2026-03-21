@@ -6,4 +6,6 @@ export { Skeleton, SkeletonText, SkeletonCard, SkeletonTableRow, SkeletonHero, S
 export { EmptyState, NoHoldingsEmpty, NoAccountsEmpty, NoTransactionsEmpty, NoDataEmpty } from './EmptyState';
 export { ThemeToggle } from './ThemeToggle';
 export { MultiSelectFilter } from './MultiSelectFilter';
+export { MiniSparkline } from './MiniSparkline';
+export { DateRangeCalendar } from './DateRangeCalendar';
 export { TransactionCard } from '../transactions';

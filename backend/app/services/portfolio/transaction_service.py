@@ -7,6 +7,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models import Holding, HoldingLot, Transaction
+from app.services.portfolio.realized_pnl_service import compute_realized_pnl_usd
 from app.services.portfolio.transaction_types import (
     BuyResult,
     InsufficientQuantityError,
@@ -79,6 +80,10 @@ class TransactionService:
         self,
         holding: Holding,
         quantity: Decimal | None,
+        *,
+        sell_price_per_unit: Decimal | None = None,
+        sell_fees: Decimal | None = None,
+        currency_rate_to_usd: Decimal | None = None,
     ) -> SellResult:
         if not quantity:
             raise TransactionError("Sell transactions require quantity")
@@ -117,7 +122,12 @@ class TransactionService:
                 quantity_from_lot = remaining_to_sell
                 lot.remaining_quantity -= quantity_from_lot  # ty: ignore[unsupported-operator] — remaining_quantity is non-null for open lots
 
-            total_cost_basis_sold += quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
+            # Include proportional buy fees in cost basis (matches _consume_lots in
+            # realized_pnl_service and PortfolioReconstructionService FIFO logic)
+            lot_cost = quantity_from_lot * lot.cost_per_unit  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal
+            if lot.quantity > 0 and lot.fees > 0:
+                lot_cost += (quantity_from_lot / lot.quantity) * lot.fees  # ty: ignore[unsupported-operator] — guarded by lot.quantity > 0 and lot.fees > 0
+            total_cost_basis_sold += lot_cost
             remaining_to_sell -= quantity_from_lot  # ty: ignore[unsupported-operator] — quantity_from_lot is always Decimal from either branch
 
         if remaining_to_sell > 0:
@@ -142,10 +152,21 @@ class TransactionService:
 
         self._db.flush()
 
+        realized_pnl_usd: Decimal | None = None
+        if sell_price_per_unit and quantity:
+            realized_pnl_usd = compute_realized_pnl_usd(
+                sell_quantity=quantity,
+                sell_price_per_unit=sell_price_per_unit,
+                sell_fees=sell_fees or Decimal("0"),
+                total_cost_basis_sold=total_cost_basis_sold,
+                currency_rate_to_usd=currency_rate_to_usd,
+            )
+
         return SellResult(
             holding_id=holding.id,
             new_quantity=holding.quantity,
             new_cost_basis=holding.cost_basis,
             total_cost_basis_sold=total_cost_basis_sold,
             is_closed=is_closed,
+            realized_pnl_usd=realized_pnl_usd,
         )

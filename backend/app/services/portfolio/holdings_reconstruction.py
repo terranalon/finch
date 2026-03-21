@@ -31,6 +31,7 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
         - holdings_updated: Number of holdings updated
         - holdings_activated: Holdings that went from 0 to non-zero quantity
         - holdings_deactivated: Holdings that went from non-zero to 0 quantity
+        - realized_pnl_backfilled: Number of sell transactions with realized P&L computed
         - error: Error message if reconstruction failed (optional)
     """
     from app.services.portfolio.portfolio_reconstruction_service import (
@@ -97,6 +98,14 @@ def reconstruct_and_update_holdings(db: Session, account_id: int) -> dict:
             f"Holdings reconstruction complete: {stats['holdings_updated']} updated, "
             f"{stats['holdings_activated']} activated, {stats['holdings_deactivated']} deactivated"
         )
+
+        # Lazy import: follows existing pattern in this file (PortfolioReconstructionService)
+        from app.services.portfolio.realized_pnl_service import RealizedPnlService
+
+        pnl_updated = RealizedPnlService(db).backfill_for_accounts([account_id])
+        if pnl_updated > 0:
+            logger.info(f"Backfilled realized_pnl_usd on {pnl_updated} sell transactions")
+        stats["realized_pnl_backfilled"] = pnl_updated
 
     except Exception as e:
         logger.exception(f"Error reconstructing holdings: {e}")

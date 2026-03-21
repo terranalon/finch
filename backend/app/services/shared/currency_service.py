@@ -64,6 +64,25 @@ class CurrencyService:
 
             return fetched_rate
 
+        # Forward-fill: use the most recent rate before the target date.
+        # This handles weekends, holidays, and transient API failures.
+        recent = self._rate_repo.find_most_recent_before(from_currency, to_currency, target_date)
+        if recent is not None:
+            logger.warning(
+                "No %s/%s rate for %s, forward-filling from %s",
+                from_currency,
+                to_currency,
+                target_date,
+                recent.date,
+            )
+            return recent.rate
+
+        logger.error(
+            "No exchange rate available for %s/%s on or before %s",
+            from_currency,
+            to_currency,
+            target_date,
+        )
         return None
 
     def fetch_exchange_rate(self, from_currency: str, to_currency: str) -> Decimal | None:

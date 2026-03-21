@@ -15,6 +15,13 @@ const CASH_ACTIVITY_TYPE_MAP = {
 };
 
 /**
+ * Check if a transaction was currency-converted (has original amount in a different currency).
+ */
+export function hasConversion(tx) {
+  return tx.original_currency && tx.original_amount != null && tx.original_currency !== tx.currency;
+}
+
+/**
  * Transform API trade response to unified format.
  */
 export function transformTrade(trade) {
@@ -32,6 +39,8 @@ export function transformTrade(trade) {
     currency: trade.currency || 'USD',
     account_name: trade.account_name,
     notes: trade.notes,
+    original_amount: trade.original_amount != null ? parseFloat(trade.original_amount) : null,
+    original_currency: trade.original_currency || null,
   };
 }
 
@@ -52,6 +61,8 @@ export function transformDividend(dividend) {
     description,
     account_name: dividend.account_name,
     notes: dividend.notes,
+    original_amount: dividend.original_amount != null ? parseFloat(dividend.original_amount) : null,
+    original_currency: dividend.original_currency || null,
   };
 }
 
@@ -92,5 +103,7 @@ export function transformCash(cash) {
     description: cash.notes ? `${cash.type} - ${cash.notes}` : cash.type,
     account_name: cash.account_name,
     notes: cash.notes,
+    original_amount: cash.original_amount != null ? parseFloat(cash.original_amount) : null,
+    original_currency: cash.original_currency || null,
   };
 }

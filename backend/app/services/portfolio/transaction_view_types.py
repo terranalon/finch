@@ -20,6 +20,8 @@ class TradeItem:
     currency: str
     account_name: str
     notes: str | None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,8 @@ class DividendItem:
     currency: str
     account_name: str
     notes: str | None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,3 +63,5 @@ class CashActivityItem:
     currency: str
     account_name: str
     notes: str | None
+    original_amount: Decimal | None = None
+    original_currency: str | None = None

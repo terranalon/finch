@@ -166,7 +166,14 @@ async def create_transaction(
                 transaction.date,
             )
         elif transaction.type == "Sell":
-            svc.process_sell(holding, transaction.quantity)
+            sell_result = svc.process_sell(
+                holding,
+                transaction.quantity,
+                sell_price_per_unit=transaction.price_per_unit,
+                sell_fees=transaction.fees,
+                currency_rate_to_usd=db_transaction.currency_rate_to_usd_at_date,
+            )
+            db_transaction.realized_pnl_usd = sell_result.realized_pnl_usd
 
         db.commit()
         loaded = _load_transaction_with_relations(db, db_transaction.id)
