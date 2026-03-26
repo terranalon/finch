@@ -19,6 +19,7 @@
     /* Borders */
     --border-primary: #E2E8F0;
     --border-secondary: #CBD5E1;
+    --border-subtle: #F1F5F9;
 
     /* Accent */
     --accent-primary: #2563EB;
@@ -52,6 +53,7 @@
     /* Borders */
     --border-primary: #334155;
     --border-secondary: #475569;
+    --border-subtle: #1F2937;
 
     /* Accent */
     --accent-primary: #3B82F6;
