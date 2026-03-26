@@ -196,29 +196,23 @@ function getCompactDescription(tx) {
   }
 }
 
-function getCompactAmount(tx, currency, style) {
+function getPrimaryAmount(tx, currency) {
   const converted = hasConversion(tx);
-  switch (tx.type) {
-    case 'trade': {
-      const amt = converted ? tx.original_amount : tx.total;
-      const cur = converted ? tx.original_currency : currency;
-      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    case 'dividend': {
-      const amt = converted ? tx.original_amount : tx.amount;
-      const cur = converted ? tx.original_currency : currency;
-      return `+${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    case 'forex':
-      return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
-    case 'cash': {
-      const amt = converted ? tx.original_amount : tx.amount;
-      const cur = converted ? tx.original_currency : currency;
-      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    default:
-      return '';
+  const fallback = tx.type === 'trade' ? tx.total : tx.amount;
+  return {
+    amount: converted ? tx.original_amount : fallback,
+    currency: converted ? tx.original_currency : currency,
+  };
+}
+
+function getCompactAmount(tx, currency, style) {
+  if (tx.type === 'forex') {
+    return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
   }
+
+  const { amount, currency: cur } = getPrimaryAmount(tx, currency);
+  const sign = tx.type === 'dividend' ? '+' : style.sign;
+  return `${sign}${formatCurrency(Math.abs(amount), cur)}`;
 }
 
 // ============================================
@@ -226,6 +220,7 @@ function getCompactAmount(tx, currency, style) {
 // ============================================
 
 const BADGE_CLASS = 'text-[10px] font-bold uppercase tracking-wide leading-[1.6] px-1.5 py-px rounded';
+const SYMBOL_CLASS = 'text-[13px] font-semibold text-[var(--text-primary)]';
 const DETAIL_TEXT_CLASS = 'text-[12px] text-[var(--text-tertiary)] mt-0.5 truncate';
 const FEE_TEXT_CLASS = 'text-[12px] text-[var(--text-faint)] mt-1';
 const AMOUNT_CLASS = 'text-[15px] font-bold font-mono tabular-nums';
@@ -243,7 +238,7 @@ function renderDetailedTradeContent(tx, style, currency) {
     <>
       <div className="flex items-center gap-2">
         <DetailBadge label={tx.side} style={style} />
-        <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <span className={SYMBOL_CLASS}>{tx.symbol}</span>
       </div>
       <p className={cn(DETAIL_TEXT_CLASS, 'font-mono tabular-nums')}>
         {tx.quantity} × {formatCurrency(tx.price, currency)}
@@ -260,7 +255,7 @@ function renderDetailedDividendContent(tx, style) {
     <>
       <div className="flex items-center gap-2">
         <DetailBadge label="DIVIDEND" style={style} />
-        <span className="text-[13px] font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <span className={SYMBOL_CLASS}>{tx.symbol}</span>
       </div>
       <p className={DETAIL_TEXT_CLASS}>{tx.description}</p>
     </>
@@ -272,7 +267,7 @@ function renderDetailedForexContent(tx, style) {
     <>
       <div className="flex items-center gap-2">
         <DetailBadge label="FX" style={style} />
-        <span className="text-[13px] font-semibold text-[var(--text-primary)]">
+        <span className={SYMBOL_CLASS}>
           {tx.from_currency} {'\u2192'} {tx.to_currency}
         </span>
       </div>
@@ -324,59 +319,32 @@ function ConvertedAmountLine({ amount, currency }) {
 }
 
 function renderDetailedAmount(tx, style, currency) {
-  const converted = hasConversion(tx);
-
-  switch (tx.type) {
-    case 'trade': {
-      const primaryAmount = converted ? tx.original_amount : tx.total;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn(AMOUNT_CLASS, style.text)}>
-            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.total} currency={currency} />}
-        </>
-      );
-    }
-    case 'dividend': {
-      const primaryAmount = converted ? tx.original_amount : tx.amount;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn(AMOUNT_CLASS, style.text)}>
-            +{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
-        </>
-      );
-    }
-    case 'forex':
-      return (
-        <>
-          <p className={cn(AMOUNT_CLASS, style.text)}>
-            {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
-          </p>
-          <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
-            from {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
-          </p>
-        </>
-      );
-    case 'cash': {
-      const primaryAmount = converted ? tx.original_amount : tx.amount;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn(AMOUNT_CLASS, style.text)}>
-            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
-        </>
-      );
-    }
-    default:
-      return null;
+  if (tx.type === 'forex') {
+    return (
+      <>
+        <p className={cn(AMOUNT_CLASS, style.text)}>
+          {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
+        </p>
+        <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+          from {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
+        </p>
+      </>
+    );
   }
+
+  const converted = hasConversion(tx);
+  const { amount, currency: primaryCurrency } = getPrimaryAmount(tx, currency);
+  const sign = tx.type === 'dividend' ? '+' : style.sign;
+  const convertedFallback = tx.type === 'trade' ? tx.total : tx.amount;
+
+  return (
+    <>
+      <p className={cn(AMOUNT_CLASS, style.text)}>
+        {sign}{formatCurrency(Math.abs(amount), primaryCurrency)}
+      </p>
+      {converted && <ConvertedAmountLine amount={convertedFallback} currency={currency} />}
+    </>
+  );
 }
 
 // ============================================
@@ -444,8 +412,8 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
       )}
     >
       <div className="flex items-start gap-3 min-w-0">
-        <div className={cn('w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0', style.bg)}>
-          <Icon className={cn('w-[18px] h-[18px]', style.text)} />
+        <div className={cn('size-9 rounded-[10px] flex items-center justify-center flex-shrink-0', style.bg)}>
+          <Icon className={cn('size-[18px]', style.text)} />
         </div>
         <div className="min-w-0 flex-1">
           {renderDetailedContent(tx, style, txCurrency)}

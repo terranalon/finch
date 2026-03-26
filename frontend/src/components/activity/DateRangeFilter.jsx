@@ -4,11 +4,11 @@ import { CalendarIcon, ChevronDownIcon } from './icons';
 import { useClickOutside } from '../../hooks/useClickOutside';
 
 const DATE_RANGES = [
-  { id: 'all', label: 'All Time', days: null },
-  { id: '7d', label: 'Last 7 Days', days: 7 },
-  { id: '30d', label: 'Last 30 Days', days: 30 },
-  { id: '90d', label: 'Last 90 Days', days: 90 },
-  { id: 'ytd', label: 'Year to Date', days: 'ytd' },
+  { id: 'all', label: 'All Time' },
+  { id: '7d', label: 'Last 7 Days' },
+  { id: '30d', label: 'Last 30 Days' },
+  { id: '90d', label: 'Last 90 Days' },
+  { id: 'ytd', label: 'Year to Date' },
 ];
 
 const DATE_INPUT_CLASS =

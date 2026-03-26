@@ -10,6 +10,7 @@ import {
   MinusCircleIcon,
   ReceiptPercentIcon,
   ExternalLinkIcon,
+  XMarkIcon,
 } from '../activity/icons';
 
 const CURRENCY_SYMBOLS = { USD: '$', EUR: '\u20AC', GBP: '\u00A3', ILS: '\u20AA', JPY: '\u00A5', CHF: 'CHF ' };
@@ -22,17 +23,9 @@ function formatRate(rate) {
   return parseFloat(rate.toFixed(4)).toString();
 }
 
-function formatShortDate(dateStr) {
+function formatDateShort(dateStr) {
   const date = new Date(dateStr + 'T00:00:00');
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-    </svg>
-  );
 }
 
 const STYLE_CONFIG = {
@@ -127,18 +120,16 @@ function ViewAssetButton({ symbol, onClose }) {
   );
 }
 
-function getPrimaryAmount(tx, hasOriginal, amountField) {
-  return Math.abs(hasOriginal ? tx.original_amount : tx[amountField]);
+function getPrimaryDisplay(tx, converted, amountField) {
+  const amount = Math.abs(converted ? tx.original_amount : tx[amountField]);
+  const currency = converted ? tx.original_currency : tx.currency;
+  const convertedAmount = converted ? Math.abs(tx[amountField]) : null;
+  return { amount, currency, convertedAmount };
 }
 
-function getPrimaryCurrency(tx, hasOriginal) {
-  return hasOriginal ? tx.original_currency : tx.currency;
-}
-
-function TradeDetails({ tx, style, hasOriginal, onClose }) {
+function TradeDetails({ tx, style, converted, onClose }) {
   const isBuy = tx.side === 'BUY';
-  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'total');
-  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+  const { amount, currency, convertedAmount } = getPrimaryDisplay(tx, converted, 'total');
   const subtotal = tx.total - (tx.fee || 0);
 
   return (
@@ -147,10 +138,10 @@ function TradeDetails({ tx, style, hasOriginal, onClose }) {
       <SummaryCard
         label={`Total ${isBuy ? 'Cost' : 'Proceeds'}`}
         sign={style.sign}
-        amount={primaryAmount}
-        currency={primaryCurrency}
+        amount={amount}
+        currency={currency}
         style={style}
-        convertedAmount={hasOriginal ? Math.abs(tx.total) : null}
+        convertedAmount={convertedAmount}
         convertedCurrency={tx.currency}
       />
       <div>
@@ -159,7 +150,7 @@ function TradeDetails({ tx, style, hasOriginal, onClose }) {
         <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
         <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
         {tx.fee > 0 && <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />}
-        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Date" value={formatDateShort(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
         {tx.notes && (
           <div className="pt-3">
@@ -173,9 +164,8 @@ function TradeDetails({ tx, style, hasOriginal, onClose }) {
   );
 }
 
-function DividendDetails({ tx, style, hasOriginal, onClose }) {
-  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'amount');
-  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+function DividendDetails({ tx, style, converted, onClose }) {
+  const { amount, currency, convertedAmount } = getPrimaryDisplay(tx, converted, 'amount');
 
   return (
     <>
@@ -183,18 +173,18 @@ function DividendDetails({ tx, style, hasOriginal, onClose }) {
       <SummaryCard
         label="Dividend Received"
         sign="+"
-        amount={primaryAmount}
-        currency={primaryCurrency}
+        amount={amount}
+        currency={currency}
         style={style}
-        convertedAmount={hasOriginal ? Math.abs(tx.amount) : null}
+        convertedAmount={convertedAmount}
         convertedCurrency={tx.currency}
       />
       <div>
         <DetailRow label="Description" value={tx.description} />
         {tx.shares_held && <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />}
         {tx.dividend_per_share && <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />}
-        <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
-        {tx.ex_date && <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />}
+        <DetailRow label="Payment Date" value={formatDateShort(tx.date)} />
+        {tx.ex_date && <DetailRow label="Ex-Dividend Date" value={formatDateShort(tx.ex_date)} />}
         <DetailRow label="Account" value={tx.account_name} />
       </div>
       <ViewAssetButton symbol={tx.symbol} onClose={onClose} />
@@ -228,17 +218,16 @@ function ForexDetails({ tx, style }) {
       <div>
         <DetailRow label="Exchange Rate" value={`1 ${tx.from_currency} = ${formatRate(tx.exchange_rate)} ${tx.to_currency}`} />
         {tx.fee > 0 && <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />}
-        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Date" value={formatDateShort(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
       </div>
     </>
   );
 }
 
-function CashDetails({ tx, style, hasOriginal }) {
+function CashDetails({ tx, style, converted }) {
   const displayType = tx.cash_type || (tx.activity_type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal');
-  const primaryAmount = getPrimaryAmount(tx, hasOriginal, 'amount');
-  const primaryCurrency = getPrimaryCurrency(tx, hasOriginal);
+  const { amount, currency, convertedAmount } = getPrimaryDisplay(tx, converted, 'amount');
 
   return (
     <>
@@ -246,46 +235,46 @@ function CashDetails({ tx, style, hasOriginal }) {
       <SummaryCard
         label="Amount"
         sign={style.sign}
-        amount={primaryAmount}
-        currency={primaryCurrency}
+        amount={amount}
+        currency={currency}
         style={style}
-        convertedAmount={hasOriginal ? Math.abs(tx.amount) : null}
+        convertedAmount={convertedAmount}
         convertedCurrency={tx.currency}
       />
       <div>
         <DetailRow label="Type" value={displayType} />
         {tx.fee > 0 && <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />}
         {tx.reference && <DetailRow label="Reference" value={tx.reference} />}
-        <DetailRow label="Date" value={formatShortDate(tx.date)} />
+        <DetailRow label="Date" value={formatDateShort(tx.date)} />
         <DetailRow label="Account" value={tx.account_name} />
       </div>
     </>
   );
 }
 
-function renderDetails(tx, style, hasOriginal, onClose) {
+function renderDetails(tx, style, converted, onClose) {
   switch (tx.type) {
     case 'trade':
-      return <TradeDetails tx={tx} style={style} hasOriginal={hasOriginal} onClose={onClose} />;
+      return <TradeDetails tx={tx} style={style} converted={converted} onClose={onClose} />;
     case 'dividend':
-      return <DividendDetails tx={tx} style={style} hasOriginal={hasOriginal} onClose={onClose} />;
+      return <DividendDetails tx={tx} style={style} converted={converted} onClose={onClose} />;
     case 'forex':
       return <ForexDetails tx={tx} style={style} />;
     case 'cash':
-      return <CashDetails tx={tx} style={style} hasOriginal={hasOriginal} />;
+      return <CashDetails tx={tx} style={style} converted={converted} />;
     default:
       return null;
   }
 }
 
-export function TransactionDetailSidebar({ transaction: tx, currency, onClose }) {
+export function TransactionDetailSidebar({ transaction: tx, onClose }) {
   const isOpen = !!tx;
   useSlideover(isOpen, onClose);
 
   if (!isOpen) return null;
 
   const style = getStyle(tx);
-  const hasOriginal = hasConversion(tx);
+  const converted = hasConversion(tx);
 
   return (
     <>
@@ -300,11 +289,11 @@ export function TransactionDetailSidebar({ transaction: tx, currency, onClose })
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex-shrink-0"
           >
-            <CloseIcon />
+            <XMarkIcon className="w-[18px] h-[18px]" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {renderDetails(tx, style, hasOriginal, onClose)}
+          {renderDetails(tx, style, converted, onClose)}
         </div>
       </div>
     </>

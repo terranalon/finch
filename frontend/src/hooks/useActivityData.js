@@ -8,6 +8,14 @@ async function fetchJson(endpoint, label) {
   return res.json();
 }
 
+function buildQuery(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null) search.set(key, value);
+  }
+  return `?${search.toString()}`;
+}
+
 export function useActivityData() {
   const { currency: globalCurrency } = useCurrency();
   const { selectedPortfolioId, portfolioCurrency } = usePortfolio();
@@ -25,16 +33,16 @@ export function useActivityData() {
       setLoading(true);
       setError(null);
 
-      const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
-      const currencyParam = currency ? `&display_currency=${currency}` : '';
+      const shared = { portfolio_id: selectedPortfolioId };
+      const withCurrency = { ...shared, display_currency: currency };
 
       try {
         const [accountsData, tradesData, dividendsData, forexData, cashData] = await Promise.all([
-          fetchJson(`/accounts?is_active=true${portfolioParam}`, 'accounts'),
-          fetchJson(`/transactions/trades?limit=500${portfolioParam}${currencyParam}`, 'trades'),
-          fetchJson(`/transactions/dividends?limit=500${portfolioParam}${currencyParam}`, 'dividends'),
-          fetchJson(`/transactions/forex?limit=500${portfolioParam}`, 'forex'),
-          fetchJson(`/transactions/cash?limit=500${portfolioParam}${currencyParam}`, 'cash'),
+          fetchJson(`/accounts${buildQuery({ is_active: true, ...shared })}`, 'accounts'),
+          fetchJson(`/transactions/trades${buildQuery({ limit: 500, ...withCurrency })}`, 'trades'),
+          fetchJson(`/transactions/dividends${buildQuery({ limit: 500, ...withCurrency })}`, 'dividends'),
+          fetchJson(`/transactions/forex${buildQuery({ limit: 500, ...shared })}`, 'forex'),
+          fetchJson(`/transactions/cash${buildQuery({ limit: 500, ...withCurrency })}`, 'cash'),
         ]);
 
         if (cancelled) return;
