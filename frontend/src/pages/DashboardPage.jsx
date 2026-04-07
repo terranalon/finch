@@ -41,9 +41,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left Column – 75% */}
-      <div className="w-3/4 overflow-y-auto p-5 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex flex-col min-[900px]:flex-row h-full min-[900px]:overflow-hidden">
+      {/* Left Column */}
+      <div className="min-[900px]:flex-1 min-[900px]:overflow-y-auto p-5 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <SummaryStrip
           summary={summary}
           snapshots={snapshots}
@@ -82,8 +82,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Right Column – 25% */}
-      <div className="w-1/4 min-w-[280px] p-5 pl-0 flex flex-col gap-3.5 overflow-y-auto h-full [scrollbar-width:thin]">
+      {/* Right Column */}
+      <div className="px-5 pb-5 min-[900px]:py-5 min-[900px]:pr-5 min-[900px]:pl-0 min-[900px]:w-[300px] min-[900px]:shrink-0 flex flex-col gap-3.5 min-[900px]:overflow-y-auto min-[900px]:h-full [scrollbar-width:thin]">
         <MarketPulseCard />
 
         <RecentActivityCard onTradeClick={handleTradeClick} />

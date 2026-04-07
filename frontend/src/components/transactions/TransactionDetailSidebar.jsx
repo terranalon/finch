@@ -40,6 +40,7 @@ const STYLE_CONFIG = {
     INTEREST: { bg: 'bg-[var(--positive-muted)]', text: 'text-[var(--positive)]', icon: BanknotesIcon, sign: '+' },
     FEE: { bg: 'bg-[var(--negative-muted)]', text: 'text-[var(--negative)]', icon: ReceiptPercentIcon, sign: '-' },
     WITHDRAWAL: { bg: 'bg-[var(--amber-muted)]', text: 'text-[var(--amber)]', icon: MinusCircleIcon, sign: '-' },
+    TRANSFER: { bg: 'bg-[var(--slate-muted)]', text: 'text-[var(--slate-clr)]', icon: ArrowsRightLeftIcon, sign: '' },
   },
 };
 
@@ -146,7 +147,7 @@ function TradeDetails({ tx, style, converted, onClose }) {
       />
       <div>
         <DetailRow label="Transaction Type" value={isBuy ? 'Buy' : 'Sell'} />
-        <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
+        <DetailRow label="Quantity" value={`${tx.quantity} ${tx.asset_class === 'Crypto' ? 'units' : 'shares'}`} />
         <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
         <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
         {tx.fee > 0 && <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />}
