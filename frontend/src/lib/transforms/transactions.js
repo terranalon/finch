@@ -37,6 +37,7 @@ export function transformTrade(trade) {
     total: parseFloat(trade.total),
     fee: parseFloat(trade.fees || 0),
     currency: trade.currency || 'USD',
+    asset_class: trade.asset_class || null,
     account_name: trade.account_name,
     notes: trade.notes,
     original_amount: trade.original_amount != null ? parseFloat(trade.original_amount) : null,

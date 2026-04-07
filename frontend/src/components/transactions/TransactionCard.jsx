@@ -75,57 +75,57 @@ function ReceiptPercentIcon({ className }) {
 const STYLE_CONFIG = {
   trade: {
     BUY: {
-      bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-      text: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-[var(--positive-muted)]',
+      text: 'text-[var(--positive)]',
       icon: ArrowDownIcon,
       sign: '-',
     },
     SELL: {
-      bg: 'bg-red-50 dark:bg-red-950/40',
-      text: 'text-red-600 dark:text-red-400',
+      bg: 'bg-[var(--negative-muted)]',
+      text: 'text-[var(--negative)]',
       icon: ArrowUpIcon,
       sign: '+',
     },
   },
   dividend: {
-    bg: 'bg-teal-50 dark:bg-teal-950/40',
-    text: 'text-teal-600 dark:text-teal-400',
+    bg: 'bg-[var(--teal-muted)]',
+    text: 'text-[var(--teal)]',
     icon: BanknotesIcon,
     sign: '+',
   },
   forex: {
-    bg: 'bg-violet-50 dark:bg-violet-950/40',
-    text: 'text-violet-600 dark:text-violet-400',
+    bg: 'bg-[var(--violet-muted)]',
+    text: 'text-[var(--violet)]',
     icon: ArrowsRightLeftIcon,
   },
   cash: {
     DEPOSIT: {
-      bg: 'bg-blue-50 dark:bg-blue-950/40',
-      text: 'text-blue-600 dark:text-blue-400',
+      bg: 'bg-[var(--blue-muted)]',
+      text: 'text-[var(--blue)]',
       icon: PlusCircleIcon,
       sign: '+',
     },
     WITHDRAWAL: {
-      bg: 'bg-amber-50 dark:bg-amber-950/40',
-      text: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-[var(--amber-muted)]',
+      text: 'text-[var(--amber)]',
       icon: MinusCircleIcon,
       sign: '-',
     },
     FEE: {
-      bg: 'bg-red-50 dark:bg-red-950/40',
-      text: 'text-red-600 dark:text-red-400',
+      bg: 'bg-[var(--negative-muted)]',
+      text: 'text-[var(--negative)]',
       icon: ReceiptPercentIcon,
       sign: '-',
     },
     INTEREST: {
-      bg: 'bg-green-50 dark:bg-green-950/40',
-      text: 'text-green-600 dark:text-green-400',
+      bg: 'bg-[var(--positive-muted)]',
+      text: 'text-[var(--positive)]',
       icon: BanknotesIcon,
       sign: '+',
     },
     TRANSFER: {
-      bg: 'bg-slate-50 dark:bg-slate-950/40',
-      text: 'text-slate-600 dark:text-slate-400',
+      bg: 'bg-[var(--slate-muted)]',
+      text: 'text-[var(--slate-clr)]',
       icon: ArrowsRightLeftIcon,
       sign: '',
     },
@@ -196,51 +196,55 @@ function getCompactDescription(tx) {
   }
 }
 
-function getCompactAmount(tx, currency, style) {
+function getPrimaryAmount(tx, currency) {
   const converted = hasConversion(tx);
-  switch (tx.type) {
-    case 'trade': {
-      const amt = converted ? tx.original_amount : tx.total;
-      const cur = converted ? tx.original_currency : currency;
-      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    case 'dividend': {
-      const amt = converted ? tx.original_amount : tx.amount;
-      const cur = converted ? tx.original_currency : currency;
-      return `+${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    case 'forex':
-      return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
-    case 'cash': {
-      const amt = converted ? tx.original_amount : tx.amount;
-      const cur = converted ? tx.original_currency : currency;
-      return `${style.sign}${formatCurrency(Math.abs(amt), cur)}`;
-    }
-    default:
-      return '';
+  const fallback = tx.type === 'trade' ? tx.total : tx.amount;
+  return {
+    amount: converted ? tx.original_amount : fallback,
+    currency: converted ? tx.original_currency : currency,
+  };
+}
+
+function getCompactAmount(tx, currency, style) {
+  if (tx.type === 'forex') {
+    return `${Math.abs(tx.to_amount).toLocaleString()} ${tx.to_currency}`;
   }
+
+  const { amount, currency: cur } = getPrimaryAmount(tx, currency);
+  const sign = tx.type === 'dividend' ? '+' : style.sign;
+  return `${sign}${formatCurrency(Math.abs(amount), cur)}`;
 }
 
 // ============================================
 // DETAILED VARIANT HELPERS
 // ============================================
 
+const BADGE_CLASS = 'text-[10px] font-bold uppercase tracking-wide leading-[1.6] px-1.5 py-px rounded';
+const SYMBOL_CLASS = 'text-[13px] font-semibold text-[var(--text-primary)]';
+const DETAIL_TEXT_CLASS = 'text-[12px] text-[var(--text-tertiary)] mt-0.5 truncate';
+const FEE_TEXT_CLASS = 'text-[12px] text-[var(--text-faint)] mt-1';
+const AMOUNT_CLASS = 'text-[15px] font-bold font-mono tabular-nums';
+
+function DetailBadge({ label, style }) {
+  return (
+    <span className={cn(BADGE_CLASS, style.bg, style.text)}>
+      {label}
+    </span>
+  );
+}
+
 function renderDetailedTradeContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
-          {tx.side}
-        </span>
-        <span className="font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <DetailBadge label={tx.side} style={style} />
+        <span className={SYMBOL_CLASS}>{tx.symbol}</span>
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1 font-mono tabular-nums">
+      <p className={cn(DETAIL_TEXT_CLASS, 'font-mono tabular-nums')}>
         {tx.quantity} × {formatCurrency(tx.price, currency)}
       </p>
       {tx.fee > 0 && (
-        <p className="text-xs text-[var(--text-tertiary)] mt-1">
-          Fee: {formatCurrency(tx.fee, currency)}
-        </p>
+        <p className={FEE_TEXT_CLASS}>Fee: {formatCurrency(tx.fee, currency)}</p>
       )}
     </>
   );
@@ -250,12 +254,10 @@ function renderDetailedDividendContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
-          DIVIDEND
-        </span>
-        <span className="font-semibold text-[var(--text-primary)]">{tx.symbol}</span>
+        <DetailBadge label="DIVIDEND" style={style} />
+        <span className={SYMBOL_CLASS}>{tx.symbol}</span>
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
+      <p className={DETAIL_TEXT_CLASS}>{tx.description}</p>
     </>
   );
 }
@@ -264,14 +266,12 @@ function renderDetailedForexContent(tx, style) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
-          FX
-        </span>
-        <span className="font-semibold text-[var(--text-primary)]">
+        <DetailBadge label="FX" style={style} />
+        <span className={SYMBOL_CLASS}>
           {tx.from_currency} {'\u2192'} {tx.to_currency}
         </span>
       </div>
-      <p className="text-xs text-[var(--text-tertiary)] mt-1">
+      <p className={FEE_TEXT_CLASS}>
         Rate: {formatRate(tx.exchange_rate)}
         {tx.fee > 0 && (
           <span> · Fee: {getCurrencySymbol(tx.from_currency)}{tx.fee}</span>
@@ -285,15 +285,11 @@ function renderDetailedCashContent(tx, style, currency) {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded', style.bg, style.text)}>
-          {tx.cash_type || tx.activity_type}
-        </span>
+        <DetailBadge label={tx.cash_type || tx.activity_type} style={style} />
       </div>
-      <p className="text-sm text-[var(--text-secondary)] mt-1">{tx.description}</p>
+      <p className={DETAIL_TEXT_CLASS}>{tx.description}</p>
       {tx.fee > 0 && (
-        <p className="text-xs text-[var(--text-tertiary)] mt-1">
-          Fee: {formatCurrency(tx.fee, currency)}
-        </p>
+        <p className={FEE_TEXT_CLASS}>Fee: {formatCurrency(tx.fee, currency)}</p>
       )}
     </>
   );
@@ -316,66 +312,39 @@ function renderDetailedContent(tx, style, currency) {
 
 function ConvertedAmountLine({ amount, currency }) {
   return (
-    <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+    <p className="text-[10px] text-[var(--text-faint)] font-mono mt-px">
       {formatCurrency(Math.abs(amount), currency)}
     </p>
   );
 }
 
 function renderDetailedAmount(tx, style, currency) {
-  const converted = hasConversion(tx);
-
-  switch (tx.type) {
-    case 'trade': {
-      const primaryAmount = converted ? tx.original_amount : tx.total;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.total} currency={currency} />}
-        </>
-      );
-    }
-    case 'dividend': {
-      const primaryAmount = converted ? tx.original_amount : tx.amount;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-            +{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
-        </>
-      );
-    }
-    case 'forex':
-      return (
-        <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-            {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
-          </p>
-          <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
-            from {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
-          </p>
-        </>
-      );
-    case 'cash': {
-      const primaryAmount = converted ? tx.original_amount : tx.amount;
-      const primaryCurrency = converted ? tx.original_currency : currency;
-      return (
-        <>
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
-            {style.sign}{formatCurrency(Math.abs(primaryAmount), primaryCurrency)}
-          </p>
-          {converted && <ConvertedAmountLine amount={tx.amount} currency={currency} />}
-        </>
-      );
-    }
-    default:
-      return null;
+  if (tx.type === 'forex') {
+    return (
+      <>
+        <p className={cn(AMOUNT_CLASS, style.text)}>
+          {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
+        </p>
+        <p className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
+          from {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
+        </p>
+      </>
+    );
   }
+
+  const converted = hasConversion(tx);
+  const { amount, currency: primaryCurrency } = getPrimaryAmount(tx, currency);
+  const sign = tx.type === 'dividend' ? '+' : style.sign;
+  const convertedFallback = tx.type === 'trade' ? tx.total : tx.amount;
+
+  return (
+    <>
+      <p className={cn(AMOUNT_CLASS, style.text)}>
+        {sign}{formatCurrency(Math.abs(amount), primaryCurrency)}
+      </p>
+      {converted && <ConvertedAmountLine amount={convertedFallback} currency={currency} />}
+    </>
+  );
 }
 
 // ============================================
@@ -419,7 +388,7 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
           </div>
         </div>
         <div className="text-right">
-          <p className={cn('font-mono tabular-nums font-semibold', style.text)}>
+          <p className={cn(AMOUNT_CLASS, style.text)}>
             {getCompactAmount(tx, txCurrency, style)}
           </p>
           {isConverted && (
@@ -437,23 +406,23 @@ export function TransactionCard({ tx, variant = 'detailed', currency, onClick })
     <div
       onClick={onClick}
       className={cn(
-        'flex items-start justify-between p-4 bg-[var(--bg-secondary)] rounded-lg',
-        'border border-[var(--border-primary)] shadow-sm dark:shadow-none',
+        'flex items-start justify-between px-4 py-3.5 gap-3',
+        'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg',
         onClick && 'hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer'
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className={cn('p-2 rounded-lg', style.bg)}>
-          <Icon className={cn('size-4', style.text)} />
+      <div className="flex items-start gap-3 min-w-0">
+        <div className={cn('size-9 rounded-[10px] flex items-center justify-center flex-shrink-0', style.bg)}>
+          <Icon className={cn('size-[18px]', style.text)} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           {renderDetailedContent(tx, style, txCurrency)}
           {tx.account_name && (
-            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{tx.account_name}</p>
+            <p className="text-[11px] text-[var(--text-faint)] mt-0.5">{tx.account_name}</p>
           )}
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right flex-shrink-0 flex flex-col justify-center self-stretch">
         {renderDetailedAmount(tx, style, txCurrency)}
       </div>
     </div>

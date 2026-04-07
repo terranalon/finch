@@ -10,8 +10,9 @@ import {
   RecentActivityCard,
   AllocationDonutCard,
   AssetDetailSidebar,
-  TradeDetailSidebar,
 } from '../components/dashboard';
+import { TransactionDetailSidebar } from '../components/transactions';
+import { transformTrade } from '../lib';
 
 export default function DashboardPage() {
   const { summary, snapshots, cashFlows, loading, error, currency } = useDashboardData();
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   const handleAssetClick = (asset) => setSidebarAsset(asset);
   const handleCloseSidebar = () => setSidebarAsset(null);
 
-  const handleTradeClick = (trade) => setSidebarTrade(trade);
+  const handleTradeClick = (trade) => setSidebarTrade(transformTrade(trade));
   const handleCloseTradePanel = () => setSidebarTrade(null);
 
   if (error) {
@@ -103,11 +104,10 @@ export default function DashboardPage() {
       />
 
       {/* Trade Detail Slide-Over */}
-      <TradeDetailSidebar
-        trade={sidebarTrade}
-        isOpen={!!sidebarTrade}
-        onClose={handleCloseTradePanel}
+      <TransactionDetailSidebar
+        transaction={sidebarTrade}
         currency={currency}
+        onClose={handleCloseTradePanel}
       />
     </div>
   );

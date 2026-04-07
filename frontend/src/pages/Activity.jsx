@@ -1,921 +1,125 @@
-/**
- * Activity Page - Finch Redesign
- *
- * Purpose: Complete transaction history as card-based timeline
- *
- * Wired to real API endpoints:
- * - GET /api/transactions/trades
- * - GET /api/transactions/dividends
- * - GET /api/transactions/forex
- * - GET /api/transactions/cash
- * - GET /api/accounts?is_active=true
- */
-
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { cn, formatCurrency, api, transformTrade, transformDividend, transformForex, transformCash, hasConversion } from '../lib';
-import { useCurrency, usePortfolio } from '../contexts';
-import { PageContainer } from '../components/layout';
-import { MultiSelectFilter, Skeleton } from '../components/ui';
-import { TransactionCard } from '../components/transactions';
-import { useClickOutside } from '../hooks/useClickOutside';
+import { useState, useMemo, useEffect } from 'react';
+import { useActivityData } from '../hooks/useActivityData';
+import { PageContainer, PageHeader } from '../components/layout';
+import { Skeleton } from '../components/ui';
+import {
+  ActivityTimeline,
+  DateRangeFilter,
+  FilterPopover,
+  PaginationFooter,
+} from '../components/activity';
+import { TransactionDetailSidebar } from '../components/transactions';
+import { SearchIcon } from '../components/activity/icons';
 
 const TRANSACTION_TYPES = ['Trade', 'Dividend', 'Forex', 'Cash'];
 
-// ============================================
-// ICONS
-// ============================================
+const TYPE_MAP = { trade: 'Trade', dividend: 'Dividend', forex: 'Forex', cash: 'Cash' };
 
-function SearchIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-    </svg>
-  );
+const PRESET_DAYS = { '7d': 7, '30d': 30, '90d': 90 };
+
+function getDateCutoff(dateRange) {
+  if (dateRange.type === 'custom' && dateRange.startDate && dateRange.endDate) {
+    return { start: new Date(dateRange.startDate), end: new Date(dateRange.endDate) };
+  }
+  if (dateRange.type !== 'preset' || dateRange.preset === 'all') return null;
+
+  const now = new Date();
+  if (dateRange.preset === 'ytd') {
+    return { start: new Date(now.getFullYear(), 0, 1), end: null };
+  }
+  const days = PRESET_DAYS[dateRange.preset];
+  if (!days) return null;
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - days);
+  return { start: cutoff, end: null };
 }
 
-function XMarkIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-    </svg>
-  );
+function isWithinDateRange(txDate, cutoff) {
+  if (!cutoff) return true;
+  if (txDate < cutoff.start) return false;
+  if (cutoff.end && txDate > cutoff.end) return false;
+  return true;
 }
-
-function ChevronLeftIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-    </svg>
-  );
-}
-
-function ChevronDoubleLeftIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5" />
-    </svg>
-  );
-}
-
-function ChevronDoubleRightIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-    </svg>
-  );
-}
-
-function ArrowUpIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-    </svg>
-  );
-}
-
-function ArrowDownIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
-    </svg>
-  );
-}
-
-function PlusCircleIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
-function MinusCircleIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-    </svg>
-  );
-}
-
-function ReceiptPercentIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m9 14.25 6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0c1.1.128 1.907 1.077 1.907 2.185ZM9.75 9h.008v.008H9.75V9Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 4.5h.008v.008h-.008V13.5Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-    </svg>
-  );
-}
-
-function BanknotesIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
-    </svg>
-  );
-}
-
-function ArrowsRightLeftIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-    </svg>
-  );
-}
-
-function CalendarIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-    </svg>
-  );
-}
-
-// ============================================
-// DATE RANGE PRESETS
-// ============================================
-
-const DATE_RANGES = [
-  { id: 'all', label: 'All Time', days: null },
-  { id: '7d', label: 'Last 7 Days', days: 7 },
-  { id: '30d', label: 'Last 30 Days', days: 30 },
-  { id: '90d', label: 'Last 90 Days', days: 90 },
-  { id: 'ytd', label: 'Year to Date', days: 'ytd' },
-];
-
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-const getCurrencySymbol = (code) => {
-  const symbols = { USD: '$', EUR: '€', GBP: '£', ILS: '₪', JPY: '¥', CHF: 'CHF ' };
-  return symbols[code] || code + ' ';
-};
-
-// Format rate: trim trailing zeros but keep up to 4 decimal places
-const formatRate = (rate) => {
-  const formatted = rate.toFixed(4);
-  return parseFloat(formatted).toString();
-};
-
-// Format date for display
-const formatDateHeader = (dateStr) => {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-const formatShortDate = (dateStr) => {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-// ============================================
-// SLIDE-OUT DETAIL PANEL
-// ============================================
-
-function TransactionDetailPanel({ transaction: tx, currency, onClose }) {
-  if (!tx) return null;
-
-  const hasOriginal = hasConversion(tx);
-
-  const renderTradeDetails = () => {
-    const isBuy = tx.side === 'BUY';
-    const primaryTotal = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.total);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-    // Compute true subtotal (qty * price) by subtracting the fee from total
-    const subtotal = tx.total - (tx.fee || 0);
-
-    return (
-      <>
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className={cn(
-            'p-3 rounded-xl',
-            isBuy ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-red-50 dark:bg-red-950/40'
-          )}>
-            {isBuy ? (
-              <ArrowDownIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <ArrowUpIcon className="w-6 h-6 text-red-600 dark:text-red-400" />
-            )}
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
-          </div>
-        </div>
-
-        {/* Summary */}
-        <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Total {isBuy ? 'Cost' : 'Proceeds'}</span>
-            <div className="text-right">
-              <span className={cn(
-                'text-2xl font-semibold font-mono tabular-nums',
-                isBuy ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-              )}>
-                {isBuy ? '-' : '+'}{formatCurrency(primaryTotal, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-tertiary)] font-mono">
-                  {formatCurrency(Math.abs(tx.total), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Details Grid */}
-        <div className="space-y-4">
-          <DetailRow label="Transaction Type" value={isBuy ? 'Buy' : 'Sell'} />
-          <DetailRow label="Quantity" value={`${tx.quantity} shares`} />
-          <DetailRow label="Price per Share" value={formatCurrency(tx.price, tx.currency)} />
-          <DetailRow label="Subtotal" value={formatCurrency(subtotal, tx.currency)} />
-          {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-          )}
-          <div className="h-px bg-[var(--border-primary)] my-2" />
-          <DetailRow label="Date" value={formatShortDate(tx.date)} />
-          <DetailRow label="Account" value={tx.account_name} />
-          {tx.notes && (
-            <>
-              <div className="h-px bg-[var(--border-primary)] my-2" />
-              <div>
-                <p className="text-xs text-[var(--text-tertiary)] mb-1">Notes</p>
-                <p className="text-sm text-[var(--text-secondary)]">{tx.notes}</p>
-              </div>
-            </>
-          )}
-        </div>
-      </>
-    );
-  };
-
-  const renderDividendDetails = () => {
-    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-
-    return (
-      <>
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40">
-            <BanknotesIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">{tx.symbol}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.name}</p>
-          </div>
-        </div>
-
-        {/* Summary */}
-        <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Dividend Received</span>
-            <div className="text-right">
-              <span className="text-2xl font-semibold font-mono tabular-nums text-teal-600 dark:text-teal-400">
-                +{formatCurrency(primaryAmount, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-tertiary)] font-mono">
-                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Details Grid */}
-        <div className="space-y-4">
-          <DetailRow label="Description" value={tx.description} />
-          {tx.shares_held && (
-            <DetailRow label="Shares Held" value={`${tx.shares_held} shares`} />
-          )}
-          {tx.dividend_per_share && (
-            <DetailRow label="Per Share" value={formatCurrency(tx.dividend_per_share, tx.currency)} />
-          )}
-          <div className="h-px bg-[var(--border-primary)] my-2" />
-          <DetailRow label="Payment Date" value={formatShortDate(tx.date)} />
-          {tx.ex_date && (
-            <DetailRow label="Ex-Dividend Date" value={formatShortDate(tx.ex_date)} />
-          )}
-          <DetailRow label="Account" value={tx.account_name} />
-        </div>
-      </>
-    );
-  };
-
-  const renderForexDetails = () => (
-    <>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-950/40">
-          <ArrowsRightLeftIcon className="w-6 h-6 text-violet-600 dark:text-violet-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-            {tx.from_currency} → {tx.to_currency}
-          </h2>
-          <p className="text-sm text-[var(--text-secondary)]">Currency Exchange</p>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
-        <div className="flex justify-between items-center mb-3">
-          <span className="text-sm text-[var(--text-secondary)]">You Received</span>
-          <span className="text-2xl font-semibold font-mono tabular-nums text-violet-600 dark:text-violet-400">
-            {getCurrencySymbol(tx.to_currency)}{tx.to_amount.toLocaleString()}
-          </span>
-        </div>
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-[var(--text-tertiary)]">You Converted</span>
-          <span className="font-mono tabular-nums text-[var(--text-secondary)]">
-            {getCurrencySymbol(tx.from_currency)}{tx.from_amount.toLocaleString()}
-          </span>
-        </div>
-      </div>
-
-      {/* Details Grid */}
-      <div className="space-y-4">
-        <DetailRow label="Exchange Rate" value={`1 ${tx.from_currency} = ${formatRate(tx.exchange_rate)} ${tx.to_currency}`} />
-        {tx.fee > 0 && (
-          <DetailRow label="Fee" value={`${getCurrencySymbol(tx.from_currency)}${tx.fee}`} />
-        )}
-        <div className="h-px bg-[var(--border-primary)] my-2" />
-        <DetailRow label="Date" value={formatShortDate(tx.date)} />
-        <DetailRow label="Account" value={tx.account_name} />
-      </div>
-    </>
-  );
-
-  const renderCashDetails = () => {
-    const isDeposit = tx.activity_type === 'DEPOSIT';
-    const isFee = tx.activity_type === 'FEE';
-    const isInterest = tx.activity_type === 'INTEREST';
-    const displayType = tx.cash_type || (isDeposit ? 'Deposit' : 'Withdrawal');
-    const primaryAmount = hasOriginal ? Math.abs(tx.original_amount) : Math.abs(tx.amount);
-    const primaryCurrency = hasOriginal ? tx.original_currency : tx.currency;
-
-    // Determine colors and icons based on transaction type
-    const getStyleConfig = () => {
-      if (isDeposit) {
-        return {
-          bgColor: 'bg-blue-50 dark:bg-blue-950/40',
-          textColor: 'text-blue-600 dark:text-blue-400',
-          icon: <PlusCircleIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />,
-          sign: '+',
-        };
-      } else if (isInterest) {
-        return {
-          bgColor: 'bg-green-50 dark:bg-green-950/40',
-          textColor: 'text-green-600 dark:text-green-400',
-          icon: <BanknotesIcon className="w-6 h-6 text-green-600 dark:text-green-400" />,
-          sign: '+',
-        };
-      } else if (isFee) {
-        return {
-          bgColor: 'bg-red-50 dark:bg-red-950/40',
-          textColor: 'text-red-600 dark:text-red-400',
-          icon: <ReceiptPercentIcon className="w-6 h-6 text-red-600 dark:text-red-400" />,
-          sign: '-',
-        };
-      } else {
-        return {
-          bgColor: 'bg-amber-50 dark:bg-amber-950/40',
-          textColor: 'text-amber-600 dark:text-amber-400',
-          icon: <MinusCircleIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />,
-          sign: '-',
-        };
-      }
-    };
-
-    const style = getStyleConfig();
-
-    return (
-      <>
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className={cn('p-3 rounded-xl', style.bgColor)}>
-            {style.icon}
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-              {displayType}
-            </h2>
-            <p className="text-sm text-[var(--text-secondary)]">{tx.description}</p>
-          </div>
-        </div>
-
-        {/* Summary */}
-        <div className="bg-[var(--bg-tertiary)] rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-[var(--text-secondary)]">Amount</span>
-            <div className="text-right">
-              <span className={cn('text-2xl font-semibold font-mono tabular-nums', style.textColor)}>
-                {style.sign}{formatCurrency(primaryAmount, primaryCurrency)}
-              </span>
-              {hasOriginal && (
-                <p className="text-sm text-[var(--text-tertiary)] font-mono">
-                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Details Grid */}
-        <div className="space-y-4">
-          <DetailRow label="Type" value={displayType} />
-          {tx.fee > 0 && (
-            <DetailRow label="Commission/Fee" value={formatCurrency(tx.fee, tx.currency)} />
-          )}
-          {tx.reference && (
-            <DetailRow label="Reference" value={tx.reference} />
-          )}
-          <div className="h-px bg-[var(--border-primary)] my-2" />
-          <DetailRow label="Date" value={formatShortDate(tx.date)} />
-          <DetailRow label="Account" value={tx.account_name} />
-        </div>
-      </>
-    );
-  };
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-[var(--bg-primary)] z-50 shadow-xl overflow-y-auto">
-        {/* Close button */}
-        <div className="sticky top-0 bg-[var(--bg-primary)] p-4 border-b border-[var(--border-primary)] flex justify-between items-center">
-          <span className="text-sm text-[var(--text-tertiary)]">Transaction Details</span>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
-          >
-            <XMarkIcon className="w-5 h-5 text-[var(--text-secondary)]" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {tx.type === 'trade' && renderTradeDetails()}
-          {tx.type === 'dividend' && renderDividendDetails()}
-          {tx.type === 'forex' && renderForexDetails()}
-          {tx.type === 'cash' && renderCashDetails()}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-[var(--text-tertiary)]">{label}</span>
-      <span className="text-sm text-[var(--text-primary)] font-medium">{value}</span>
-    </div>
-  );
-}
-
-// ============================================
-// DATE RANGE FILTER COMPONENT
-// ============================================
-
-function DateRangeFilter({ value, onChange, presets }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showCustom, setShowCustom] = useState(value.type === 'custom');
-  const [customStart, setCustomStart] = useState(value.startDate || '');
-  const [customEnd, setCustomEnd] = useState(value.endDate || '');
-  const dropdownRef = useRef(null);
-
-  useClickOutside(dropdownRef, useCallback(() => setIsOpen(false), []));
-
-  const handlePresetSelect = (preset) => {
-    onChange({ type: 'preset', preset: preset.id, label: preset.label });
-    setShowCustom(false);
-    setIsOpen(false);
-  };
-
-  const handleCustomApply = () => {
-    if (customStart && customEnd) {
-      onChange({
-        type: 'custom',
-        startDate: customStart,
-        endDate: customEnd,
-        label: `${customStart} - ${customEnd}`,
-      });
-      setIsOpen(false);
-    }
-  };
-
-  const displayLabel = value.label || 'All Time';
-  const isCustomActive = value.type === 'custom';
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          'flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer',
-          'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-          'text-[var(--text-primary)] text-sm',
-          'hover:bg-[var(--bg-tertiary)] transition-colors',
-          isCustomActive && 'border-accent'
-        )}
-      >
-        <CalendarIcon className="w-4 h-4 text-[var(--text-tertiary)]" />
-        <span>{displayLabel}</span>
-        <ChevronDownIcon className={cn('w-4 h-4 transition-transform', isOpen && 'rotate-180')} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 min-w-[280px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-lg z-50 py-1">
-          {/* Preset Options */}
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => handlePresetSelect(preset)}
-              className={cn(
-                'flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors cursor-pointer',
-                value.type === 'preset' && value.preset === preset.id
-                  ? 'bg-accent/10 text-accent'
-                  : 'hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-              )}
-            >
-              {preset.label}
-            </button>
-          ))}
-
-          <div className="h-px bg-[var(--border-primary)] my-1" />
-
-          {/* Custom Range Toggle */}
-          <button
-            onClick={() => setShowCustom(!showCustom)}
-            className={cn(
-              'flex items-center justify-between w-full px-3 py-2 text-sm text-left transition-colors cursor-pointer',
-              showCustom || isCustomActive
-                ? 'bg-accent/10 text-accent'
-                : 'hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-            )}
-          >
-            <span>Custom Range</span>
-            <ChevronDownIcon className={cn('w-4 h-4 transition-transform', showCustom && 'rotate-180')} />
-          </button>
-
-          {/* Custom Date Inputs */}
-          {showCustom && (
-            <div className="px-3 py-3 space-y-3">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-xs text-[var(--text-tertiary)] mb-1 block">From</label>
-                  <input
-                    type="date"
-                    value={customStart}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className={cn(
-                      'w-full px-2 py-1.5 rounded text-sm',
-                      'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                      'text-[var(--text-primary)]',
-                      'focus:outline-none focus:ring-1 focus:ring-accent'
-                    )}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-[var(--text-tertiary)] mb-1 block">To</label>
-                  <input
-                    type="date"
-                    value={customEnd}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className={cn(
-                      'w-full px-2 py-1.5 rounded text-sm',
-                      'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                      'text-[var(--text-primary)]',
-                      'focus:outline-none focus:ring-1 focus:ring-accent'
-                    )}
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleCustomApply}
-                disabled={!customStart || !customEnd}
-                className={cn(
-                  'w-full py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
-                  customStart && customEnd
-                    ? 'bg-accent text-white hover:bg-accent/90'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] cursor-not-allowed'
-                )}
-              >
-                Apply
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================
-// FILTER BAR COMPONENT
-// ============================================
-
-function FilterBar({
-  searchQuery,
-  setSearchQuery,
-  selectedTypes,
-  setSelectedTypes,
-  selectedAccounts,
-  setSelectedAccounts,
-  dateRange,
-  setDateRange,
-  accounts,
-  types,
-  datePresets,
-}) {
-  return (
-    <div className="flex flex-col lg:flex-row gap-4 mb-6">
-      {/* Search */}
-      <div className="relative flex-1 max-w-md">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-tertiary)]" />
-        <input
-          type="text"
-          placeholder="Search by symbol..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className={cn(
-            'w-full pl-10 pr-4 py-2.5 rounded-lg',
-            'bg-[var(--bg-secondary)] border border-[var(--border-primary)]',
-            'text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]',
-            'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
-            'transition-colors'
-          )}
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <MultiSelectFilter
-          label="Types"
-          options={types}
-          selected={selectedTypes}
-          onChange={setSelectedTypes}
-          getOptionLabel={(t) => t}
-          getOptionValue={(t) => t}
-        />
-
-        <MultiSelectFilter
-          label="Accounts"
-          options={accounts}
-          selected={selectedAccounts}
-          onChange={setSelectedAccounts}
-          getOptionLabel={(a) => a.name}
-          getOptionValue={(a) => a.id}
-        />
-
-        <DateRangeFilter
-          value={dateRange}
-          onChange={setDateRange}
-          presets={datePresets}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 export default function Activity() {
-  const { currency } = useCurrency();
-  const { selectedPortfolioId } = usePortfolio();
+  const { transactions, accounts, loading, error, currency } = useActivityData();
 
-  // Data fetching state
-  const [transactions, setTransactions] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Filter states - initialized after data loads
+  // Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypes, setSelectedTypes] = useState([...TRANSACTION_TYPES]);
-  const [selectedAccounts, setSelectedAccounts] = useState([]);
+  const [excludedTypes, setExcludedTypes] = useState(new Set());
+  const [excludedAccounts, setExcludedAccounts] = useState(new Set());
   const [dateRange, setDateRange] = useState({ type: 'preset', preset: 'all', label: 'All Time' });
-  const [filtersInitialized, setFiltersInitialized] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Selected transaction for detail panel
+  // Detail panel
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
-  // Fetch transactions and accounts
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+  // Filter + paginate + group
+  const { groupedTransactions, filteredCount, totalCount, totalPages } = useMemo(() => {
+    const accountIdByName = new Map(accounts.map((a) => [a.name, a.id]));
+    const dateCutoff = getDateCutoff(dateRange);
+    const query = searchQuery.toLowerCase();
 
-      // Build query params - add portfolio_id if a specific portfolio is selected
-      const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
+    const filtered = transactions.filter((tx) => {
+      if (excludedTypes.has(TYPE_MAP[tx.type])) return false;
 
-      try {
-        // Fetch accounts first
-        const accountsRes = await api(`/accounts?is_active=true${portfolioParam}`);
-        if (!accountsRes.ok) {
-          throw new Error(`Failed to fetch accounts: ${accountsRes.statusText}`);
-        }
-        const accountsResponse = await accountsRes.json();
-        const accountsData = accountsResponse.items;
-        setAccounts(accountsData);
+      const accountId = accountIdByName.get(tx.account_name);
+      if (accountId && excludedAccounts.has(accountId)) return false;
 
-        // Fetch all transaction types in parallel
-        const currencyParam = currency ? `&display_currency=${currency}` : '';
-        const [tradesRes, dividendsRes, forexRes, cashRes] = await Promise.all([
-          api(`/transactions/trades?limit=500${portfolioParam}${currencyParam}`),
-          api(`/transactions/dividends?limit=500${portfolioParam}${currencyParam}`),
-          api(`/transactions/forex?limit=500${portfolioParam}`),
-          api(`/transactions/cash?limit=500${portfolioParam}${currencyParam}`),
-        ]);
-
-        // Check for errors
-        if (!tradesRes.ok) throw new Error(`Failed to fetch trades: ${tradesRes.statusText}`);
-        if (!dividendsRes.ok) throw new Error(`Failed to fetch dividends: ${dividendsRes.statusText}`);
-        if (!forexRes.ok) throw new Error(`Failed to fetch forex: ${forexRes.statusText}`);
-        if (!cashRes.ok) throw new Error(`Failed to fetch cash: ${cashRes.statusText}`);
-
-        // Parse responses
-        const [tradesData, dividendsData, forexData, cashData] = await Promise.all([
-          tradesRes.json(),
-          dividendsRes.json(),
-          forexRes.json(),
-          cashRes.json(),
-        ]);
-
-        // Transform and merge all transactions
-        const allTransactions = [
-          ...tradesData.items.map(transformTrade),
-          ...dividendsData.items.map(transformDividend),
-          ...forexData.items.map(transformForex),
-          ...cashData.items.map(transformCash),
-        ];
-
-        // Sort by date descending
-        allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        setTransactions(allTransactions);
-
-        // Initialize account filter with all accounts selected
-        if (!filtersInitialized) {
-          setSelectedAccounts(accountsData.map((a) => a.id));
-          setFiltersInitialized(true);
-        }
-      } catch (err) {
-        console.error('Error fetching activity data:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedPortfolioId, currency]);
-
-  // Filter and group transactions
-  const { groupedTransactions, totalCount, filteredCount, totalPages } = useMemo(() => {
-    // Filter transactions
-    let filtered = transactions.filter((tx) => {
-      // Type filter
-      const typeMap = { trade: 'Trade', dividend: 'Dividend', forex: 'Forex', cash: 'Cash' };
-      const typeMatch = selectedTypes.length === TRANSACTION_TYPES.length ||
-        selectedTypes.includes(typeMap[tx.type]);
-
-      // Account filter - match by account_name since we don't have account_id in transformed data
-      const accountNames = accounts
-        .filter((a) => selectedAccounts.includes(a.id))
-        .map((a) => a.name);
-      const accountMatch = selectedAccounts.length === accounts.length ||
-        accountNames.includes(tx.account_name);
-
-      // Search filter (symbol only for trades and dividends)
-      const searchMatch = !searchQuery ||
-        (tx.symbol && tx.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      // Date range filter
-      let dateMatch = true;
-      if (dateRange.type === 'custom' && dateRange.startDate && dateRange.endDate) {
-        const txDate = new Date(tx.date);
-        const startDate = new Date(dateRange.startDate);
-        const endDate = new Date(dateRange.endDate);
-        dateMatch = txDate >= startDate && txDate <= endDate;
-      } else if (dateRange.type === 'preset' && dateRange.preset !== 'all') {
-        const txDate = new Date(tx.date);
-        const now = new Date();
-        const preset = DATE_RANGES.find((r) => r.id === dateRange.preset);
-        if (preset && preset.days) {
-          if (preset.days === 'ytd') {
-            const yearStart = new Date(now.getFullYear(), 0, 1);
-            dateMatch = txDate >= yearStart;
-          } else {
-            const cutoff = new Date(now);
-            cutoff.setDate(cutoff.getDate() - preset.days);
-            dateMatch = txDate >= cutoff;
-          }
-        }
+      if (query) {
+        const matchesSymbol = tx.symbol?.toLowerCase().includes(query);
+        const matchesName = tx.name?.toLowerCase().includes(query);
+        if (!matchesSymbol && !matchesName) return false;
       }
 
-      return typeMatch && accountMatch && searchMatch && dateMatch;
+      if (!isWithinDateRange(new Date(tx.date), dateCutoff)) return false;
+
+      return true;
     });
 
-    // Calculate pagination
     const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedTransactions = filtered.slice(startIndex, endIndex);
+    const paginated = filtered.slice(startIndex, startIndex + pageSize);
 
-    // Group by date
     const grouped = {};
-    paginatedTransactions.forEach((tx) => {
-      if (!grouped[tx.date]) {
-        grouped[tx.date] = [];
-      }
+    for (const tx of paginated) {
+      if (!grouped[tx.date]) grouped[tx.date] = [];
       grouped[tx.date].push(tx);
-    });
+    }
 
     return {
       groupedTransactions: grouped,
-      totalCount: transactions.length,
       filteredCount: filtered.length,
+      totalCount: transactions.length,
       totalPages: Math.ceil(filtered.length / pageSize),
     };
-  }, [transactions, searchQuery, selectedTypes, selectedAccounts, dateRange, currentPage, pageSize, accounts]);
+  }, [transactions, searchQuery, excludedTypes, excludedAccounts, dateRange, currentPage, pageSize, accounts]);
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedTypes, selectedAccounts, dateRange]);
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, excludedTypes, excludedAccounts, dateRange]);
 
-  // Loading state
   if (loading) {
     return (
-      <PageContainer>
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Activity</h1>
-          <p className="text-[var(--text-secondary)] mt-1">
-            Complete transaction history across all accounts
-          </p>
-        </div>
-
-        {/* Filters skeleton */}
+      <PageContainer className="mx-0 max-w-none">
+        <PageHeader title="Activity" />
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
-          <Skeleton className="h-11 w-full max-w-md" />
-          <div className="flex flex-wrap gap-3">
-            <Skeleton className="h-10 w-28" />
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-36" />
+          <Skeleton className="h-9 w-64" />
+          <div className="flex gap-3 ml-auto">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-9" />
           </div>
         </div>
-
-        {/* Timeline skeleton */}
         <div className="space-y-8">
           {[1, 2, 3].map((i) => (
             <div key={i}>
               <div className="flex items-center gap-3 mb-4">
                 <Skeleton className="w-2 h-2 rounded-full" />
-                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-48" />
               </div>
-              <div className="space-y-3 ml-4 pl-4 border-l-2 border-[var(--border-primary)]">
-                {[1, 2].map((j) => (
-                  <Skeleton key={j} className="h-24 w-full rounded-lg" />
-                ))}
+              <div className="ml-4 pl-4 border-l-2 border-[var(--border-primary)] flex flex-col gap-[10px]">
+                {[1, 2].map((j) => <Skeleton key={j} className="h-[72px] w-full rounded-lg" />)}
               </div>
             </div>
           ))}
@@ -924,13 +128,10 @@ export default function Activity() {
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <PageContainer>
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Activity</h1>
-        </div>
+      <PageContainer className="mx-0 max-w-none">
+        <PageHeader title="Activity" />
         <div className="text-center py-12">
           <p className="text-negative mb-2">Error loading activity</p>
           <p className="text-[var(--text-secondary)] text-sm">{error}</p>
@@ -946,171 +147,53 @@ export default function Activity() {
   }
 
   return (
-    <PageContainer>
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Activity</h1>
-        <p className="text-[var(--text-secondary)] mt-1">
-          Complete transaction history across all accounts
-        </p>
+    <PageContainer className="mx-0 max-w-none">
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Activity</h1>
+        <div className="flex items-center gap-[10px]">
+          <div className="relative w-[260px]">
+            <SearchIcon className="absolute left-[10px] top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-faint)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by symbol or name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full py-2 pl-[34px] pr-3 bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-faint)] focus:outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          <FilterPopover
+            types={TRANSACTION_TYPES}
+            excludedTypes={excludedTypes}
+            onTypesChange={setExcludedTypes}
+            accounts={accounts}
+            excludedAccounts={excludedAccounts}
+            onAccountsChange={setExcludedAccounts}
+          />
+        </div>
       </div>
 
-      {/* Filters */}
-      <FilterBar
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        selectedTypes={selectedTypes}
-        setSelectedTypes={setSelectedTypes}
-        selectedAccounts={selectedAccounts}
-        setSelectedAccounts={setSelectedAccounts}
-        dateRange={dateRange}
-        setDateRange={setDateRange}
-        accounts={accounts}
-        types={TRANSACTION_TYPES}
-        datePresets={DATE_RANGES}
+      <ActivityTimeline
+        groupedTransactions={groupedTransactions}
+        currency={currency}
+        onTransactionClick={setSelectedTransaction}
       />
 
-      {/* Transaction Timeline */}
-      <div className="space-y-8">
-        {Object.keys(groupedTransactions).length === 0 ? (
-          <div className="text-center py-12">
-            <CalendarIcon className="w-12 h-12 mx-auto text-[var(--text-tertiary)] mb-4" />
-            <h3 className="text-lg font-medium text-[var(--text-primary)]">No transactions found</h3>
-            <p className="text-[var(--text-secondary)] mt-1">
-              Try adjusting your filters to see more results.
-            </p>
-          </div>
-        ) : (
-          Object.entries(groupedTransactions)
-            .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
-            .map(([date, transactions]) => (
-              <div key={date}>
-                {/* Date Header */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-accent" />
-                  <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-                    {formatDateHeader(date)}
-                  </h2>
-                  <div className="flex-1 h-px bg-[var(--border-primary)]" />
-                </div>
+      <PaginationFooter
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        filteredCount={filteredCount}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+      />
 
-                {/* Transaction Cards */}
-                <div className="space-y-3 ml-4 pl-4 border-l-2 border-[var(--border-primary)]">
-                  {transactions.map((tx) => (
-                    <TransactionCard
-                      key={tx.id}
-                      tx={tx}
-                      variant="detailed"
-                      currency={currency}
-                      onClick={() => setSelectedTransaction(tx)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-        )}
-      </div>
-
-      {/* Footer with pagination */}
-      <div className="mt-8 flex items-center justify-between py-4 border-t border-[var(--border-primary)]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-[var(--text-secondary)]">Show:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className={cn(
-                'px-2 py-1 rounded text-sm',
-                'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                'text-[var(--text-primary)] cursor-pointer',
-                'focus:outline-none focus:ring-2 focus:ring-accent/50'
-              )}
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-          <p className="text-sm text-[var(--text-tertiary)]">
-            Showing {Math.min((currentPage - 1) * pageSize + 1, filteredCount)}-{Math.min(currentPage * pageSize, filteredCount)} of {filteredCount}
-            {filteredCount !== totalCount && (
-              <span> ({totalCount} total)</span>
-            )}
-          </p>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => { setCurrentPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              disabled={currentPage === 1}
-              className={cn(
-                'p-1.5 rounded',
-                'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
-                'hover:bg-[var(--border-primary)] transition-colors',
-                currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-              )}
-              title="First page"
-            >
-              <ChevronDoubleLeftIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              disabled={currentPage === 1}
-              className={cn(
-                'p-1.5 rounded',
-                'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
-                'hover:bg-[var(--border-primary)] transition-colors',
-                currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-              )}
-              title="Previous page"
-            >
-              <ChevronLeftIcon className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-[var(--text-secondary)] px-2">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              disabled={currentPage >= totalPages}
-              className={cn(
-                'p-1.5 rounded',
-                'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
-                'hover:bg-[var(--border-primary)] transition-colors',
-                currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-              )}
-              title="Next page"
-            >
-              <ChevronRightIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => { setCurrentPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              disabled={currentPage >= totalPages}
-              className={cn(
-                'p-1.5 rounded',
-                'bg-[var(--bg-secondary)] text-[var(--text-primary)]',
-                'hover:bg-[var(--border-primary)] transition-colors',
-                currentPage >= totalPages ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-              )}
-              title="Last page"
-            >
-              <ChevronDoubleRightIcon className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Transaction Detail Panel */}
-      {selectedTransaction && (
-        <TransactionDetailPanel
-          transaction={selectedTransaction}
-          currency={currency}
-          onClose={() => setSelectedTransaction(null)}
-        />
-      )}
+      <TransactionDetailSidebar
+        transaction={selectedTransaction}
+        currency={currency}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </PageContainer>
   );
 }
