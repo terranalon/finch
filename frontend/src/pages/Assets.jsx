@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAssetsData } from '../hooks/useAssetsData';
 import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import { AssetClassTabs, AssetsFilterRow, AssetsTable, PERIOD_KEYS } from '../components/assets';
 import { AssetDetailSidebar } from '../components/dashboard';
 
-function getSortValue(asset, sortKey, periodKeys, positionMap) {
+function getSortValue(asset, sortKey, periodKeys) {
   switch (sortKey) {
     case 'symbol': return asset.symbol?.toLowerCase() || '';
     case 'price': return asset.last_fetched_price ?? -Infinity;
@@ -39,17 +39,25 @@ export default function Assets() {
   };
 
   const handleRowClick = (asset) => {
+    const periodKeys = PERIOD_KEYS[selectedPeriod] || PERIOD_KEYS['1d'];
     setSidebarAsset({
       id: asset.id,
       symbol: asset.symbol,
       name: asset.name,
       asset_class: asset.asset_class,
       current_price: asset.last_fetched_price,
-      day_change_pct: asset.change_1d_pct,
+      day_change_pct: asset[periodKeys.pct],
       currency: asset.currency,
       is_favorite: asset.is_favorite,
     });
   };
+
+  const handleToggleFavorite = useCallback((assetId) => {
+    toggleFavorite(assetId);
+    setSidebarAsset((prev) =>
+      prev?.id === assetId ? { ...prev, is_favorite: !prev.is_favorite } : prev
+    );
+  }, [toggleFavorite]);
 
   const { filteredAssets, totalCount, favoritesCount } = useMemo(() => {
     const periodKeys = PERIOD_KEYS[selectedPeriod] || PERIOD_KEYS['1d'];
@@ -61,10 +69,7 @@ export default function Assets() {
     let favCount = 0;
     for (const a of assets) {
       const inTab = activeTab === 'All' || a.asset_class === activeTab;
-      if (inTab) {
-        tabCount++;
-        if (a.is_favorite) favCount++;
-      }
+      if (inTab) tabCount++;
 
       if (!inTab) continue;
       if (showFavoritesOnly && !a.is_favorite) continue;
@@ -74,11 +79,12 @@ export default function Assets() {
         if (!matchSymbol && !matchName) continue;
       }
       filtered.push(a);
+      if (a.is_favorite) favCount++;
     }
 
     const sorted = [...filtered].sort((a, b) => {
-      const va = getSortValue(a, sortConfig.key, periodKeys, positionMap);
-      const vb = getSortValue(b, sortConfig.key, periodKeys, positionMap);
+      const va = getSortValue(a, sortConfig.key, periodKeys);
+      const vb = getSortValue(b, sortConfig.key, periodKeys);
       if (typeof va === 'string') {
         return sortConfig.direction === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       }
@@ -86,7 +92,7 @@ export default function Assets() {
     });
 
     return { filteredAssets: sorted, totalCount: tabCount, favoritesCount: favCount };
-  }, [assets, activeTab, searchQuery, selectedPeriod, showFavoritesOnly, sortConfig, positionMap]);
+  }, [assets, activeTab, searchQuery, selectedPeriod, showFavoritesOnly, sortConfig]);
 
   if (loading) {
     return (
@@ -169,7 +175,7 @@ export default function Assets() {
         sortConfig={sortConfig}
         onSort={handleSort}
         onRowClick={handleRowClick}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={handleToggleFavorite}
         loading={false}
         totalCount={totalCount}
         favoritesCount={favoritesCount}

@@ -29,7 +29,7 @@ export function AssetRow({ asset, position, period, currency, onToggleFavorite, 
   const changeAbs = asset[keys.change];
   const isPositive = changePct > 0;
   const isNegative = changePct < 0;
-  const iconColor = ICON_COLORS[asset.asset_class] || '#64748B';
+  const iconColor = ICON_COLORS[asset.asset_class] || 'var(--slate-clr)';
   const initials = (asset.symbol || '??').slice(0, 2);
 
   return (
@@ -43,7 +43,7 @@ export function AssetRow({ asset, position, period, currency, onToggleFavorite, 
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(asset.id); }}
           className={cn(
             'text-[16px] leading-none p-0.5 cursor-pointer transition-colors bg-transparent border-none',
-            asset.is_favorite ? 'text-[#F59E0B]' : 'text-[var(--text-faint)] hover:text-[#F59E0B]'
+            asset.is_favorite ? 'text-[var(--amber)]' : 'text-[var(--text-faint)] hover:text-[var(--amber)]'
           )}
         >
           {asset.is_favorite ? (
@@ -121,7 +121,7 @@ export function AssetRow({ asset, position, period, currency, onToggleFavorite, 
               {changeAbs >= 0 ? '+' : ''}
               {Math.abs(changeAbs) >= 1
                 ? formatCurrency(changeAbs, currency, { decimals: 2 })
-                : `$${changeAbs.toFixed(4)}`}
+                : `${changeAbs < 0 ? '-' : ''}$${Math.abs(changeAbs).toFixed(4)}`}
             </span>
           )}
         </div>

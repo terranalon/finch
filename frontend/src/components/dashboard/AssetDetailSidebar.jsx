@@ -214,7 +214,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
               </p>
             ) : dayChangePct != null && (
               <p className={cn('text-sm font-mono tabular-nums', changeColor)}>
-                {getChangeIndicator(dayChangePct)} ({formatPercent(dayChangePct)}) today
+                {getChangeIndicator(dayChangePct)} {formatPercent(dayChangePct)}
               </p>
             )}
           </div>
