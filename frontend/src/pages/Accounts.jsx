@@ -5,7 +5,6 @@
  * - GET /api/accounts
  * - GET /api/dashboard/summary
  * - GET /api/positions
- * - GET /api/broker-data/supported-brokers
  */
 
 import { useState, useEffect } from 'react';
@@ -16,18 +15,29 @@ import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import { AllocationStrip, AccountGrid, AccountSidebar } from '../components/accounts';
 import { AccountWizard } from '../components/AccountWizard';
+import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
+import { BatchUploadModal } from '../components/BatchUploadModal';
+import { getBrokerConfig } from '../components/AccountWizard/constants/brokerConfig';
 import { PlusIcon } from '../components/accounts/icons';
 
 export default function Accounts() {
   const { selectedPortfolioId } = usePortfolio();
   const {
     accounts, accountHoldings, totalValue,
-    loading, error, currency, refresh,
+    loading, error, currency, refresh, positionsTruncated,
   } = useAccountsData();
 
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [showApiCredentials, setShowApiCredentials] = useState(false);
+  const [showBatchUpload, setShowBatchUpload] = useState(false);
+  const [activeModalAccount, setActiveModalAccount] = useState(null);
   const [linkableAccounts, setLinkableAccounts] = useState([]);
+
+  // Derive live account from accounts array to avoid stale snapshot after refresh
+  const liveSelectedAccount = selectedAccount
+    ? accounts.find((a) => a.id === selectedAccount.id) ?? null
+    : null;
 
   // Fetch linkable accounts when wizard opens
   useEffect(() => {
@@ -42,6 +52,32 @@ export default function Accounts() {
   const handleCardClick = (account) => setSelectedAccount(account);
   const handleCloseSidebar = () => setSelectedAccount(null);
   const handleAddAccount = () => setShowWizard(true);
+
+  const handleDelete = async (accountId) => {
+    const res = await api(`/accounts/${accountId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setSelectedAccount(null);
+      refresh();
+    }
+  };
+
+  const handleRename = async (accountId, newName) => {
+    const res = await api(`/accounts/${accountId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: newName }),
+    });
+    if (res.ok) refresh();
+  };
+
+  const handleUpload = (account) => {
+    setActiveModalAccount(account);
+    setShowBatchUpload(true);
+  };
+
+  const handleApiCredentials = (account) => {
+    setActiveModalAccount(account);
+    setShowApiCredentials(true);
+  };
 
   if (loading) {
     return (
@@ -111,7 +147,7 @@ export default function Accounts() {
         />
       )}
 
-      {/* Account grid (handles empty state internally via add-account card) */}
+      {/* Account grid */}
       {accounts.length === 0 ? (
         <EmptyState onAddAccount={handleAddAccount} />
       ) : (
@@ -126,10 +162,15 @@ export default function Accounts() {
 
       {/* Account detail sidebar */}
       <AccountSidebar
-        account={selectedAccount}
-        holdings={selectedAccount ? accountHoldings.get(selectedAccount.id) || [] : []}
+        account={liveSelectedAccount}
+        holdings={liveSelectedAccount ? accountHoldings.get(liveSelectedAccount.id) || [] : []}
         currency={currency}
         onClose={handleCloseSidebar}
+        onDelete={handleDelete}
+        onRename={handleRename}
+        onUpload={handleUpload}
+        onApiCredentials={handleApiCredentials}
+        positionsTruncated={positionsTruncated}
       />
 
       {/* Account creation wizard */}
@@ -142,6 +183,31 @@ export default function Accounts() {
         portfolioId={selectedPortfolioId}
         linkableAccounts={linkableAccounts}
         existingAccountNames={accounts.map((a) => a.name)}
+      />
+
+      {/* Batch upload modal */}
+      <BatchUploadModal
+        isOpen={showBatchUpload}
+        onClose={() => {
+          setShowBatchUpload(false);
+          setActiveModalAccount(null);
+          refresh();
+        }}
+        accountId={activeModalAccount?.id}
+        brokerType={activeModalAccount?.broker_type}
+        supportedFormats={getBrokerConfig(activeModalAccount?.broker_type)?.supportedFormats || []}
+      />
+
+      {/* API credentials modal */}
+      <ApiCredentialsModal
+        isOpen={showApiCredentials}
+        onClose={() => {
+          setShowApiCredentials(false);
+          setActiveModalAccount(null);
+        }}
+        account={activeModalAccount}
+        onCredentialsSaved={refresh}
+        hasCredentials={false}
       />
     </PageContainer>
   );

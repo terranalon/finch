@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, formatPercent } from '../../lib';
 import { ASSET_COLORS } from '../../lib/constants';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
+import { getBrokerConfig } from '../AccountWizard/constants/brokerConfig';
 import { useSlideover } from '../../hooks/useSlideover';
-import { ExternalLinkIcon, XMarkIcon } from './icons';
+import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon, TrashIcon, CloudArrowUpIcon, KeyIcon } from './icons';
 import { TYPE_LABELS } from './constants';
 
 function pnlColor(value) {
@@ -30,16 +32,42 @@ function HoldingIcon({ symbol, assetClass }) {
   );
 }
 
-export function AccountSidebar({ account, holdings, currency, onClose }) {
+export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename, onUpload, onApiCredentials, positionsTruncated }) {
   const isOpen = !!account;
   const navigate = useNavigate();
   useSlideover(isOpen, onClose);
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (!account) return null;
 
+  const brokerConfig = getBrokerConfig(account.broker_type);
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+
+  const startRename = () => {
+    setNameValue(account.name);
+    setEditingName(true);
+  };
+
+  const commitRename = () => {
+    const trimmed = nameValue.trim();
+    setEditingName(false);
+    if (trimmed && trimmed !== account.name) {
+      onRename?.(account.id, trimmed);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    await onDelete?.(account.id);
+    setIsDeleting(false);
+    setShowDeleteConfirm(false);
+  };
 
   return (
     <>
@@ -67,7 +95,30 @@ export function AccountSidebar({ account, holdings, currency, onClose }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2.5 mb-1">
                 <BrokerLogo type={account.broker_type} className="w-9 h-9 rounded-[9px] shrink-0" />
-                <h2 className="text-xl font-semibold truncate">{account.name}</h2>
+                {editingName ? (
+                  <input
+                    autoFocus
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename();
+                      if (e.key === 'Escape') setEditingName(false);
+                    }}
+                    className="text-xl font-semibold bg-transparent border-b border-[var(--accent-primary)] outline-none w-full"
+                  />
+                ) : (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h2 className="text-xl font-semibold truncate">{account.name}</h2>
+                    <button
+                      onClick={startRename}
+                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[var(--text-faint)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
+                      title="Rename account"
+                    >
+                      <PencilSquareIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="text-[13px] text-[var(--text-faint)]">
                 {TYPE_LABELS[account.account_type] || account.account_type} Account
@@ -157,8 +208,63 @@ export function AccountSidebar({ account, holdings, currency, onClose }) {
                   </div>
                 </div>
               ))}
+              {positionsTruncated && (
+                <p className="text-[11px] text-[var(--text-faint)] mt-2 pt-2 border-t border-[var(--border-subtle)]">
+                  Portfolio has more than 100 positions. View full list in account details.
+                </p>
+              )}
             </div>
           )}
+
+          {/* Management actions */}
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
+            <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">Manage</h3>
+            <div className="flex flex-col gap-2">
+              {brokerConfig?.supportedFormats?.length > 0 && (
+                <ActionButton
+                  icon={<CloudArrowUpIcon className="w-4 h-4" />}
+                  label="Upload Data"
+                  onClick={() => onUpload?.(account)}
+                />
+              )}
+              {brokerConfig?.hasApi && (
+                <ActionButton
+                  icon={<KeyIcon className="w-4 h-4" />}
+                  label="API Credentials"
+                  onClick={() => onApiCredentials?.(account)}
+                />
+              )}
+              {!showDeleteConfirm ? (
+                <ActionButton
+                  icon={<TrashIcon className="w-4 h-4" />}
+                  label="Delete Account"
+                  variant="danger"
+                  onClick={() => setShowDeleteConfirm(true)}
+                />
+              ) : (
+                <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--negative)]/30">
+                  <p className="text-[12px] text-[var(--text-secondary)] mb-2.5">
+                    Permanently delete this account and all its data?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteConfirm}
+                      disabled={isDeleting}
+                      className="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-[var(--negative)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </>
@@ -176,6 +282,24 @@ function DetailRow({ label, value, valueClass, isLast }) {
         {value}
       </span>
     </div>
+  );
+}
+
+function ActionButton({ icon, label, onClick, variant = 'default' }) {
+  const isDefault = variant === 'default';
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors cursor-pointer text-left',
+        isDefault
+          ? 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+          : 'text-[var(--negative)] hover:bg-[var(--negative)]/10'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

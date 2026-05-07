@@ -17,7 +17,7 @@ function buildQuery(params) {
 }
 
 function getSyncStatus(lastSync) {
-  if (!lastSync) return { status: 'unknown', color: 'text-[var(--text-faint)]' };
+  if (!lastSync) return { status: 'unknown', color: 'bg-[var(--text-faint)]' };
   const diffDays = Math.floor((Date.now() - new Date(lastSync)) / 86400000);
   if (diffDays <= 7) return { status: 'green', color: 'bg-[var(--positive)]' };
   if (diffDays <= 30) return { status: 'amber', color: 'bg-[var(--warning)]' };
@@ -74,6 +74,7 @@ export function useAccountsData() {
   const [rawAccounts, setRawAccounts] = useState([]);
   const [dashboardAccounts, setDashboardAccounts] = useState([]);
   const [positions, setPositions] = useState([]);
+  const [positionsTruncated, setPositionsTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -92,7 +93,7 @@ export function useAccountsData() {
 
       try {
         const [accountsData, dashboardData, positionsData] = await Promise.all([
-          fetchJson(`/accounts${buildQuery({ is_active: true, ...shared })}`, 'accounts'),
+          fetchJson(`/accounts${buildQuery({ is_active: true, limit: 100, ...shared })}`, 'accounts'),
           fetchJson(`/dashboard/summary${buildQuery(withCurrency)}`, 'dashboard'),
           fetchJson(`/positions${buildQuery({ ...withCurrency, limit: 100 })}`, 'positions'),
         ]);
@@ -102,6 +103,7 @@ export function useAccountsData() {
         setRawAccounts(accountsData.items);
         setDashboardAccounts(dashboardData.accounts || []);
         setPositions(positionsData.items || []);
+        setPositionsTruncated(positionsData.has_more || false);
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -142,5 +144,5 @@ export function useAccountsData() {
     return { accounts: enriched, accountHoldings: holdingsMap, totalValue: total };
   }, [rawAccounts, dashboardAccounts, positions]);
 
-  return { accounts, accountHoldings, totalValue, loading, error, currency, refresh };
+  return { accounts, accountHoldings, totalValue, loading, error, currency, refresh, positionsTruncated };
 }
