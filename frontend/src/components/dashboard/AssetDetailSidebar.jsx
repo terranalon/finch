@@ -70,6 +70,11 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
 
   useSlideover(isOpen, onClose);
 
+  // Sync isFavorite from parent prop so table-side toggles (and their reverts) propagate live
+  useEffect(() => {
+    setIsFavorite(asset?.is_favorite ?? false);
+  }, [asset?.is_favorite]);
+
   // Fetch position details (account breakdown, P&L)
   useEffect(() => {
     if (!asset?.id || !isOpen) return;
@@ -214,7 +219,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
               </p>
             ) : dayChangePct != null && (
               <p className={cn('text-sm font-mono tabular-nums', changeColor)}>
-                {getChangeIndicator(dayChangePct)} {formatPercent(dayChangePct)}
+                {getChangeIndicator(dayChangePct)} ({formatPercent(dayChangePct)})
               </p>
             )}
           </div>

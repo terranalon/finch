@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAssetsData } from '../hooks/useAssetsData';
 import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
@@ -52,12 +52,12 @@ export default function Assets() {
     });
   };
 
-  const handleToggleFavorite = useCallback((assetId) => {
-    toggleFavorite(assetId);
-    setSidebarAsset((prev) =>
-      prev?.id === assetId ? { ...prev, is_favorite: !prev.is_favorite } : prev
-    );
-  }, [toggleFavorite]);
+  // Derive is_favorite from live assets so table toggles (and their reverts) propagate to the sidebar
+  const sidebarAssetLive = useMemo(() => {
+    if (!sidebarAsset) return null;
+    const live = assets.find((a) => a.id === sidebarAsset.id);
+    return live ? { ...sidebarAsset, is_favorite: live.is_favorite } : sidebarAsset;
+  }, [sidebarAsset, assets]);
 
   const { filteredAssets, totalCount, favoritesCount } = useMemo(() => {
     const periodKeys = PERIOD_KEYS[selectedPeriod] || PERIOD_KEYS['1d'];
@@ -175,14 +175,14 @@ export default function Assets() {
         sortConfig={sortConfig}
         onSort={handleSort}
         onRowClick={handleRowClick}
-        onToggleFavorite={handleToggleFavorite}
+        onToggleFavorite={toggleFavorite}
         loading={false}
         totalCount={totalCount}
         favoritesCount={favoritesCount}
       />
 
       <AssetDetailSidebar
-        asset={sidebarAsset}
+        asset={sidebarAssetLive}
         isOpen={!!sidebarAsset}
         onClose={() => setSidebarAsset(null)}
         onFavoriteToggle={syncFavorite}
