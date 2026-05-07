@@ -1,607 +1,33 @@
 /**
- * Accounts Page - Finch Redesign
+ * Accounts Page - Grid card layout with allocation strip and detail sidebar.
  *
- * Purpose: Account management with integrated import flow
- *
- * Wired to real API endpoints:
+ * API endpoints (via useAccountsData hook):
  * - GET /api/accounts
- * - GET /api/dashboard/summary (for account values)
+ * - GET /api/dashboard/summary
+ * - GET /api/positions
+ * - GET /api/broker-data/supported-brokers
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { cn, formatCurrency, api } from '../lib';
-import { useCurrency, usePortfolio } from '../contexts';
+import { useState, useEffect } from 'react';
+import { api } from '../lib';
+import { usePortfolio } from '../contexts';
+import { useAccountsData } from '../hooks/useAccountsData';
 import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
-import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
+import { AllocationStrip, AccountGrid, AccountSidebar } from '../components/accounts';
 import { AccountWizard } from '../components/AccountWizard';
-import { BatchUploadModal } from '../components/BatchUploadModal';
-import { BrokerLogo } from '../components/AccountWizard/BrokerLogo';
-import { CoverageTimeline } from '../components/CoverageTimeline';
-
-// ============================================
-// ICONS
-// ============================================
-
-function PlusIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-    </svg>
-  );
-}
-
-function XMarkIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-function LinkIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-    </svg>
-  );
-}
-
-function DocumentArrowUpIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-    </svg>
-  );
-}
-
-function TrashIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-    </svg>
-  );
-}
-
-function ExclamationTriangleIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-    </svg>
-  );
-}
-
-function PencilIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-    </svg>
-  );
-}
-
-function ArrowRightIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-    </svg>
-  );
-}
-
-function BuildingLibraryIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
-    </svg>
-  );
-}
-
-function ChartBarIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
-
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-const formatLastSync = (dateStr) => {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours === 0) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return `${diffMins} minutes ago`;
-    }
-    return `${diffHours} hours ago`;
-  } else if (diffDays === 1) {
-    return 'Yesterday';
-  } else if (diffDays < 30) {
-    return `${diffDays} days ago`;
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-};
-
-const getStatusInfo = (lastSync) => {
-  const date = new Date(lastSync);
-  const now = new Date();
-  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-
-  if (diffDays <= 7) {
-    return { status: 'connected', label: 'Connected', color: 'text-emerald-600 dark:text-emerald-400' };
-  } else if (diffDays <= 30) {
-    return { status: 'stale', label: 'Needs sync', color: 'text-amber-600 dark:text-amber-400' };
-  } else {
-    return { status: 'outdated', label: 'Outdated', color: 'text-red-600 dark:text-red-400' };
-  }
-};
-
-// ============================================
-// ALERT DIALOG COMPONENT
-// ============================================
-
-function AlertDialog({ isOpen, onClose, onConfirm, title, description, confirmLabel = 'Delete', variant = 'danger' }) {
-  if (!isOpen) return null;
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
-
-      {/* Dialog */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-[var(--bg-primary)] rounded-xl shadow-xl max-w-md w-full p-6">
-          <div className="flex items-start gap-4">
-            <div className={cn(
-              'p-2 rounded-full',
-              variant === 'danger' ? 'bg-red-100 dark:bg-red-950/40' : 'bg-amber-100 dark:bg-amber-950/40'
-            )}>
-              <ExclamationTriangleIcon className={cn(
-                'w-6 h-6',
-                variant === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
-              )} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h3>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">{description}</p>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border-primary)] transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors cursor-pointer',
-                variant === 'danger'
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-amber-600 hover:bg-amber-700'
-              )}
-            >
-              {confirmLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ============================================
-// DATA COVERAGE BAR
-// ============================================
-
-function DataCoverageBar({ coverage }) {
-  if (!coverage || !coverage.start_date || !coverage.end_date) {
-    return (
-      <div className="text-sm text-[var(--text-tertiary)]">
-        No data coverage information available
-      </div>
-    );
-  }
-
-  const files = [
-    {
-      fileName: 'All sources',
-      startDate: coverage.start_date,
-      endDate: coverage.end_date,
-      transactions: coverage.transactions || 0,
-    },
-  ];
-
-  return (
-    <div>
-      <CoverageTimeline files={files} gaps={coverage.gaps || []} />
-      <div className="flex items-center gap-4 mt-2 text-xs text-[var(--text-secondary)]">
-        {coverage.sources > 0 && (
-          <span>{coverage.sources} source{coverage.sources > 1 ? 's' : ''}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// ACCOUNT CARD COMPONENT
-// ============================================
-
-function AccountCard({ account, currency, brokerConfig, onDelete, onRename, onRefresh }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(account.name);
-  const [showApiModal, setShowApiModal] = useState(false);
-  const [hasApiCredentials, setHasApiCredentials] = useState(false);
-  const [showBatchUpload, setShowBatchUpload] = useState(false);
-  const navigate = useNavigate();
-  const { selectedPortfolioId } = usePortfolio();
-  const statusInfo = getStatusInfo(account.last_sync);
-  const inputRef = useRef(null);
-
-  // Determine if this is a shared account (in multiple portfolios)
-  const isSharedAccount = account.portfolio_ids && account.portfolio_ids.length > 1;
-  const willUnlink = selectedPortfolioId && isSharedAccount;
-
-  // Get broker config (API support and file formats)
-  const supportsApi = brokerConfig?.has_api ?? false;
-  const supportedFormats = brokerConfig?.supported_formats || [];
-  const formatDisplay = supportedFormats.map(f => f.replace('.', '').toUpperCase()).join(', ') || 'Files';
-
-  // Check if API credentials exist
-  useEffect(() => {
-    if (supportsApi && account.id) {
-      api(`/brokers/${account.broker_type}/credentials/${account.id}`)
-        .then((res) => {
-          if (res.ok) {
-            return res.json();
-          }
-          return null;
-        })
-        .then((data) => {
-          setHasApiCredentials(data?.has_credentials ?? false);
-        })
-        .catch(() => setHasApiCredentials(false));
-    }
-  }, [supportsApi, account.id, account.broker_type]);
-
-  const handleEditClick = (e) => {
-    e.stopPropagation();
-    setEditName(account.name);
-    setIsEditing(true);
-    // Focus input after render
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
-  const handleSaveEdit = (e) => {
-    e.stopPropagation();
-    if (editName.trim() && editName.trim() !== account.name) {
-      onRename(account.id, editName.trim());
-    }
-    setIsEditing(false);
-  };
-
-  const handleCancelEdit = (e) => {
-    e.stopPropagation();
-    setEditName(account.name);
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSaveEdit(e);
-    } else if (e.key === 'Escape') {
-      handleCancelEdit(e);
-    }
-  };
-
-  const handleViewDetails = (e) => {
-    e.stopPropagation();
-    navigate(`/accounts/${account.id}`);
-  };
-
-  const handleUploadFile = (e) => {
-    e.stopPropagation();
-    setShowBatchUpload(true);
-  };
-
-  const handleConnectApi = (e) => {
-    e.stopPropagation();
-    setShowApiModal(true);
-  };
-
-  return (
-    <div className="bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-primary)] overflow-hidden shadow-sm dark:shadow-none">
-      {/* Card Header - Always visible */}
-      <div
-        onClick={() => !isEditing && setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between p-5 cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors"
-      >
-        <div className="flex items-center gap-4">
-          {account.broker_type ? (
-            <BrokerLogo type={account.broker_type} className="size-12 rounded-lg" />
-          ) : (
-            <div className="p-3 rounded-xl bg-accent/10">
-              <ChartBarIcon className="w-6 h-6 text-accent" />
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onBlur={handleSaveEdit}
-                    className={cn(
-                      'px-2 py-0.5 rounded text-sm font-semibold',
-                      'bg-[var(--bg-primary)] border border-accent',
-                      'text-[var(--text-primary)]',
-                      'focus:outline-none focus:ring-2 focus:ring-accent/50'
-                    )}
-                  />
-                  <button
-                    onClick={handleSaveEdit}
-                    className="p-1 rounded hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
-                    title="Save"
-                  >
-                    <CheckIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
-                    title="Cancel"
-                  >
-                    <XMarkIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <h3 className="font-semibold text-[var(--text-primary)]">{account.name}</h3>
-                  <button
-                    onClick={handleEditClick}
-                    className="p-1 rounded hover:bg-[var(--bg-primary)] transition-colors cursor-pointer"
-                    title="Rename account"
-                  >
-                    <PencilIcon className="w-3.5 h-3.5 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]" />
-                  </button>
-                </>
-              )}
-            </div>
-            <p className="text-sm text-[var(--text-secondary)]">
-              {account.institution} · {account.account_type}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={cn('w-2 h-2 rounded-full', {
-                'bg-emerald-500': statusInfo.status === 'connected',
-                'bg-amber-500': statusInfo.status === 'stale',
-                'bg-red-500': statusInfo.status === 'outdated',
-              })} />
-              <span className={cn('text-xs', statusInfo.color)}>
-                {statusInfo.label}
-              </span>
-              <span className="text-xs text-[var(--text-tertiary)]">
-                · Last sync: {formatLastSync(account.last_sync)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <p className="text-xl font-semibold font-mono tabular-nums text-[var(--text-primary)]">
-            {formatCurrency(account.value, currency)}
-          </p>
-          <ChevronDownIcon className={cn(
-            'w-5 h-5 text-[var(--text-tertiary)] transition-transform',
-            isExpanded && 'rotate-180'
-          )} />
-        </div>
-      </div>
-
-      {/* Expanded Content */}
-      {isExpanded && (
-        <div className="border-t border-[var(--border-primary)]">
-          {/* View Details Link */}
-          <button
-            onClick={handleViewDetails}
-            className="w-full flex items-center justify-between p-4 border-b border-[var(--border-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer group"
-          >
-            <span className="text-sm font-medium text-accent group-hover:text-accent/80">
-              View Account Details
-            </span>
-            <ArrowRightIcon className="w-4 h-4 text-accent group-hover:text-accent/80" />
-          </button>
-
-          {/* Data Coverage Section */}
-          <div className="p-5 border-b border-[var(--border-primary)]">
-            <h4 className="text-sm font-medium text-[var(--text-primary)] mb-3">Data Coverage</h4>
-            <DataCoverageBar coverage={account.coverage} />
-          </div>
-
-          {/* Import Options Section */}
-          <div className="p-5 border-b border-[var(--border-primary)]">
-            <h4 className="text-sm font-medium text-[var(--text-primary)] mb-3">Import Data</h4>
-            <div className={cn('grid gap-3', supportsApi ? 'grid-cols-2' : 'grid-cols-1')}>
-              {supportsApi && (
-                <button
-                  onClick={handleConnectApi}
-                  className={cn(
-                    'flex items-center justify-center gap-2 p-4 rounded-lg border-2',
-                    hasApiCredentials
-                      ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30'
-                      : 'border-dashed border-[var(--border-secondary)] hover:border-accent hover:bg-accent/5',
-                    'transition-colors cursor-pointer group'
-                  )}
-                >
-                  {hasApiCredentials ? (
-                    <CheckIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  ) : (
-                    <LinkIcon className="w-5 h-5 text-[var(--text-tertiary)] group-hover:text-accent" />
-                  )}
-                  <div className="text-left">
-                    <p className={cn(
-                      'text-sm font-medium',
-                      hasApiCredentials
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-[var(--text-primary)] group-hover:text-accent'
-                    )}>
-                      {hasApiCredentials ? 'API Connected' : 'Connect API'}
-                    </p>
-                    <p className="text-xs text-[var(--text-tertiary)]">
-                      {hasApiCredentials ? 'Click to update' : 'Automatic sync'}
-                    </p>
-                  </div>
-                </button>
-              )}
-
-              <button
-                onClick={handleUploadFile}
-                className="flex items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed border-[var(--border-secondary)] hover:border-accent hover:bg-accent/5 transition-colors cursor-pointer group"
-              >
-                <DocumentArrowUpIcon className="w-5 h-5 text-[var(--text-tertiary)] group-hover:text-accent" />
-                <div className="text-left">
-                  <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-accent">Upload File</p>
-                  <p className="text-xs text-[var(--text-tertiary)]">{formatDisplay || 'Supported formats'}</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Danger Zone */}
-          <div className={cn(
-            'p-5',
-            willUnlink
-              ? 'bg-amber-50/50 dark:bg-amber-950/20'
-              : 'bg-red-50/50 dark:bg-red-950/20'
-          )}>
-            {!willUnlink && (
-              <h4 className="text-sm font-medium mb-3 text-red-600 dark:text-red-400">
-                Danger Zone
-              </h4>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(account);
-              }}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium',
-                'transition-colors cursor-pointer',
-                willUnlink
-                  ? 'border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40'
-                  : 'border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40'
-              )}
-            >
-              <TrashIcon className="w-4 h-4" />
-              {willUnlink ? 'Unlink from Portfolio' : 'Delete Account'}
-            </button>
-            <p className="text-xs text-[var(--text-tertiary)] mt-2">
-              {willUnlink
-                ? 'This account is in multiple portfolios. Unlinking will only remove it from this portfolio.'
-                : 'This will permanently delete this account and all associated data.'}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* API Credentials Modal */}
-      <ApiCredentialsModal
-        isOpen={showApiModal}
-        onClose={() => setShowApiModal(false)}
-        account={account}
-        hasCredentials={hasApiCredentials}
-        onGoToSettings={() => navigate(`/accounts/${account.id}?tab=settings`)}
-        onCredentialsSaved={() => {
-          setHasApiCredentials(true);
-          onRefresh?.();
-        }}
-      />
-
-      {/* Batch Upload Modal */}
-      <BatchUploadModal
-        isOpen={showBatchUpload}
-        onClose={() => setShowBatchUpload(false)}
-        accountId={account.id}
-        brokerType={account.broker_type}
-        supportedFormats={supportedFormats}
-        onComplete={() => onRefresh?.()}
-      />
-    </div>
-  );
-}
-
-// ============================================
-// EMPTY STATE
-// ============================================
-
-function EmptyState({ onAddAccount }) {
-  return (
-    <div className="text-center py-16">
-      <div className="inline-flex p-4 rounded-full bg-[var(--bg-secondary)] mb-4">
-        <BuildingLibraryIcon className="w-12 h-12 text-[var(--text-tertiary)]" />
-      </div>
-      <h3 className="text-lg font-semibold text-[var(--text-primary)]">No accounts yet</h3>
-      <p className="text-[var(--text-secondary)] mt-1 max-w-sm mx-auto">
-        Add your first investment account to start tracking your portfolio.
-      </p>
-      <button
-        onClick={onAddAccount}
-        className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
-      >
-        <PlusIcon className="w-4 h-4" />
-        Add Account
-      </button>
-    </div>
-  );
-}
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
+import { PlusIcon } from '../components/accounts/icons';
 
 export default function Accounts() {
-  const { currency: globalCurrency } = useCurrency();
-  const { selectedPortfolioId, portfolioCurrency } = usePortfolio();
-  // Use portfolio's currency when viewing a specific portfolio, otherwise use global currency
-  const currency = portfolioCurrency || globalCurrency;
-  const [accounts, setAccounts] = useState([]);
-  const [brokerConfig, setBrokerConfig] = useState({}); // Maps broker_type to config
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { selectedPortfolioId } = usePortfolio();
+  const {
+    accounts, accountHoldings, totalValue,
+    loading, error, currency, refresh,
+  } = useAccountsData();
+
+  const [selectedAccount, setSelectedAccount] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
   const [linkableAccounts, setLinkableAccounts] = useState([]);
-  const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, account: null });
-  const [refreshKey, setRefreshKey] = useState(0);
 
   // Fetch linkable accounts when wizard opens
   useEffect(() => {
@@ -613,218 +39,40 @@ export default function Accounts() {
     }
   }, [showWizard, selectedPortfolioId]);
 
-  // Fetch accounts and values
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+  const handleCardClick = (account) => setSelectedAccount(account);
+  const handleCloseSidebar = () => setSelectedAccount(null);
+  const handleAddAccount = () => setShowWizard(true);
 
-      // Build query params - add portfolio_id if a specific portfolio is selected
-      const portfolioParam = selectedPortfolioId ? `&portfolio_id=${selectedPortfolioId}` : '';
-
-      try {
-        // Fetch accounts, dashboard summary, and broker config in parallel
-        const [accountsRes, dashboardRes, brokerRes] = await Promise.all([
-          api(`/accounts?is_active=true${portfolioParam}`),
-          api(`/dashboard/summary?display_currency=${currency}${portfolioParam}`),
-          api(`/broker-data/supported-brokers`),
-        ]);
-
-        if (!accountsRes.ok) {
-          throw new Error(`Failed to fetch accounts: ${accountsRes.statusText}`);
-        }
-        if (!dashboardRes.ok) {
-          throw new Error(`Failed to fetch dashboard: ${dashboardRes.statusText}`);
-        }
-
-        const [accountsRawData, dashboardData, brokerData] = await Promise.all([
-          accountsRes.json(),
-          dashboardRes.json(),
-          brokerRes.ok ? brokerRes.json() : [],
-        ]);
-        const accountsData = accountsRawData.items;
-
-        // Build broker config map (broker_type -> config)
-        const brokerConfigMap = {};
-        brokerData.forEach((broker) => {
-          brokerConfigMap[broker.type] = {
-            name: broker.name,
-            supported_formats: broker.supported_formats,
-            has_api: broker.has_api,
-          };
-        });
-        setBrokerConfig(brokerConfigMap);
-
-        // Create a map of account values from dashboard data
-        const accountValuesMap = {};
-        if (dashboardData.accounts) {
-          dashboardData.accounts.forEach((acc) => {
-            accountValuesMap[acc.id] = acc.value;
-          });
-        }
-
-        // Fetch coverage data for each account from the broker-data API
-        const coveragePromises = accountsData.map(async (account) => {
-          try {
-            const res = await api(`/broker-data/coverage/${account.id}`);
-            if (res.ok) {
-              const data = await res.json();
-              // The response is keyed by broker type (e.g., 'ibkr', 'meitav')
-              const brokerType = account.broker_type;
-              const brokerCoverage = data.brokers?.[brokerType];
-              if (brokerCoverage && brokerCoverage.has_data) {
-                return {
-                  id: account.id,
-                  coverage: {
-                    start_date: brokerCoverage.coverage?.start_date,
-                    end_date: brokerCoverage.coverage?.end_date,
-                    transactions: brokerCoverage.totals?.transactions || 0,
-                    sources: brokerCoverage.totals?.sources || 0,
-                    gaps: brokerCoverage.gaps || [],
-                  },
-                };
-              }
-            }
-          } catch (err) {
-            console.error(`Error fetching coverage for account ${account.id}:`, err);
-          }
-          // Default coverage if API fails
-          return {
-            id: account.id,
-            coverage: {
-              start_date: account.created_at?.split('T')[0],
-              end_date: new Date().toISOString().split('T')[0],
-              transactions: 0,
-              sources: 0,
-              gaps: [],
-            },
-          };
-        });
-
-        const coverageResults = await Promise.all(coveragePromises);
-        const coverageMap = {};
-        coverageResults.forEach((c) => {
-          coverageMap[c.id] = c.coverage;
-        });
-
-        // Merge account data with values and actual coverage data
-        const enrichedAccounts = accountsData.map((account) => ({
-          ...account,
-          value: accountValuesMap[account.id] || 0,
-          last_sync: account.updated_at || account.created_at,
-          coverage: coverageMap[account.id],
-        }));
-
-        setAccounts(enrichedAccounts);
-      } catch (err) {
-        console.error('Error fetching accounts data:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [currency, selectedPortfolioId, refreshKey]);
-
-  const handleDeleteAccount = (account) => {
-    // Determine if this is an unlink or delete operation
-    // Unlink if: viewing a specific portfolio AND account belongs to multiple portfolios
-    const isSharedAccount = account.portfolio_ids && account.portfolio_ids.length > 1;
-    const shouldUnlink = selectedPortfolioId && isSharedAccount;
-
-    setDeleteDialog({
-      isOpen: true,
-      account,
-      isUnlink: shouldUnlink,
-    });
-  };
-
-  const confirmDelete = async () => {
-    const { account, isUnlink } = deleteDialog;
-
-    try {
-      let res;
-      if (isUnlink && selectedPortfolioId) {
-        // Unlink from current portfolio only
-        res = await api(`/portfolios/${selectedPortfolioId}/accounts/${account.id}`, {
-          method: 'DELETE',
-        });
-      } else {
-        // Delete account entirely
-        res = await api(`/accounts/${account.id}`, {
-          method: 'DELETE',
-        });
-      }
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || `Failed to ${isUnlink ? 'unlink' : 'delete'} account`);
-      }
-
-      // Remove from local state
-      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
-    } catch (err) {
-      console.error(`Error ${deleteDialog.isUnlink ? 'unlinking' : 'deleting'} account:`, err);
-      alert(err.message);
-    }
-    setDeleteDialog({ isOpen: false, account: null, isUnlink: false });
-  };
-
-  const confirmRename = async (accountId, newName) => {
-    try {
-      const res = await api(`/accounts/${accountId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name: newName }),
-      });
-      if (!res.ok) {
-        throw new Error('Failed to rename account');
-      }
-      // Update local state
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === accountId ? { ...a, name: newName } : a))
-      );
-    } catch (err) {
-      console.error('Error renaming account:', err);
-      alert('Failed to rename account');
-    }
-  };
-
-  const totalValue = accounts.reduce((sum, acc) => sum + (acc.value || 0), 0);
-
-  // Loading state
   if (loading) {
     return (
-      <PageContainer>
-        <div className="flex items-center justify-between mb-8">
+      <PageContainer className="mx-0 max-w-none">
+        <div className="flex items-start justify-between mb-5">
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Accounts</h1>
-            <Skeleton className="h-5 w-48 mt-2" />
+            <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Accounts</h1>
+            <Skeleton className="h-4 w-32 mt-1" />
           </div>
-          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
         </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        <AllocationStrip loading />
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-[220px] w-full rounded-xl" />
           ))}
         </div>
       </PageContainer>
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <PageContainer>
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Accounts</h1>
-        </div>
+      <PageContainer className="mx-0 max-w-none">
+        <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)] mb-5">Accounts</h1>
         <div className="text-center py-12">
-          <p className="text-negative mb-2">Error loading accounts</p>
+          <p className="text-[var(--negative)] mb-2">Error loading accounts</p>
           <p className="text-[var(--text-secondary)] text-sm">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors cursor-pointer"
+            className="mt-4 px-4 py-2 bg-[var(--accent-primary)] text-white rounded-lg hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
           >
             Retry
           </button>
@@ -834,69 +82,90 @@ export default function Accounts() {
   }
 
   return (
-    <PageContainer>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <PageContainer className="mx-0 max-w-none">
+      {/* Title bar */}
+      <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Accounts</h1>
-          <p className="text-[var(--text-secondary)] mt-1">
-            {accounts.length} accounts · {formatCurrency(totalValue, currency)} total
+          <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">
+            Accounts
+          </h1>
+          <p className="text-[13px] text-[var(--text-tertiary)] mt-0.5">
+            {accounts.length} account{accounts.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button
-          onClick={() => setShowWizard(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
+          onClick={handleAddAccount}
+          className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent-primary)] text-white rounded-lg text-[13px] font-semibold hover:bg-[var(--accent-hover)] transition-colors cursor-pointer whitespace-nowrap"
         >
           <PlusIcon className="w-4 h-4" />
           Add Account
         </button>
       </div>
 
-      {/* Account List */}
-      {accounts.length === 0 ? (
-        <EmptyState onAddAccount={() => setShowWizard(true)} />
-      ) : (
-        <div className="space-y-4">
-          {accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              currency={currency}
-              brokerConfig={brokerConfig[account.broker_type]}
-              onDelete={handleDeleteAccount}
-              onRename={confirmRename}
-              onRefresh={() => setRefreshKey((k) => k + 1)}
-            />
-          ))}
-        </div>
+      {/* Allocation strip */}
+      {accounts.length > 0 && (
+        <AllocationStrip
+          accounts={accounts}
+          totalValue={totalValue}
+          currency={currency}
+        />
       )}
 
-      {/* Account Creation Wizard */}
+      {/* Account grid (handles empty state internally via add-account card) */}
+      {accounts.length === 0 ? (
+        <EmptyState onAddAccount={handleAddAccount} />
+      ) : (
+        <AccountGrid
+          accounts={accounts}
+          accountHoldings={accountHoldings}
+          currency={currency}
+          onCardClick={handleCardClick}
+          onAddAccount={handleAddAccount}
+        />
+      )}
+
+      {/* Account detail sidebar */}
+      <AccountSidebar
+        account={selectedAccount}
+        holdings={selectedAccount ? accountHoldings.get(selectedAccount.id) || [] : []}
+        currency={currency}
+        onClose={handleCloseSidebar}
+      />
+
+      {/* Account creation wizard */}
       <AccountWizard
         isOpen={showWizard}
         onClose={() => {
           setShowWizard(false);
-          setRefreshKey((k) => k + 1);
+          refresh();
         }}
         portfolioId={selectedPortfolioId}
         linkableAccounts={linkableAccounts}
         existingAccountNames={accounts.map((a) => a.name)}
       />
-
-      {/* Delete/Unlink Confirmation Dialog */}
-      <AlertDialog
-        isOpen={deleteDialog.isOpen}
-        onClose={() => setDeleteDialog({ isOpen: false, account: null, isUnlink: false })}
-        onConfirm={confirmDelete}
-        title={deleteDialog.isUnlink ? 'Unlink from Portfolio' : 'Delete Account'}
-        description={
-          deleteDialog.isUnlink
-            ? `Are you sure you want to unlink "${deleteDialog.account?.name}" from this portfolio? The account will remain in your other portfolios.`
-            : `Are you sure you want to delete "${deleteDialog.account?.name}"? This action cannot be undone and all associated transaction data will be permanently removed.`
-        }
-        confirmLabel={deleteDialog.isUnlink ? 'Unlink' : 'Delete Account'}
-        variant={deleteDialog.isUnlink ? 'warning' : 'danger'}
-      />
     </PageContainer>
+  );
+}
+
+function EmptyState({ onAddAccount }) {
+  return (
+    <div className="text-center py-16">
+      <div className="inline-flex p-4 rounded-full bg-[var(--bg-secondary)] mb-4">
+        <svg className="w-12 h-12 text-[var(--text-tertiary)]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-[var(--text-primary)]">No accounts yet</h3>
+      <p className="text-[var(--text-secondary)] mt-1 max-w-sm mx-auto">
+        Add your first investment account to start tracking your portfolio.
+      </p>
+      <button
+        onClick={onAddAccount}
+        className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
+      >
+        <PlusIcon className="w-4 h-4" />
+        Add Account
+      </button>
+    </div>
   );
 }
