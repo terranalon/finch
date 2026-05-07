@@ -130,7 +130,7 @@ export function AssetRow({ asset, position, period, currency, onToggleFavorite, 
       {/* Market Cap */}
       <td className="px-4 py-3 text-right w-[120px]">
         <span className="font-mono tabular-nums text-[13px] text-[var(--text-secondary)]">
-          {position?.market_cap ? formatCompact(position.market_cap) : '\u2014'}
+          {asset.market_cap != null ? formatCompact(asset.market_cap) : '\u2014'}
         </span>
       </td>
 

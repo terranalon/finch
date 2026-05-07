@@ -10,7 +10,7 @@ function getSortValue(asset, sortKey, periodKeys, positionMap) {
     case 'symbol': return asset.symbol?.toLowerCase() || '';
     case 'price': return asset.last_fetched_price ?? -Infinity;
     case 'changePct': return asset[periodKeys.pct] ?? -Infinity;
-    case 'marketCap': return positionMap.get(asset.id)?.market_cap ?? -Infinity;
+    case 'marketCap': return asset.market_cap ?? -Infinity;
     case 'volume': return -Infinity;
     default: return 0;
   }
@@ -47,6 +47,7 @@ export default function Assets() {
       current_price: asset.last_fetched_price,
       day_change_pct: asset.change_1d_pct,
       currency: asset.currency,
+      is_favorite: asset.is_favorite,
     });
   };
 
@@ -60,8 +61,10 @@ export default function Assets() {
     let favCount = 0;
     for (const a of assets) {
       const inTab = activeTab === 'All' || a.asset_class === activeTab;
-      if (inTab) tabCount++;
-      if (a.is_favorite) favCount++;
+      if (inTab) {
+        tabCount++;
+        if (a.is_favorite) favCount++;
+      }
 
       if (!inTab) continue;
       if (showFavoritesOnly && !a.is_favorite) continue;

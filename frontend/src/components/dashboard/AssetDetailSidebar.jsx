@@ -83,7 +83,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
         const items = res.items || res || [];
         const match = items.find((p) => p.asset_id === asset.id);
         setPosition(match || null);
-        setIsFavorite(match?.is_favorite ?? false);
+        setIsFavorite(match?.is_favorite ?? asset.is_favorite ?? false);
       })
       .catch(() => { if (!cancelled) setPosition(null); })
       .finally(() => { if (!cancelled) setPosLoading(false); });
