@@ -14,7 +14,7 @@ function SearchIcon({ className }) {
 }
 
 export function HeaderBar() {
-  const { theme, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const { selectedPortfolio } = usePortfolio();
   const { currency } = useCurrency();
 
@@ -42,7 +42,7 @@ export function HeaderBar() {
           </span>
         )}
         <PortfolioSelector />
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <ThemeToggle isDark={isDark} onToggle={toggleTheme} />
         <SettingsDropdown />
       </div>
     </header>
