@@ -39,6 +39,7 @@ router = APIRouter(prefix="/api/portfolios", tags=["portfolios"])
 async def list_portfolios(
     include_values: bool = Query(False, description="Include total portfolio values"),
     include_accounts: bool = Query(False, description="Include account details per portfolio"),
+    display_currency: str = Query("USD", description="Currency to convert portfolio values to"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -47,11 +48,14 @@ async def list_portfolios(
 
     Use include_accounts=true to embed account details in each portfolio.
     Use include_values=true to include portfolio total and per-account values.
+    Use display_currency to convert values to a specific currency (default: USD).
     """
     portfolios = db.query(Portfolio).filter(Portfolio.user_id == current_user.id).all()
 
     return [
-        _to_portfolio_with_account_count(portfolio, db, include_values, include_accounts)
+        _to_portfolio_with_account_count(
+            portfolio, db, include_values, include_accounts, display_currency
+        )
         for portfolio in portfolios
     ]
 
@@ -61,10 +65,11 @@ def _to_portfolio_with_account_count(
     db: Session,
     include_values: bool = False,
     include_accounts: bool = False,
+    display_currency: str = "USD",
 ) -> PortfolioWithAccountCount:
     """Convert a Portfolio model to PortfolioWithAccountCount schema."""
     valuation = (
-        PortfolioManagementService(db).calculate_portfolio_value(portfolio)
+        PortfolioManagementService(db).calculate_portfolio_value(portfolio, display_currency)
         if include_values
         else None
     )

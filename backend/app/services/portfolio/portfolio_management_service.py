@@ -27,15 +27,17 @@ class PortfolioManagementService:
         self._db = db
         self._currency = CurrencyService(db)
 
-    def calculate_portfolio_value(self, portfolio: Portfolio) -> PortfolioValuation:
+    def calculate_portfolio_value(
+        self, portfolio: Portfolio, display_currency: str = "USD"
+    ) -> PortfolioValuation:
         account_values_usd = {
             account.id: self._calculate_account_value_usd(account) for account in portfolio.accounts
         }
 
         total_value_usd = sum(account_values_usd.values(), Decimal("0"))
 
-        if portfolio.default_currency != "USD":
-            rate = self._currency.get_exchange_rate("USD", portfolio.default_currency)
+        if display_currency != "USD":
+            rate = self._currency.get_exchange_rate("USD", display_currency)
             convert = (lambda v: float(v * rate)) if rate else (lambda v: float(v))
         else:
             convert = float
