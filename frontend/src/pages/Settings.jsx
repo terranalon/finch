@@ -275,6 +275,7 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
           className={SELECT_CLASS}
+          style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
         >
           {SUPPORTED_CURRENCIES.map((c) => (
             <option key={c.code} value={c.code}>
@@ -423,6 +424,7 @@ function SecurityPanel() {
               value={mfaStatus.primary_method || 'totp'}
               onChange={(e) => handlePrimaryMethodChange(e.target.value)}
               className="px-3 py-1.5 rounded-lg text-[13px] bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] cursor-pointer"
+              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
             >
               <option value="totp">Authenticator App</option>
               <option value="email">Email OTP</option>
@@ -518,8 +520,8 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile');
 
   return (
-    <PageContainer className="mx-0 max-w-none">
-      <div className="max-w-[780px] w-full mx-auto">
+    <PageContainer>
+      <div className="w-[clamp(320px,_88%,_1400px)] mx-auto">
         {/* Page title */}
         <div className="mb-6">
           <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Settings</h1>
