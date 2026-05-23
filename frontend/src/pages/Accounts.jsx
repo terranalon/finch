@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib';
 import { usePortfolio } from '../contexts';
 import { useAccountsData } from '../hooks/useAccountsData';
@@ -21,6 +22,7 @@ import { getBrokerConfig } from '../components/AccountWizard/constants/brokerCon
 import { PlusIcon } from '../components/accounts/icons';
 
 export default function Accounts() {
+  const navigate = useNavigate();
   const { selectedPortfolioId } = usePortfolio();
   const {
     accounts, accountHoldings, totalValue,
@@ -32,6 +34,7 @@ export default function Accounts() {
   const [showApiCredentials, setShowApiCredentials] = useState(false);
   const [showBatchUpload, setShowBatchUpload] = useState(false);
   const [activeModalAccount, setActiveModalAccount] = useState(null);
+  const [apiHasCredentials, setApiHasCredentials] = useState(false);
   const [linkableAccounts, setLinkableAccounts] = useState([]);
 
   // Derive live account from accounts array to avoid stale snapshot after refresh
@@ -53,20 +56,35 @@ export default function Accounts() {
   const handleCloseSidebar = () => setSelectedAccount(null);
   const handleAddAccount = () => setShowWizard(true);
 
+  // Throws on failure so the sidebar can surface the error to the user.
+  // Uses unlink endpoint for accounts shared across multiple portfolios.
   const handleDelete = async (accountId) => {
-    const res = await api(`/accounts/${accountId}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSelectedAccount(null);
-      refresh();
+    const account = accounts.find((a) => a.id === accountId);
+    const isShared = (account?.portfolio_ids?.length ?? 0) > 1;
+    const endpoint = isShared && selectedPortfolioId
+      ? `/portfolios/${selectedPortfolioId}/accounts/${accountId}`
+      : `/accounts/${accountId}`;
+
+    const res = await api(endpoint, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || 'Failed to delete account');
     }
+    setSelectedAccount(null);
+    refresh();
   };
 
+  // Throws on failure so the sidebar can surface the error to the user.
   const handleRename = async (accountId, newName) => {
     const res = await api(`/accounts/${accountId}`, {
       method: 'PUT',
       body: JSON.stringify({ name: newName }),
     });
-    if (res.ok) refresh();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || 'Failed to rename account');
+    }
+    refresh();
   };
 
   const handleUpload = (account) => {
@@ -74,8 +92,20 @@ export default function Accounts() {
     setShowBatchUpload(true);
   };
 
-  const handleApiCredentials = (account) => {
+  // Fetches real credentials status before opening the modal so the modal
+  // shows the correct state (connected vs. entry form).
+  const handleApiCredentials = async (account) => {
     setActiveModalAccount(account);
+    setApiHasCredentials(false);
+    try {
+      const res = await api(`/brokers/${account.broker_type}/credentials/${account.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setApiHasCredentials(data.has_credentials ?? false);
+      }
+    } catch {
+      // leave as false; modal will show the entry form
+    }
     setShowApiCredentials(true);
   };
 
@@ -185,10 +215,14 @@ export default function Accounts() {
         existingAccountNames={accounts.map((a) => a.name)}
       />
 
-      {/* Batch upload modal */}
+      {/* Batch upload modal — onComplete fires only on successful import */}
       <BatchUploadModal
         isOpen={showBatchUpload}
         onClose={() => {
+          setShowBatchUpload(false);
+          setActiveModalAccount(null);
+        }}
+        onComplete={() => {
           setShowBatchUpload(false);
           setActiveModalAccount(null);
           refresh();
@@ -207,7 +241,11 @@ export default function Accounts() {
         }}
         account={activeModalAccount}
         onCredentialsSaved={refresh}
-        hasCredentials={false}
+        hasCredentials={apiHasCredentials}
+        onGoToSettings={() => {
+          setShowApiCredentials(false);
+          navigate(`/accounts/${activeModalAccount?.id}`);
+        }}
       />
     </PageContainer>
   );

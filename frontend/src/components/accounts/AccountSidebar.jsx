@@ -39,34 +39,48 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
 
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
+  const [renameError, setRenameError] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   if (!account) return null;
 
   const brokerConfig = getBrokerConfig(account.broker_type);
+  const isShared = (account.portfolio_ids?.length ?? 0) > 1;
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
   const startRename = () => {
     setNameValue(account.name);
+    setRenameError(null);
     setEditingName(true);
   };
 
-  const commitRename = () => {
+  const commitRename = async () => {
     const trimmed = nameValue.trim();
     setEditingName(false);
     if (trimmed && trimmed !== account.name) {
-      onRename?.(account.id, trimmed);
+      try {
+        await onRename?.(account.id, trimmed);
+      } catch (err) {
+        setRenameError(err.message || 'Failed to rename account');
+      }
     }
   };
 
+  // Only resets spinner/error on the failure path — success closes the sidebar
+  // naturally via liveSelectedAccount becoming null in the parent.
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
-    await onDelete?.(account.id);
-    setIsDeleting(false);
-    setShowDeleteConfirm(false);
+    setDeleteError(null);
+    try {
+      await onDelete?.(account.id);
+    } catch (err) {
+      setIsDeleting(false);
+      setDeleteError(err.message || 'Failed to delete account');
+    }
   };
 
   return (
@@ -125,6 +139,9 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                 {' \u00B7 '}
                 {account.allocationPct.toFixed(1)}% of portfolio
               </p>
+              {renameError && (
+                <p className="text-[11px] text-[var(--negative)] mt-0.5">{renameError}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -237,18 +254,23 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
               {!showDeleteConfirm ? (
                 <ActionButton
                   icon={<TrashIcon className="w-4 h-4" />}
-                  label="Delete Account"
+                  label={isShared ? 'Remove from Portfolio' : 'Delete Account'}
                   variant="danger"
                   onClick={() => setShowDeleteConfirm(true)}
                 />
               ) : (
                 <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--negative)]/30">
                   <p className="text-[12px] text-[var(--text-secondary)] mb-2.5">
-                    Permanently delete this account and all its data?
+                    {isShared
+                      ? 'Remove this account from the current portfolio? It will remain in other portfolios.'
+                      : 'Permanently delete this account and all its data?'}
                   </p>
+                  {deleteError && (
+                    <p className="text-[11px] text-[var(--negative)] mb-2">{deleteError}</p>
+                  )}
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowDeleteConfirm(false)}
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
                       className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                     >
                       Cancel
@@ -258,7 +280,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                       disabled={isDeleting}
                       className="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-[var(--negative)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
                     >
-                      {isDeleting ? 'Deleting...' : 'Delete'}
+                      {isDeleting ? 'Deleting...' : isShared ? 'Remove' : 'Delete'}
                     </button>
                   </div>
                 </div>
