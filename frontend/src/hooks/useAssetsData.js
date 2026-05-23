@@ -30,13 +30,13 @@ export function useAssetsData() {
       try {
         const [assetsData, positionsData] = await Promise.all([
           fetchJson(`/assets/market?display_currency=${currency}&limit=500`, 'assets'),
-          fetchJson(`/positions?display_currency=${currency}&limit=500${portfolioParam}`, 'positions'),
+          fetchJson(`/positions?display_currency=${currency}&limit=500${portfolioParam}`, 'positions').catch(() => null),
         ]);
 
         if (cancelled) return;
 
         setAssets(assetsData.items);
-        setPositionMap(new Map(positionsData.items.map((pos) => [pos.asset_id, pos])));
+        setPositionMap(new Map(positionsData ? positionsData.items.map((pos) => [pos.asset_id, pos]) : []));
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
