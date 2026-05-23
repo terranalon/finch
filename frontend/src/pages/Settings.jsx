@@ -206,6 +206,20 @@ function ThemeSelector({ value, onChange }) {
 
 function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePreferences }) {
   const [username, setUsername] = useState(user?.username ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleSaveProfile = async () => {
+    setSaveError('');
+    setSaving(true);
+    try {
+      await updatePreferences({ username });
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <SettingsCard description="Your personal information">
@@ -228,9 +242,16 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
           />
         </FormGroup>
       </div>
+      {saveError && (
+        <div className="mt-3 p-3 rounded-lg bg-negative/10 text-negative text-sm">{saveError}</div>
+      )}
       <div className="mt-5">
-        <button className="inline-flex items-center gap-1.5 px-[18px] py-[9px] rounded-lg text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer">
-          Save Changes
+        <button
+          onClick={handleSaveProfile}
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 px-[18px] py-[9px] rounded-lg text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
 
@@ -441,7 +462,7 @@ function SecurityPanel() {
             <DisableMfaMethod method="email" onComplete={handleMfaComplete} onCancel={closeModal} />
           )}
           {modal === 'regenerate' && (
-            <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
+            <RegenerateRecoveryCodes onComplete={handleMfaComplete} onCancel={closeModal} />
           )}
         </Modal>
       )}
