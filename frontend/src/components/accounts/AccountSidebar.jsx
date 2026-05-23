@@ -32,7 +32,7 @@ function HoldingIcon({ symbol, assetClass }) {
   );
 }
 
-export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename, onUpload, onApiCredentials, positionsTruncated }) {
+export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename, onUpload, onApiCredentials }) {
   const isOpen = !!account;
   const navigate = useNavigate();
   useSlideover(isOpen, onClose);
@@ -253,9 +253,9 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                   </div>
                 </div>
               ))}
-              {positionsTruncated && (
+              {renderAccount.holdingCount > (holdings || []).length && (
                 <p className="text-[11px] text-[var(--text-faint)] mt-2 pt-2 border-t border-[var(--border-subtle)]">
-                  Portfolio has more than 100 positions. View full list in account details.
+                  Showing {(holdings || []).length} of {renderAccount.holdingCount} positions. View full list in account details.
                 </p>
               )}
             </div>

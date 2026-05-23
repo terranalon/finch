@@ -26,7 +26,7 @@ export default function Accounts() {
   const { selectedPortfolioId } = usePortfolio();
   const {
     accounts, accountHoldings, totalValue,
-    loading, error, currency, refresh, positionsTruncated,
+    loading, error, currency, refresh,
   } = useAccountsData();
 
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -200,7 +200,6 @@ export default function Accounts() {
         onRename={handleRename}
         onUpload={handleUpload}
         onApiCredentials={handleApiCredentials}
-        positionsTruncated={positionsTruncated}
       />
 
       {/* Account creation wizard */}
