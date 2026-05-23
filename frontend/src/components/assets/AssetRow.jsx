@@ -75,7 +75,7 @@ export function AssetRow({ asset, position, period, currency, onToggleFavorite, 
                 </span>
               )}
             </div>
-            <p className="text-[12px] text-[var(--text-faint)] mt-px truncate max-w-[220px]">
+            <p className="text-[12px] text-[var(--text-faint)] mt-px truncate">
               {asset.name}
             </p>
           </div>

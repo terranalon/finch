@@ -168,7 +168,7 @@ export function AssetDetailSidebar({ asset, isOpen, onClose, onFavoriteToggle })
       />
 
       {/* Panel */}
-      <div className="fixed top-0 right-0 z-50 h-dvh w-[420px] max-w-[90vw] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] shadow-2xl flex flex-col animate-slide-in-right">
+      <div className="fixed top-0 right-0 z-50 h-dvh w-[520px] max-w-[90vw] bg-[var(--bg-secondary)] border-l border-[var(--border-primary)] shadow-2xl flex flex-col animate-slide-in-right">
         {/* Header (sticky) */}
         <div className="px-6 pt-5 pb-4 border-b border-[var(--border-primary)] flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
