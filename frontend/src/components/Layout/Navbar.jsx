@@ -15,7 +15,7 @@ const navLinks = [
 ];
 
 export function Navbar() {
-  const { theme, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <nav className="sticky top-0 z-30 bg-[var(--bg-primary)] border-b border-[var(--border-primary)]">
@@ -55,7 +55,7 @@ export function Navbar() {
           {/* Right side actions */}
           <div className="flex items-center gap-2">
             <PortfolioSelector />
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <ThemeToggle isDark={isDark} onToggle={toggleTheme} />
             <SettingsDropdown />
           </div>
         </div>

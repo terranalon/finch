@@ -4,12 +4,11 @@ import { cn } from '../../lib';
  * Theme toggle button for switching between light and dark mode.
  *
  * @param {object} props
- * @param {'light'|'dark'} props.theme - Current theme
+ * @param {boolean} props.isDark - Whether the effective theme is currently dark
  * @param {function} props.onToggle - Toggle callback
  * @param {string} props.className - Additional CSS classes
  */
-export function ThemeToggle({ theme, onToggle, className, ...props }) {
-  const isDark = theme === 'dark';
+export function ThemeToggle({ isDark, onToggle, className, ...props }) {
 
   return (
     <button

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from './AuthContext';
+import { useCurrency } from './CurrencyContext';
 
 const PortfolioContext = createContext(undefined);
 
@@ -11,6 +12,7 @@ const PortfolioContext = createContext(undefined);
  */
 export function PortfolioProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
+  const { currency } = useCurrency();
   const [portfolios, setPortfolios] = useState([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState(() => {
     const stored = localStorage.getItem('finch-portfolio-id');
@@ -36,7 +38,7 @@ export function PortfolioProvider({ children }) {
       try {
         setLoading(true);
         setError(null);
-        const response = await api('/portfolios?include_values=true');
+        const response = await api(`/portfolios?include_values=true&display_currency=${currency}`);
         if (response.ok) {
           const data = await response.json();
           setPortfolios(data);
@@ -79,7 +81,7 @@ export function PortfolioProvider({ children }) {
     }
 
     fetchPortfolios();
-  }, [isAuthenticated, showCombinedView]);
+  }, [isAuthenticated, showCombinedView, currency]);
 
   // When showCombinedView is disabled and user is viewing "All Portfolios", switch to a specific portfolio
   useEffect(() => {
@@ -104,7 +106,7 @@ export function PortfolioProvider({ children }) {
     if (!isAuthenticated) return;
 
     try {
-      const response = await api('/portfolios?include_values=true');
+      const response = await api(`/portfolios?include_values=true&display_currency=${currency}`);
       if (response.ok) {
         const data = await response.json();
         setPortfolios(data);

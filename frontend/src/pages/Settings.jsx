@@ -1,34 +1,13 @@
-/**
- * Settings Page Mock - Finch Redesign
- *
- * Purpose: User settings, preferences, and account management
- *
- * This is a static mock with hardcoded data for review.
- * After approval, it will be wired up to real API endpoints.
- */
-
 import { useState, useEffect } from 'react';
 import { cn } from '../lib';
 import { getMfaStatus, setPrimaryMfaMethod } from '../lib/api';
 import { useTheme, useCurrency, useAuth, SUPPORTED_CURRENCIES } from '../contexts';
 import { PageContainer } from '../components/layout';
+import { Skeleton } from '../components/ui';
 import { ChangePassword } from '../components/ChangePassword';
 import { TotpSetup, EmailOtpSetup, DisableMfaMethod, RegenerateRecoveryCodes } from '../components/MfaSetup';
 
-// ============================================
-// MOCK DATA - Replace with real API data later
-// ============================================
-
-const MOCK_USER = {
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  avatar: null,
-  created_at: '2023-01-15',
-};
-
-// ============================================
-// ICONS
-// ============================================
+// ─── Icons ───────────────────────────────────────────────
 
 function UserCircleIcon({ className }) {
   return (
@@ -38,18 +17,10 @@ function UserCircleIcon({ className }) {
   );
 }
 
-function SwatchIcon({ className }) {
+function ShieldCheckIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
-    </svg>
-  );
-}
-
-function CurrencyDollarIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
     </svg>
   );
 }
@@ -58,14 +29,6 @@ function BellIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-    </svg>
-  );
-}
-
-function ShieldCheckIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
     </svg>
   );
 }
@@ -102,52 +65,103 @@ function EnvelopeIcon({ className }) {
   );
 }
 
-// ============================================
-// COMPONENTS
-// ============================================
+// ─── Constants ────────────────────────────────────────────
 
-function SettingsSection({ icon: Icon, title, description, children }) {
+const TABS = [
+  { id: 'profile', label: 'Profile', icon: UserCircleIcon },
+  { id: 'security', label: 'Security', icon: ShieldCheckIcon },
+  { id: 'notifications', label: 'Notifications', icon: BellIcon },
+];
+
+const INPUT_CLASS =
+  'w-full py-[9px] px-3.5 text-[13px] bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]';
+
+const SELECT_CLASS = cn(
+  INPUT_CLASS,
+  "cursor-pointer appearance-none bg-no-repeat bg-[right_12px_center] bg-[length:12px] bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22none%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m2%204%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')]"
+);
+
+const MFA_METHODS = [
+  {
+    key: 'totp',
+    icon: ShieldCheckIcon,
+    label: 'Authenticator App',
+    description: 'Use Google Authenticator, Authy, etc.',
+    enabledField: 'totp_enabled',
+    enableModal: 'totp',
+    disableModal: 'disable-totp',
+  },
+  {
+    key: 'email',
+    icon: EnvelopeIcon,
+    label: 'Email OTP',
+    description: 'Codes sent to your email',
+    enabledField: 'email_otp_enabled',
+    enableModal: 'email',
+    disableModal: 'disable-email',
+  },
+];
+
+// ─── Shared Components ───────────────────────────────────
+
+function Divider() {
+  return <div className="h-px bg-[var(--border-primary)] my-6" />;
+}
+
+function SettingsCard({ description, children }) {
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-primary)] overflow-hidden shadow-sm dark:shadow-none">
-      <div className="p-6 border-b border-[var(--border-primary)]">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-accent/10">
-            <Icon className="w-5 h-5 text-accent" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-            <p className="text-sm text-[var(--text-secondary)]">{description}</p>
-          </div>
+    <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-6 overflow-hidden">
+      {description && (
+        <p className="text-[13px] text-[var(--text-tertiary)] mb-5 pb-4 border-b border-[var(--border-subtle)]">
+          {description}
+        </p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function FormGroup({ label, hint, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[13px] font-medium text-[var(--text-secondary)]">{label}</label>
+      {children}
+      {hint && <p className="text-[11px] text-[var(--text-faint)] mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+function Modal({ onClose, children }) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-xl max-w-md w-full p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
         </div>
       </div>
-      <div className="p-6">{children}</div>
-    </div>
+    </>
   );
 }
 
-function FormField({ label, children, hint }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-[var(--text-primary)]">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-[var(--text-tertiary)]">{hint}</p>}
-    </div>
-  );
-}
-
-function MfaToggle({ enabled, onClick }) {
+function Toggle({ checked, onChange }) {
   return (
     <button
-      onClick={onClick}
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
       className={cn(
-        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer',
-        enabled ? 'bg-accent' : 'bg-[var(--bg-secondary)]'
+        'relative w-[42px] h-6 rounded-full transition-colors shrink-0 cursor-pointer',
+        checked ? 'bg-accent' : 'bg-[var(--border-primary)]'
       )}
     >
       <span
         className={cn(
-          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-          enabled ? 'translate-x-6' : 'translate-x-1'
+          'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
+          checked && 'translate-x-[18px]'
         )}
       />
     </button>
@@ -162,25 +176,24 @@ function ThemeSelector({ value, onChange }) {
   ];
 
   return (
-    <div className="flex gap-3">
-      {options.map((option) => {
-        const Icon = option.icon;
-        const isSelected = value === option.id;
-
+    <div className="flex gap-2.5">
+      {options.map((opt) => {
+        const Icon = opt.icon;
+        const selected = value === opt.id;
         return (
           <button
-            key={option.id}
-            onClick={() => onChange(option.id)}
+            key={opt.id}
+            onClick={() => onChange(opt.id)}
             className={cn(
-              'flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors cursor-pointer',
-              isSelected
-                ? 'border-accent bg-accent/5'
-                : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'
+              'flex-1 flex flex-col items-center gap-2 py-4 px-3 rounded-[10px] border-2 transition-all cursor-pointer',
+              selected
+                ? 'border-accent bg-accent/10'
+                : 'border-[var(--border-primary)] hover:border-[var(--text-faint)]'
             )}
           >
-            <Icon className={cn('w-6 h-6', isSelected ? 'text-accent' : 'text-[var(--text-secondary)]')} />
-            <span className={cn('text-sm font-medium', isSelected ? 'text-accent' : 'text-[var(--text-secondary)]')}>
-              {option.label}
+            <Icon className={cn('w-6 h-6', selected ? 'text-accent' : 'text-[var(--text-tertiary)]')} />
+            <span className={cn('text-[13px] font-medium', selected ? 'text-accent font-semibold' : 'text-[var(--text-secondary)]')}>
+              {opt.label}
             </span>
           </button>
         );
@@ -189,59 +202,109 @@ function ThemeSelector({ value, onChange }) {
   );
 }
 
-function Toggle({ checked, onChange, label }) {
+// ─── Profile Panel ───────────────────────────────────────
+
+function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePreferences }) {
+  const [username, setUsername] = useState(user?.username ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleSaveProfile = async () => {
+    const trimmed = username.trim();
+    if (trimmed.length < 3 || trimmed.length > 30 || !/^[A-Za-z0-9_]+$/.test(trimmed)) {
+      setSaveError('Username must be 3-30 characters and contain only letters, numbers, and underscores');
+      return;
+    }
+    setSaveError('');
+    setSaving(true);
+    try {
+      const userData = await updatePreferences({ username: trimmed });
+      setUsername(userData.username);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <label className="flex items-center justify-between cursor-pointer">
-      <span className="text-sm text-[var(--text-primary)]">{label}</span>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          'relative w-11 h-6 rounded-full transition-colors cursor-pointer',
-          checked ? 'bg-accent' : 'bg-[var(--border-secondary)]'
-        )}
-      >
-        <span
-          className={cn(
-            'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
-            checked && 'translate-x-5'
-          )}
+    <SettingsCard description="Your personal information">
+      {/* Personal info */}
+      <div className="space-y-4">
+        <FormGroup label="Username">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className={INPUT_CLASS}
+          />
+        </FormGroup>
+        <FormGroup label="Email Address" hint="Contact support to change your email address">
+          <input
+            type="email"
+            value={user?.email ?? ''}
+            disabled
+            className={cn(INPUT_CLASS, 'text-[var(--text-tertiary)] opacity-60 cursor-not-allowed')}
+          />
+        </FormGroup>
+      </div>
+      {saveError && (
+        <div className="mt-3 p-3 rounded-lg bg-negative/10 text-negative text-sm">{saveError}</div>
+      )}
+      <div className="mt-5">
+        <button
+          onClick={handleSaveProfile}
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 px-[18px] py-[9px] rounded-lg text-[13px] font-semibold bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+
+      {/* Appearance */}
+      <Divider />
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3.5">Appearance</h3>
+      <label className="block text-[13px] font-medium text-[var(--text-secondary)] mb-2.5">Theme</label>
+      <ThemeSelector value={theme} onChange={setTheme} />
+
+      {/* Preferences */}
+      <Divider />
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3.5">Preferences</h3>
+      <FormGroup label="Display Currency" hint="All values will be converted to this currency">
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          className={SELECT_CLASS}
+          style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+        >
+          {SUPPORTED_CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} - {c.name}
+            </option>
+          ))}
+        </select>
+      </FormGroup>
+      <div className="flex items-center justify-between mt-3">
+        <div>
+          <p className="text-[13px] text-[var(--text-primary)]">Show &quot;All Portfolios&quot; option</p>
+          <p className="text-[11px] text-[var(--text-faint)] mt-0.5">
+            When enabled, you can view all portfolios combined in the portfolio selector
+          </p>
+        </div>
+        <Toggle
+          checked={user?.show_combined_view ?? true}
+          onChange={async (checked) => {
+            try { await updatePreferences({ show_combined_view: checked }); } catch { /* UI stays in sync */ }
+          }}
         />
-      </button>
-    </label>
+      </div>
+    </SettingsCard>
   );
 }
 
-function StarIcon({ className, filled }) {
-  if (filled) {
-    return (
-      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-        <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
-      </svg>
-    );
-  }
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
-    </svg>
-  );
-}
+// ─── Security Panel ──────────────────────────────────────
 
-function XMarkIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-
-// ============================================
-// SECURITY SECTION
-// ============================================
-
-function SecuritySection() {
+function SecurityPanel() {
   const [modal, setModal] = useState(null);
   const [mfaStatus, setMfaStatus] = useState({
     mfa_enabled: false,
@@ -253,28 +316,20 @@ function SecuritySection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Fetch MFA status on mount
   useEffect(() => {
-    async function fetchMfaStatus() {
+    (async () => {
       try {
-        const status = await getMfaStatus();
-        setMfaStatus(status);
+        setMfaStatus(await getMfaStatus());
       } catch (err) {
         console.error('Failed to fetch MFA status:', err);
       } finally {
         setLoading(false);
       }
-    }
-    fetchMfaStatus();
+    })();
   }, []);
 
   const refreshMfaStatus = async () => {
-    try {
-      const status = await getMfaStatus();
-      setMfaStatus(status);
-    } catch (err) {
-      console.error('Failed to refresh MFA status:', err);
-    }
+    try { setMfaStatus(await getMfaStatus()); } catch { /* ignore */ }
   };
 
   const handleMfaComplete = async () => {
@@ -294,179 +349,138 @@ function SecuritySection() {
 
   const closeModal = () => setModal(null);
 
+  if (loading) {
+    return (
+      <SettingsCard description="Password and authentication settings">
+        <div className="space-y-3">
+          <Skeleton className="h-14 w-full rounded-[10px]" />
+          <Skeleton className="h-4 w-48 mt-4" />
+          <Skeleton className="h-[52px] w-full rounded-[10px]" />
+          <Skeleton className="h-[52px] w-full rounded-[10px]" />
+        </div>
+      </SettingsCard>
+    );
+  }
+
   return (
-    <SettingsSection
-      icon={ShieldCheckIcon}
-      title="Security"
-      description="Password and authentication settings"
-    >
-      <div className="space-y-4">
-        {/* Password */}
-        <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-tertiary)]">
+    <>
+      <SettingsCard description="Password and authentication settings">
+        {/* Password row */}
+        <div className="flex items-center justify-between py-3.5 px-4 rounded-[10px] bg-[var(--bg-tertiary)]">
           <div>
-            <p className="text-sm font-medium text-[var(--text-primary)]">Password</p>
-            <p className="text-xs text-[var(--text-secondary)]">Change your account password</p>
+            <p className="text-[13px] font-medium text-[var(--text-primary)]">Password</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">Change your account password</p>
           </div>
           <button
             onClick={() => setModal('password')}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-[18px] py-[9px] rounded-lg text-[13px] font-medium bg-[var(--bg-tertiary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:border-[var(--text-faint)] hover:bg-[var(--bg-secondary)] transition-all cursor-pointer"
           >
             Change Password
           </button>
         </div>
 
-        {/* Two-Factor Authentication - Redesigned */}
-        <div className="p-4 rounded-lg bg-[var(--bg-tertiary)]">
-          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-4">
-            Two-factor authentication
-          </h3>
+        {/* Two-factor authentication */}
+        <p className="text-[13px] font-semibold text-[var(--text-secondary)] mt-[18px] mb-2.5">
+          Two-factor authentication
+        </p>
 
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-negative/10 text-negative text-sm">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="mb-3 p-3 rounded-lg bg-negative/10 text-negative text-sm">{error}</div>
+        )}
 
-          {loading ? (
-            <div className="text-sm text-[var(--text-secondary)]">Loading...</div>
-          ) : (
-            <div className="space-y-3">
-              {/* Authenticator App Card */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+        {/* MFA method cards */}
+        <div className="space-y-2">
+          {MFA_METHODS.map((method) => {
+            const Icon = method.icon;
+            const enabled = mfaStatus[method.enabledField];
+            return (
+              <div
+                key={method.key}
+                className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-primary)] border border-[var(--border-primary)]"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
-                    <ShieldCheckIcon className="h-5 w-5 text-[var(--text-secondary)]" />
+                  <div className="w-[34px] h-[34px] rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[var(--text-tertiary)]" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      Authenticator App
-                    </p>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Use Google Authenticator, Authy, etc.
-                    </p>
+                    <p className="text-[13px] font-medium text-[var(--text-primary)]">{method.label}</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)] mt-px">{method.description}</p>
                   </div>
                 </div>
-                <MfaToggle
-                  enabled={mfaStatus.totp_enabled}
-                  onClick={() => setModal(mfaStatus.totp_enabled ? 'disable-totp' : 'totp')}
+                <Toggle
+                  checked={enabled}
+                  onChange={() => setModal(enabled ? method.disableModal : method.enableModal)}
                 />
               </div>
-
-              {/* Email OTP Card */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
-                    <EnvelopeIcon className="h-5 w-5 text-[var(--text-secondary)]" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      Email OTP
-                    </p>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Codes sent to your email
-                    </p>
-                  </div>
-                </div>
-                <MfaToggle
-                  enabled={mfaStatus.email_otp_enabled}
-                  onClick={() => setModal(mfaStatus.email_otp_enabled ? 'disable-email' : 'email')}
-                />
-              </div>
-
-              {/* Default Method Dropdown - only when both enabled */}
-              {mfaStatus.totp_enabled && mfaStatus.email_otp_enabled && (
-                <div className="flex items-center justify-between pt-2">
-                  <label className="text-sm text-[var(--text-secondary)]">
-                    Default login method
-                  </label>
-                  <select
-                    value={mfaStatus.primary_method || 'totp'}
-                    onChange={(e) => handlePrimaryMethodChange(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-sm bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] cursor-pointer"
-                  >
-                    <option value="totp">Authenticator App</option>
-                    <option value="email">Email OTP</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Recovery Codes Button */}
-              {mfaStatus.has_recovery_codes && (
-                <button
-                  onClick={() => setModal('regenerate')}
-                  className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
-                >
-                  Regenerate Recovery Codes
-                </button>
-              )}
-            </div>
-          )}
+            );
+          })}
         </div>
-      </div>
+
+        {/* Default method dropdown */}
+        {mfaStatus.totp_enabled && mfaStatus.email_otp_enabled && (
+          <div className="flex items-center justify-between pt-3 mt-2">
+            <label className="text-[13px] text-[var(--text-secondary)]">Default login method</label>
+            <select
+              value={mfaStatus.primary_method || 'totp'}
+              onChange={(e) => handlePrimaryMethodChange(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-[13px] bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] cursor-pointer"
+              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            >
+              <option value="totp">Authenticator App</option>
+              <option value="email">Email OTP</option>
+            </select>
+          </div>
+        )}
+
+        {/* Recovery codes */}
+        {mfaStatus.has_recovery_codes && (
+          <button
+            onClick={() => setModal('regenerate')}
+            className="block w-full mt-3 py-[9px] rounded-lg text-[13px] font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-primary)] hover:border-[var(--text-faint)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer text-center"
+          >
+            Regenerate Recovery Codes
+          </button>
+        )}
+      </SettingsCard>
 
       {/* Modals */}
       {modal && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-50" onClick={closeModal} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-[var(--bg-primary)] rounded-xl shadow-xl max-w-md w-full p-6">
-              {modal === 'password' && (
-                <ChangePassword onComplete={closeModal} onCancel={closeModal} />
-              )}
-              {modal === 'totp' && (
-                <TotpSetup
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                  requireVerification={mfaStatus.email_otp_enabled}
-                />
-              )}
-              {modal === 'email' && (
-                <EmailOtpSetup
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                  requireVerification={mfaStatus.totp_enabled}
-                />
-              )}
-              {modal === 'disable-totp' && (
-                <DisableMfaMethod
-                  method="totp"
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                />
-              )}
-              {modal === 'disable-email' && (
-                <DisableMfaMethod
-                  method="email"
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                />
-              )}
-              {modal === 'regenerate' && (
-                <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
-              )}
-            </div>
-          </div>
-        </>
+        <Modal onClose={closeModal}>
+          {modal === 'password' && (
+            <ChangePassword onComplete={closeModal} onCancel={closeModal} />
+          )}
+          {modal === 'totp' && (
+            <TotpSetup
+              onComplete={handleMfaComplete}
+              onCancel={closeModal}
+              requireVerification={mfaStatus.email_otp_enabled}
+            />
+          )}
+          {modal === 'email' && (
+            <EmailOtpSetup
+              onComplete={handleMfaComplete}
+              onCancel={closeModal}
+              requireVerification={mfaStatus.totp_enabled}
+            />
+          )}
+          {modal === 'disable-totp' && (
+            <DisableMfaMethod method="totp" onComplete={handleMfaComplete} onCancel={closeModal} />
+          )}
+          {modal === 'disable-email' && (
+            <DisableMfaMethod method="email" onComplete={handleMfaComplete} onCancel={closeModal} />
+          )}
+          {modal === 'regenerate' && (
+            <RegenerateRecoveryCodes onComplete={handleMfaComplete} onCancel={closeModal} />
+          )}
+        </Modal>
       )}
-    </SettingsSection>
+    </>
   );
 }
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
+// ─── Notifications Panel ─────────────────────────────────
 
-export default function Settings() {
-  const { theme, setTheme } = useTheme();
-  const { currency, setCurrency } = useCurrency();
-  const { user, updatePreferences } = useAuth();
-
-  // Form states
-  const [profile, setProfile] = useState({
-    name: MOCK_USER.name,
-    email: MOCK_USER.email,
-  });
-
+function NotificationsPanel() {
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
     priceAlerts: false,
@@ -474,158 +488,82 @@ export default function Settings() {
     marketNews: false,
   });
 
-  const handleSaveProfile = () => {
-    // TODO: Implement API call to save profile
-  };
+  const update = (key) => (val) => setNotifications((prev) => ({ ...prev, [key]: val }));
+
+  const rows = [
+    { key: 'emailAlerts', label: 'Email alerts for significant portfolio changes' },
+    { key: 'priceAlerts', label: 'Price alerts for watched assets' },
+    { key: 'weeklyDigest', label: 'Weekly portfolio digest' },
+    { key: 'marketNews', label: 'Market news and insights' },
+  ];
+
+  return (
+    <SettingsCard description="Choose what updates you receive">
+      <div className="space-y-2.5">
+        {rows.map((row) => (
+          <div key={row.key} className="flex items-center justify-between py-1">
+            <span className="text-[13px] text-[var(--text-primary)]">{row.label}</span>
+            <Toggle checked={notifications[row.key]} onChange={update(row.key)} />
+          </div>
+        ))}
+      </div>
+    </SettingsCard>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────
+
+export default function Settings() {
+  const { theme, setTheme } = useTheme();
+  const { currency, setCurrency } = useCurrency();
+  const { user, updatePreferences } = useAuth();
+  const [activeTab, setActiveTab] = useState('profile');
 
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Settings</h1>
-        <p className="text-[var(--text-secondary)] mt-1">
-          Manage your account settings and preferences
-        </p>
-      </div>
+      <div className="w-[clamp(320px,_88%,_1400px)] mx-auto">
+        {/* Page title */}
+        <div className="mb-6">
+          <h1 className="text-[22px] font-bold tracking-[-0.3px] text-[var(--text-primary)]">Settings</h1>
+          <p className="text-[13px] text-[var(--text-tertiary)] mt-0.5">Manage your account settings and preferences</p>
+        </div>
 
-      <div className="space-y-6 max-w-3xl">
-        {/* Profile Section */}
-        <SettingsSection
-          icon={UserCircleIcon}
-          title="Profile"
-          description="Your personal information"
-        >
-          <div className="space-y-4">
-            <FormField label="Full Name">
-              <input
-                type="text"
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                className={cn(
-                  'w-full px-3 py-2.5 rounded-lg text-sm',
-                  'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                  'text-[var(--text-primary)]',
-                  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent'
-                )}
-              />
-            </FormField>
-
-            <FormField label="Email Address">
-              <input
-                type="email"
-                value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                className={cn(
-                  'w-full px-3 py-2.5 rounded-lg text-sm',
-                  'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                  'text-[var(--text-primary)]',
-                  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent'
-                )}
-              />
-            </FormField>
-
-            <div className="pt-2">
+        {/* Tab bar */}
+        <div className="flex items-center gap-0.5 p-[3px] bg-[var(--bg-tertiary)] rounded-[10px] mb-5">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                onClick={handleSaveProfile}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 transition-colors cursor-pointer"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </SettingsSection>
-
-        {/* Security Section */}
-        <SecuritySection />
-
-        {/* Appearance Section */}
-        <SettingsSection
-          icon={SwatchIcon}
-          title="Appearance"
-          description="Customize how Finch looks"
-        >
-          <div className="space-y-6">
-            <FormField label="Theme">
-              <ThemeSelector value={theme} onChange={setTheme} />
-            </FormField>
-          </div>
-        </SettingsSection>
-
-        {/* Preferences Section */}
-        <SettingsSection
-          icon={CurrencyDollarIcon}
-          title="Preferences"
-          description="Display and regional settings"
-        >
-          <div className="space-y-4">
-            <FormField label="Display Currency" hint="All values will be converted to this currency">
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'w-full px-3 py-2.5 rounded-lg text-sm',
-                  'bg-[var(--bg-primary)] border border-[var(--border-primary)]',
-                  'text-[var(--text-primary)]',
-                  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent',
-                  'cursor-pointer'
+                  'flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-medium transition-all cursor-pointer whitespace-nowrap',
+                  isActive
+                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] font-semibold shadow-sm'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
                 )}
               >
-                {SUPPORTED_CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code}
-                  </option>
-                ))}
-              </select>
-            </FormField>
+                <Icon className="w-4 h-4 shrink-0" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-            <div className="pt-2 border-t border-[var(--border-primary)]">
-              <Toggle
-                checked={user?.show_combined_view ?? true}
-                onChange={async (checked) => {
-                  try {
-                    await updatePreferences({ show_combined_view: checked });
-                  } catch {
-                    // Preference update failed silently - UI will remain in sync
-                  }
-                }}
-                label="Show 'All Portfolios' option"
-              />
-              <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                When enabled, you can view all portfolios combined in the portfolio selector
-              </p>
-            </div>
-          </div>
-        </SettingsSection>
-
-        {/* Notifications Section */}
-        <SettingsSection
-          icon={BellIcon}
-          title="Notifications"
-          description="Choose what updates you receive"
-        >
-          <div className="space-y-4">
-            <Toggle
-              checked={notifications.emailAlerts}
-              onChange={(checked) => setNotifications({ ...notifications, emailAlerts: checked })}
-              label="Email alerts for significant portfolio changes"
-            />
-            <Toggle
-              checked={notifications.priceAlerts}
-              onChange={(checked) => setNotifications({ ...notifications, priceAlerts: checked })}
-              label="Price alerts for watched assets"
-            />
-            <Toggle
-              checked={notifications.weeklyDigest}
-              onChange={(checked) => setNotifications({ ...notifications, weeklyDigest: checked })}
-              label="Weekly portfolio digest"
-            />
-            <Toggle
-              checked={notifications.marketNews}
-              onChange={(checked) => setNotifications({ ...notifications, marketNews: checked })}
-              label="Market news and insights"
-            />
-          </div>
-        </SettingsSection>
+        {/* Tab panels */}
+        {activeTab === 'profile' && (
+          <ProfilePanel
+            user={user}
+            theme={theme}
+            setTheme={setTheme}
+            currency={currency}
+            setCurrency={setCurrency}
+            updatePreferences={updatePreferences}
+          />
+        )}
+        {activeTab === 'security' && <SecurityPanel />}
+        {activeTab === 'notifications' && <NotificationsPanel />}
       </div>
     </PageContainer>
   );

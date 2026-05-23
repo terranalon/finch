@@ -4,54 +4,43 @@ const ThemeContext = createContext(undefined);
 
 /**
  * Theme provider for managing light/dark mode.
+ * Supports 'light', 'dark', and 'system' preferences.
  * Persists preference to localStorage and syncs with system preference.
  */
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    // Check localStorage first
     const stored = localStorage.getItem('finch-theme');
-    if (stored === 'light' || stored === 'dark') {
-      return stored;
-    }
-    // Fall back to system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
+    if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    return 'system';
   });
 
-  // Apply theme class to document
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('finch-theme', theme);
-  }, [theme]);
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
 
-  // Listen for system preference changes
+  // Track OS preference changes reactively
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      // Only auto-switch if user hasn't set a preference
-      const stored = localStorage.getItem('finch-theme');
-      if (!stored) {
-        setTheme(e.matches ? 'dark' : 'light');
-      }
-    };
-
+    const handleChange = (e) => setSystemDark(e.matches);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  const isDark = theme === 'dark' || (theme === 'system' && systemDark);
+
+  // Apply theme class and persist preference
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('finch-theme', theme);
+  }, [isDark, theme]);
+
+  // Toggle between explicit light/dark, bypassing system preference
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setTheme(isDark ? 'light' : 'dark');
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, isDark }}>
       {children}
     </ThemeContext.Provider>
   );
