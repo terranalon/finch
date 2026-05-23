@@ -50,6 +50,9 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   if (account) prevAccountRef.current = account;
   const renderAccount = account ?? prevAccountRef.current;
 
+  // Set to true when Escape is pressed so the blur handler skips commitRename.
+  const cancelRenameRef = useRef(false);
+
   // Reset all local state when switching to a different account.
   // The null guard prevents resetting during the close animation.
   useEffect(() => {
@@ -77,6 +80,10 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   };
 
   const commitRename = async () => {
+    if (cancelRenameRef.current) {
+      cancelRenameRef.current = false;
+      return;
+    }
     const trimmed = nameValue.trim();
     setEditingName(false);
     if (trimmed && trimmed !== renderAccount.name) {
@@ -135,7 +142,10 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                     onBlur={commitRename}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commitRename();
-                      if (e.key === 'Escape') setEditingName(false);
+                      if (e.key === 'Escape') {
+                        cancelRenameRef.current = true;
+                        setEditingName(false);
+                      }
                     }}
                     className="text-xl font-semibold bg-transparent border-b border-[var(--accent-primary)] outline-none w-full"
                   />
