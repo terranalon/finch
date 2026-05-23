@@ -210,10 +210,16 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
   const [saveError, setSaveError] = useState('');
 
   const handleSaveProfile = async () => {
+    const trimmed = username.trim();
+    if (trimmed.length < 3 || trimmed.length > 30 || !/^[A-Za-z0-9_]+$/.test(trimmed)) {
+      setSaveError('Username must be 3-30 characters and contain only letters, numbers, and underscores');
+      return;
+    }
     setSaveError('');
     setSaving(true);
     try {
-      await updatePreferences({ username });
+      const userData = await updatePreferences({ username: trimmed });
+      setUsername(userData.username);
     } catch (err) {
       setSaveError(err.message || 'Failed to save changes');
     } finally {

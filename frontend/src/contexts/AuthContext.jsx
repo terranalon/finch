@@ -70,7 +70,9 @@ export function AuthProvider({ children }) {
       setUser(userData);
       return userData;
     }
-    throw new Error('Failed to update preferences');
+    const data = await response.json().catch(() => null);
+    const detail = data?.detail || data?.message || 'Failed to update preferences';
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   }, []);
 
   const value = {
