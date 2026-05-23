@@ -215,22 +215,25 @@ export default function Accounts() {
         existingAccountNames={accounts.map((a) => a.name)}
       />
 
-      {/* Batch upload modal — onComplete fires only on successful import */}
-      <BatchUploadModal
-        isOpen={showBatchUpload}
-        onClose={() => {
-          setShowBatchUpload(false);
-          setActiveModalAccount(null);
-        }}
-        onComplete={() => {
-          setShowBatchUpload(false);
-          setActiveModalAccount(null);
-          refresh();
-        }}
-        accountId={activeModalAccount?.id}
-        brokerType={activeModalAccount?.broker_type}
-        supportedFormats={getBrokerConfig(activeModalAccount?.broker_type)?.supportedFormats || []}
-      />
+      {/* Batch upload modal — conditionally rendered so sessionId resets on each open.
+          onComplete fires only on successful import. */}
+      {showBatchUpload && (
+        <BatchUploadModal
+          isOpen={showBatchUpload}
+          onClose={() => {
+            setShowBatchUpload(false);
+            setActiveModalAccount(null);
+          }}
+          onComplete={() => {
+            setShowBatchUpload(false);
+            setActiveModalAccount(null);
+            refresh();
+          }}
+          accountId={activeModalAccount?.id}
+          brokerType={activeModalAccount?.broker_type}
+          supportedFormats={getBrokerConfig(activeModalAccount?.broker_type)?.supportedFormats || []}
+        />
+      )}
 
       {/* API credentials modal */}
       <ApiCredentialsModal

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, formatPercent } from '../../lib';
 import { ASSET_COLORS } from '../../lib/constants';
@@ -44,16 +44,34 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  if (!account) return null;
+  // Keep the last non-null account in a ref so the sidebar content remains
+  // visible during the CSS slide-out animation (200ms) after account becomes null.
+  const prevAccountRef = useRef(account);
+  if (account) prevAccountRef.current = account;
+  const renderAccount = account ?? prevAccountRef.current;
 
-  const brokerConfig = getBrokerConfig(account.broker_type);
-  const isShared = (account.portfolio_ids?.length ?? 0) > 1;
+  // Reset all local state when switching to a different account.
+  // The null guard prevents resetting during the close animation.
+  useEffect(() => {
+    if (!account) return;
+    setEditingName(false);
+    setNameValue('');
+    setRenameError(null);
+    setShowDeleteConfirm(false);
+    setIsDeleting(false);
+    setDeleteError(null);
+  }, [account?.id]);
+
+  if (!renderAccount) return null;
+
+  const brokerConfig = getBrokerConfig(renderAccount.broker_type);
+  const isShared = (renderAccount.portfolio_ids?.length ?? 0) > 1;
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
   const startRename = () => {
-    setNameValue(account.name);
+    setNameValue(renderAccount.name);
     setRenameError(null);
     setEditingName(true);
   };
@@ -61,9 +79,9 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   const commitRename = async () => {
     const trimmed = nameValue.trim();
     setEditingName(false);
-    if (trimmed && trimmed !== account.name) {
+    if (trimmed && trimmed !== renderAccount.name) {
       try {
-        await onRename?.(account.id, trimmed);
+        await onRename?.(renderAccount.id, trimmed);
       } catch (err) {
         setRenameError(err.message || 'Failed to rename account');
       }
@@ -76,7 +94,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await onDelete?.(account.id);
+      await onDelete?.(renderAccount.id);
     } catch (err) {
       setIsDeleting(false);
       setDeleteError(err.message || 'Failed to delete account');
@@ -108,7 +126,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2.5 mb-1">
-                <BrokerLogo type={account.broker_type} className="w-9 h-9 rounded-[9px] shrink-0" />
+                <BrokerLogo type={renderAccount.broker_type} className="w-9 h-9 rounded-[9px] shrink-0" />
                 {editingName ? (
                   <input
                     autoFocus
@@ -123,7 +141,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                   />
                 ) : (
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <h2 className="text-xl font-semibold truncate">{account.name}</h2>
+                    <h2 className="text-xl font-semibold truncate">{renderAccount.name}</h2>
                     <button
                       onClick={startRename}
                       className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[var(--text-faint)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
@@ -135,9 +153,9 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                 )}
               </div>
               <p className="text-[13px] text-[var(--text-faint)]">
-                {TYPE_LABELS[account.account_type] || account.account_type} Account
+                {TYPE_LABELS[renderAccount.account_type] || renderAccount.account_type} Account
                 {' \u00B7 '}
-                {account.allocationPct.toFixed(1)}% of portfolio
+                {renderAccount.allocationPct.toFixed(1)}% of portfolio
               </p>
               {renameError && (
                 <p className="text-[11px] text-[var(--negative)] mt-0.5">{renameError}</p>
@@ -145,7 +163,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => navigate(`/accounts/${account.id}`)}
+                onClick={() => navigate(`/accounts/${renderAccount.id}`)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--accent-hover)] transition-colors cursor-pointer whitespace-nowrap"
               >
                 View Details
@@ -163,7 +181,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
           {/* Value block */}
           <div className="mt-3.5">
             <span className="text-[28px] font-bold font-mono tabular-nums tracking-tight">
-              {formatCurrency(account.value, currency, { decimals: 0 })}
+              {formatCurrency(renderAccount.value, currency, { decimals: 0 })}
             </span>
             <span className={cn('text-sm font-medium font-mono tabular-nums ml-2.5', pnlColor(totalPnl))}>
               {formatPnl(totalPnl, currency)} ({formatPercent(totalPnlPct)})
@@ -187,8 +205,8 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
               label="Sync Status"
               value={
                 <span className="flex items-center gap-1.5">
-                  <span className={cn('w-1.5 h-1.5 rounded-full inline-block', account.syncStatus.color)} />
-                  {account.lastSyncFormatted}
+                  <span className={cn('w-1.5 h-1.5 rounded-full inline-block', renderAccount.syncStatus.color)} />
+                  {renderAccount.lastSyncFormatted}
                 </span>
               }
               isLast
@@ -241,14 +259,14 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                 <ActionButton
                   icon={<CloudArrowUpIcon className="w-4 h-4" />}
                   label="Upload Data"
-                  onClick={() => onUpload?.(account)}
+                  onClick={() => onUpload?.(renderAccount)}
                 />
               )}
               {brokerConfig?.hasApi && (
                 <ActionButton
                   icon={<KeyIcon className="w-4 h-4" />}
                   label="API Credentials"
-                  onClick={() => onApiCredentials?.(account)}
+                  onClick={() => onApiCredentials?.(renderAccount)}
                 />
               )}
               {!showDeleteConfirm ? (
