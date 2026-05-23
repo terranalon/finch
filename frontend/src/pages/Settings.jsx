@@ -73,7 +73,40 @@ const TABS = [
   { id: 'notifications', label: 'Notifications', icon: BellIcon },
 ];
 
+const INPUT_CLASS =
+  'w-full py-[9px] px-3.5 text-[13px] bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]';
+
+const SELECT_CLASS = cn(
+  INPUT_CLASS,
+  "cursor-pointer appearance-none bg-no-repeat bg-[right_12px_center] bg-[length:12px] bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22none%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m2%204%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')]"
+);
+
+const MFA_METHODS = [
+  {
+    key: 'totp',
+    icon: ShieldCheckIcon,
+    label: 'Authenticator App',
+    description: 'Use Google Authenticator, Authy, etc.',
+    enabledField: 'totp_enabled',
+    enableModal: 'totp',
+    disableModal: 'disable-totp',
+  },
+  {
+    key: 'email',
+    icon: EnvelopeIcon,
+    label: 'Email OTP',
+    description: 'Codes sent to your email',
+    enabledField: 'email_otp_enabled',
+    enableModal: 'email',
+    disableModal: 'disable-email',
+  },
+];
+
 // ─── Shared Components ───────────────────────────────────
+
+function Divider() {
+  return <div className="h-px bg-[var(--border-primary)] my-6" />;
+}
 
 function SettingsCard({ description, children }) {
   return (
@@ -95,6 +128,22 @@ function FormGroup({ label, hint, children }) {
       {children}
       {hint && <p className="text-[11px] text-[var(--text-faint)] mt-0.5">{hint}</p>}
     </div>
+  );
+}
+
+function Modal({ onClose, children }) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-xl max-w-md w-full p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -167,7 +216,7 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full py-[9px] px-3.5 text-[13px] bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] outline-none transition-colors focus:border-accent focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]"
+            className={INPUT_CLASS}
           />
         </FormGroup>
         <FormGroup label="Email Address" hint="Contact support to change your email address">
@@ -175,7 +224,7 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
             type="email"
             value={user?.email ?? ''}
             disabled
-            className="w-full py-[9px] px-3.5 text-[13px] bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-tertiary)] outline-none opacity-60 cursor-not-allowed"
+            className={cn(INPUT_CLASS, 'text-[var(--text-tertiary)] opacity-60 cursor-not-allowed')}
           />
         </FormGroup>
       </div>
@@ -186,19 +235,19 @@ function ProfilePanel({ user, theme, setTheme, currency, setCurrency, updatePref
       </div>
 
       {/* Appearance */}
-      <div className="h-px bg-[var(--border-primary)] my-6" />
+      <Divider />
       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3.5">Appearance</h3>
       <label className="block text-[13px] font-medium text-[var(--text-secondary)] mb-2.5">Theme</label>
       <ThemeSelector value={theme} onChange={setTheme} />
 
       {/* Preferences */}
-      <div className="h-px bg-[var(--border-primary)] my-6" />
+      <Divider />
       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3.5">Preferences</h3>
       <FormGroup label="Display Currency" hint="All values will be converted to this currency">
         <select
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
-          className="w-full py-[9px] px-3.5 text-[13px] bg-[var(--bg-tertiary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] outline-none cursor-pointer transition-colors focus:border-accent focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)] appearance-none bg-no-repeat bg-[right_12px_center] bg-[length:12px] bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22none%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m2%204%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')]"
+          className={SELECT_CLASS}
         >
           {SUPPORTED_CURRENCIES.map((c) => (
             <option key={c.code} value={c.code}>
@@ -311,38 +360,32 @@ function SecurityPanel() {
           <div className="mb-3 p-3 rounded-lg bg-negative/10 text-negative text-sm">{error}</div>
         )}
 
-        {/* Authenticator App card */}
-        <div className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-primary)] border border-[var(--border-primary)]">
-          <div className="flex items-center gap-3">
-            <div className="w-[34px] h-[34px] rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
-              <ShieldCheckIcon className="w-4 h-4 text-[var(--text-tertiary)]" />
-            </div>
-            <div>
-              <p className="text-[13px] font-medium text-[var(--text-primary)]">Authenticator App</p>
-              <p className="text-[11px] text-[var(--text-tertiary)] mt-px">Use Google Authenticator, Authy, etc.</p>
-            </div>
-          </div>
-          <Toggle
-            checked={mfaStatus.totp_enabled}
-            onChange={() => setModal(mfaStatus.totp_enabled ? 'disable-totp' : 'totp')}
-          />
-        </div>
-
-        {/* Email OTP card */}
-        <div className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-primary)] border border-[var(--border-primary)] mt-2">
-          <div className="flex items-center gap-3">
-            <div className="w-[34px] h-[34px] rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
-              <EnvelopeIcon className="w-4 h-4 text-[var(--text-tertiary)]" />
-            </div>
-            <div>
-              <p className="text-[13px] font-medium text-[var(--text-primary)]">Email OTP</p>
-              <p className="text-[11px] text-[var(--text-tertiary)] mt-px">Codes sent to your email</p>
-            </div>
-          </div>
-          <Toggle
-            checked={mfaStatus.email_otp_enabled}
-            onChange={() => setModal(mfaStatus.email_otp_enabled ? 'disable-email' : 'email')}
-          />
+        {/* MFA method cards */}
+        <div className="space-y-2">
+          {MFA_METHODS.map((method) => {
+            const Icon = method.icon;
+            const enabled = mfaStatus[method.enabledField];
+            return (
+              <div
+                key={method.key}
+                className="flex items-center justify-between p-3 rounded-[10px] bg-[var(--bg-primary)] border border-[var(--border-primary)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-[34px] h-[34px] rounded-lg bg-[var(--bg-tertiary)] flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[var(--text-tertiary)]" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-medium text-[var(--text-primary)]">{method.label}</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)] mt-px">{method.description}</p>
+                  </div>
+                </div>
+                <Toggle
+                  checked={enabled}
+                  onChange={() => setModal(enabled ? method.disableModal : method.enableModal)}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Default method dropdown */}
@@ -373,42 +416,34 @@ function SecurityPanel() {
 
       {/* Modals */}
       {modal && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-50" onClick={closeModal} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-xl max-w-md w-full p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {modal === 'password' && (
-                <ChangePassword onComplete={closeModal} onCancel={closeModal} />
-              )}
-              {modal === 'totp' && (
-                <TotpSetup
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                  requireVerification={mfaStatus.email_otp_enabled}
-                />
-              )}
-              {modal === 'email' && (
-                <EmailOtpSetup
-                  onComplete={handleMfaComplete}
-                  onCancel={closeModal}
-                  requireVerification={mfaStatus.totp_enabled}
-                />
-              )}
-              {modal === 'disable-totp' && (
-                <DisableMfaMethod method="totp" onComplete={handleMfaComplete} onCancel={closeModal} />
-              )}
-              {modal === 'disable-email' && (
-                <DisableMfaMethod method="email" onComplete={handleMfaComplete} onCancel={closeModal} />
-              )}
-              {modal === 'regenerate' && (
-                <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
-              )}
-            </div>
-          </div>
-        </>
+        <Modal onClose={closeModal}>
+          {modal === 'password' && (
+            <ChangePassword onComplete={closeModal} onCancel={closeModal} />
+          )}
+          {modal === 'totp' && (
+            <TotpSetup
+              onComplete={handleMfaComplete}
+              onCancel={closeModal}
+              requireVerification={mfaStatus.email_otp_enabled}
+            />
+          )}
+          {modal === 'email' && (
+            <EmailOtpSetup
+              onComplete={handleMfaComplete}
+              onCancel={closeModal}
+              requireVerification={mfaStatus.totp_enabled}
+            />
+          )}
+          {modal === 'disable-totp' && (
+            <DisableMfaMethod method="totp" onComplete={handleMfaComplete} onCancel={closeModal} />
+          )}
+          {modal === 'disable-email' && (
+            <DisableMfaMethod method="email" onComplete={handleMfaComplete} onCancel={closeModal} />
+          )}
+          {modal === 'regenerate' && (
+            <RegenerateRecoveryCodes onComplete={closeModal} onCancel={closeModal} />
+          )}
+        </Modal>
       )}
     </>
   );
