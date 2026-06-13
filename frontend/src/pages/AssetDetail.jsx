@@ -60,7 +60,7 @@ export default function AssetDetail() {
 
   return (
     <PageContainer>
-      <nav className="mb-4 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+      <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
         <Link to="/assets" className="hover:text-[var(--text-primary)]">Assets</Link>
         <span>/</span>
         <span className="text-[var(--text-primary)] font-medium">{asset.symbol}</span>
@@ -73,6 +73,8 @@ export default function AssetDetail() {
       <div className="mt-6 flex flex-col lg:flex-row gap-6 items-start">
         {/* Left column: market data */}
         <div className="flex-1 min-w-0 flex flex-col gap-6 w-full">
+          {/* Chart uses the asset's native quote currency; activity/totals below use
+              the user's display currency (`currency` from the hook). Intentional. */}
           <AssetChart
             priceHistory={priceHistory}
             activePeriod={chartPeriod}
