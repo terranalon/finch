@@ -31,6 +31,8 @@ export default function RecentActivity({ activity, activityCount, currency }) {
                 tx.quantity != null
                   ? `${formatNumber(tx.quantity)} @ ${formatCurrency(tx.price, currency)} · ${tx.account || '--'} · ${formatDate(tx.date)}`
                   : `${tx.account || '--'} · ${formatDate(tx.date)}`;
+              const total = Number(tx.total);
+              const hasTotal = Number.isFinite(total);
               return (
                 <div
                   key={tx.id}
@@ -43,9 +45,20 @@ export default function RecentActivity({ activity, activityCount, currency }) {
                     </div>
                     <div className="text-[10px] text-[var(--text-tertiary)] truncate">{meta}</div>
                   </div>
-                  <div className={cn('text-[12px] font-mono tabular-nums font-medium flex-shrink-0', amountColor(tx.type))}>
-                    {amountSign(tx.type)}
-                    {formatCurrency(Math.abs(Number(tx.total)), currency)}
+                  <div
+                    className={cn(
+                      'text-[12px] font-mono tabular-nums font-medium flex-shrink-0',
+                      hasTotal && amountColor(tx.type),
+                    )}
+                  >
+                    {hasTotal ? (
+                      <>
+                        {amountSign(tx.type)}
+                        {formatCurrency(Math.abs(total), currency)}
+                      </>
+                    ) : (
+                      '--'
+                    )}
                   </div>
                 </div>
               );
