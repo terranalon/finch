@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import AssetDetail from '../AssetDetail';
 
 const mockNavigate = vi.fn();
@@ -9,140 +9,120 @@ vi.mock('react-router-dom', () => ({
   Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }));
 
-const mockApi = vi.fn();
-vi.mock('../../lib/index.js', () => ({
-  api: (...args) => mockApi(...args),
-  formatCurrency: (v) => `$${Number(v || 0).toFixed(2)}`,
-  formatPercent: (v) => `${Number(v || 0).toFixed(2)}%`,
-  formatDate: (d) => d || '',
-  formatNumber: (v) => String(v || 0),
-  formatPriceChange: () => ({ indicator: '', colorClass: '', change: '', percent: '' }),
-  getChangeColor: () => '',
-  getChangeIndicator: () => '',
-  cn: (...args) => args.filter(Boolean).join(' '),
+// The page is a thin orchestrator over useAssetDetailData; mock the hook so the
+// test exercises layout/branching rather than data fetching (covered elsewhere).
+const mockHook = vi.fn();
+vi.mock('../../hooks/useAssetDetailData', () => ({
+  useAssetDetailData: (...args) => mockHook(...args),
 }));
 
-vi.mock('../../contexts/index.js', () => ({
-  useCurrency: () => ({ currency: 'USD', currencySymbol: '$' }),
+vi.mock('../../components/asset-detail', () => ({
+  AssetHero: () => <div data-testid="asset-hero" />,
+  PositionStrip: () => <div data-testid="position-strip" />,
+  AssetChart: () => <div data-testid="asset-chart" />,
+  AssetStatsGrid: () => <div data-testid="asset-stats-grid" />,
+  AssetAbout: () => <div data-testid="asset-about" />,
+  AssetDividend: () => <div data-testid="asset-dividend" />,
+  RecentActivity: () => <div data-testid="recent-activity" />,
 }));
 
-vi.mock('../../components/asset-detail/AssetHero', () => ({
-  default: () => <div data-testid="asset-hero" />,
-}));
-
-vi.mock('../../components/asset-detail/AssetChart', () => ({
-  default: () => <div data-testid="asset-chart" />,
-}));
-
-vi.mock('../../components/asset-detail/AssetStatsGrid', () => ({
-  default: () => <div data-testid="asset-stats-grid" />,
-}));
-
-vi.mock('../../components/asset-detail/AssetAbout', () => ({
-  default: () => <div data-testid="asset-about" />,
-}));
-
-vi.mock('../../components/asset-detail/AssetDividend', () => ({
-  default: () => <div data-testid="asset-dividend" />,
-}));
-
-const mockAssetDetail = {
-  id: 1, symbol: 'AAPL', name: 'Apple Inc.', asset_class: 'Stock',
-  currency: 'USD', exchange: 'NASDAQ', is_favorite: false,
-  last_fetched_price: 237.42, last_fetched_at: '2026-02-20T10:00:00Z',
-  daily_metrics: { open: 234.80, close: 237.42, high: 238.10, low: 234.15 },
+const baseAsset = {
+  id: 1,
+  symbol: 'AAPL',
+  name: 'Apple Inc.',
+  asset_class: 'Stock',
+  currency: 'USD',
+  daily_metrics: { dividend_yield: 0.5 },
 };
 
-function mockSuccessfulFetch() {
-  mockApi
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAssetDetail) })
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
-    .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+function hookResult(overrides = {}) {
+  return {
+    asset: baseAsset,
+    position: null,
+    recentActivity: [],
+    activityCount: 0,
+    priceHistory: null,
+    chartPeriod: '1y',
+    loading: false,
+    error: null,
+    currency: 'USD',
+    setChartPeriod: vi.fn(),
+    toggleFavorite: vi.fn(),
+    refreshPrice: vi.fn(),
+    ...overrides,
+  };
 }
 
 describe('AssetDetail', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it('shows loading skeleton initially', () => {
-    mockApi.mockReturnValue(new Promise(() => {})); // never resolves
+  it('passes the route id to the data hook', () => {
+    mockHook.mockReturnValue(hookResult());
+    render(<AssetDetail />);
+    expect(mockHook).toHaveBeenCalledWith('1');
+  });
+
+  it('shows loading skeleton while loading', () => {
+    mockHook.mockReturnValue(hookResult({ loading: true, asset: null }));
     render(<AssetDetail />);
     expect(document.querySelector('.animate-pulse')).toBeTruthy();
   });
 
-  it('renders breadcrumb with asset symbol after loading', async () => {
-    mockSuccessfulFetch();
+  it('shows error state and navigates back to assets on CTA click', () => {
+    mockHook.mockReturnValue(hookResult({ error: 'Asset not found', asset: null }));
     render(<AssetDetail />);
-    await waitFor(() => {
-      expect(screen.getByText('AAPL')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Assets')).toBeInTheDocument();
-  });
-
-  it('shows error state when asset returns 404', async () => {
-    mockApi.mockResolvedValueOnce({ ok: false, status: 404 });
-    render(<AssetDetail />);
-    await waitFor(() => {
-      expect(screen.getByText('Asset not found')).toBeInTheDocument();
-    });
-  });
-
-  it('shows error state when fetch throws', async () => {
-    mockApi.mockRejectedValueOnce(new Error('Network error'));
-    render(<AssetDetail />);
-    await waitFor(() => {
-      expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
-    });
-  });
-
-  it('switches between Overview and Transactions tabs', async () => {
-    mockSuccessfulFetch();
-    render(<AssetDetail />);
-    await waitFor(() => screen.getByText('AAPL'));
-    const txnTab = screen.getByRole('button', { name: 'Transactions' });
-    fireEvent.click(txnTab);
-    expect(txnTab).toHaveClass('font-semibold');
-  });
-
-  it('navigates back to assets on error CTA click', async () => {
-    mockApi.mockResolvedValueOnce({ ok: false, status: 404 });
-    render(<AssetDetail />);
-    await waitFor(() => screen.getByText('Asset not found'));
+    expect(screen.getByText('Asset not found')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Back to Assets'));
     expect(mockNavigate).toHaveBeenCalledWith('/assets');
   });
 
-  it('shows "No transactions" empty state when trades and dividends are empty', async () => {
-    mockSuccessfulFetch();
+  it('renders breadcrumb, hero, chart, stats, activity and about', () => {
+    mockHook.mockReturnValue(hookResult());
     render(<AssetDetail />);
-    await waitFor(() => screen.getByText('AAPL'));
-    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
-    await waitFor(() => {
-      expect(screen.getByText(/no transactions/i)).toBeInTheDocument();
-    });
+    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByText('AAPL')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-hero')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-stats-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('recent-activity')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-about')).toBeInTheDocument();
   });
 
-  it('renders transaction rows when trades data exists', async () => {
-    const mockTrade = {
-      date: '2026-01-15',
-      type: 'BUY',
-      quantity: 10,
-      price: 230.00,
-      amount: 2300.00,
-      account_name: 'IBKR Main',
-    };
-    mockApi
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAssetDetail) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [mockTrade], total: 1 }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+  it('renders PositionStrip only when a position exists', () => {
+    mockHook.mockReturnValue(hookResult({ position: null }));
+    const { rerender } = render(<AssetDetail />);
+    expect(screen.queryByTestId('position-strip')).not.toBeInTheDocument();
+
+    mockHook.mockReturnValue(hookResult({ position: { asset_id: 1, quantity: 10 } }));
+    rerender(<AssetDetail />);
+    expect(screen.getByTestId('position-strip')).toBeInTheDocument();
+  });
+
+  it('shows dividend when dividend_yield present and not Crypto', () => {
+    mockHook.mockReturnValue(hookResult());
     render(<AssetDetail />);
-    await waitFor(() => screen.getByText('AAPL'));
-    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
-    await waitFor(() => {
-      expect(screen.getByText('IBKR Main')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('asset-dividend')).toBeInTheDocument();
+  });
+
+  it('hides dividend for Crypto assets', () => {
+    mockHook.mockReturnValue(
+      hookResult({
+        asset: { ...baseAsset, asset_class: 'Crypto' },
+      })
+    );
+    render(<AssetDetail />);
+    expect(screen.queryByTestId('asset-dividend')).not.toBeInTheDocument();
+  });
+
+  it('hides dividend when dividend_yield is missing', () => {
+    mockHook.mockReturnValue(
+      hookResult({
+        asset: { ...baseAsset, daily_metrics: {} },
+      })
+    );
+    render(<AssetDetail />);
+    expect(screen.queryByTestId('asset-dividend')).not.toBeInTheDocument();
   });
 });
