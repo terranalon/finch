@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCurrency, usePortfolio } from '../contexts';
 import api from '../lib/api';
 import { mergeRecentActivity } from './assetActivity';
@@ -26,6 +26,7 @@ export function useAssetDetailData(id) {
   const [chartPeriod, setChartPeriod] = useState('1y');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const latestPeriodRequest = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,13 +89,19 @@ export function useAssetDetailData(id) {
 
     load();
     return () => { cancelled = true; };
+    // chartPeriod intentionally omitted: the initial load uses the default
+    // period, and period switches are handled imperatively by handlePeriodChange.
+    // Re-running the full load on every period change would be wasteful.
   }, [id, currency, selectedPortfolioId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePeriodChange = useCallback(async (period) => {
     setChartPeriod(period);
     if (!asset) return;
+    const requestId = ++latestPeriodRequest.current;
     const res = await api(`/prices/historical/${asset.symbol}?period=${period}`);
-    if (res.ok) setPriceHistory(await res.json());
+    if (res.ok && requestId === latestPeriodRequest.current) {
+      setPriceHistory(await res.json());
+    }
   }, [asset]);
 
   const toggleFavorite = useCallback(async () => {
