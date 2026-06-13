@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../lib';
 import { usePortfolio } from '../contexts';
 import { useAccountsData } from '../hooks/useAccountsData';
@@ -16,13 +15,9 @@ import { PageContainer } from '../components/layout';
 import { Skeleton } from '../components/ui';
 import { AllocationStrip, AccountGrid, AccountSidebar } from '../components/accounts';
 import { AccountWizard } from '../components/AccountWizard';
-import { ApiCredentialsModal } from '../components/ApiCredentialsModal';
-import { BatchUploadModal } from '../components/BatchUploadModal';
-import { getBrokerConfig } from '../components/AccountWizard/constants/brokerConfig';
 import { PlusIcon } from '../components/accounts/icons';
 
 export default function Accounts() {
-  const navigate = useNavigate();
   const { selectedPortfolioId } = usePortfolio();
   const {
     accounts, accountHoldings, totalValue,
@@ -31,10 +26,6 @@ export default function Accounts() {
 
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [showApiCredentials, setShowApiCredentials] = useState(false);
-  const [showBatchUpload, setShowBatchUpload] = useState(false);
-  const [activeModalAccount, setActiveModalAccount] = useState(null);
-  const [apiHasCredentials, setApiHasCredentials] = useState(false);
   const [linkableAccounts, setLinkableAccounts] = useState([]);
 
   // Derive live account from accounts array to avoid stale snapshot after refresh
@@ -85,28 +76,6 @@ export default function Accounts() {
       throw new Error(data.message || 'Failed to rename account');
     }
     refresh();
-  };
-
-  const handleUpload = (account) => {
-    setActiveModalAccount(account);
-    setShowBatchUpload(true);
-  };
-
-  // Fetches real credentials status before opening the modal so the modal
-  // shows the correct state (connected vs. entry form).
-  const handleApiCredentials = async (account) => {
-    setActiveModalAccount(account);
-    setApiHasCredentials(false);
-    try {
-      const res = await api(`/brokers/${account.broker_type}/credentials/${account.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setApiHasCredentials(data.has_credentials ?? false);
-      }
-    } catch {
-      // leave as false; modal will show the entry form
-    }
-    setShowApiCredentials(true);
   };
 
   if (loading) {
@@ -198,8 +167,6 @@ export default function Accounts() {
         onClose={handleCloseSidebar}
         onDelete={handleDelete}
         onRename={handleRename}
-        onUpload={handleUpload}
-        onApiCredentials={handleApiCredentials}
       />
 
       {/* Account creation wizard */}
@@ -212,42 +179,6 @@ export default function Accounts() {
         portfolioId={selectedPortfolioId}
         linkableAccounts={linkableAccounts}
         existingAccountNames={accounts.map((a) => a.name)}
-      />
-
-      {/* Batch upload modal — conditionally rendered so sessionId resets on each open.
-          onComplete fires only on successful import. */}
-      {showBatchUpload && (
-        <BatchUploadModal
-          isOpen={showBatchUpload}
-          onClose={() => {
-            setShowBatchUpload(false);
-            setActiveModalAccount(null);
-          }}
-          onComplete={() => {
-            setShowBatchUpload(false);
-            setActiveModalAccount(null);
-            refresh();
-          }}
-          accountId={activeModalAccount?.id}
-          brokerType={activeModalAccount?.broker_type}
-          supportedFormats={getBrokerConfig(activeModalAccount?.broker_type)?.supportedFormats || []}
-        />
-      )}
-
-      {/* API credentials modal */}
-      <ApiCredentialsModal
-        isOpen={showApiCredentials}
-        onClose={() => {
-          setShowApiCredentials(false);
-          setActiveModalAccount(null);
-        }}
-        account={activeModalAccount}
-        onCredentialsSaved={refresh}
-        hasCredentials={apiHasCredentials}
-        onGoToSettings={() => {
-          setShowApiCredentials(false);
-          navigate(`/accounts/${activeModalAccount?.id}`);
-        }}
       />
     </PageContainer>
   );

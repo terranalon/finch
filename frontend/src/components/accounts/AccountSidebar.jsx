@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { cn, formatCurrency, formatPercent, api, transformTrade, transformDividend, transformForex, transformCash } from '../../lib';
 import { ASSET_COLORS } from '../../lib/constants';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
-import { getBrokerConfig } from '../AccountWizard/constants/brokerConfig';
 import { useSlideover } from '../../hooks/useSlideover';
-import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon, TrashIcon, CloudArrowUpIcon, KeyIcon } from './icons';
+import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon, TrashIcon } from './icons';
 import { TYPE_LABELS } from './constants';
 
 const HOLDINGS_PREVIEW = 5;
@@ -79,7 +78,7 @@ async function fetchRecentActivity(accountId, currency) {
   return all.slice(0, 5);
 }
 
-export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename, onUpload, onApiCredentials }) {
+export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename }) {
   const isOpen = !!account;
   const navigate = useNavigate();
   useSlideover(isOpen, onClose);
@@ -129,7 +128,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
 
   if (!renderAccount) return null;
 
-  const brokerConfig = getBrokerConfig(renderAccount.broker_type);
   const isShared = (renderAccount.portfolio_ids?.length ?? 0) > 1;
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
@@ -291,9 +289,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
           {/* Holdings card — top 5 */}
           {visibleHoldings.length > 0 && (
             <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
-              <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">
-                Top Holdings ({(holdings || []).length})
-              </h3>
+              <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">Top Holdings</h3>
               {visibleHoldings.map((h) => (
                 <div
                   key={h.symbol}
@@ -318,13 +314,13 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                   </div>
                 </div>
               ))}
-              {(hiddenCount > 0 || renderAccount.holdingCount > (holdings || []).length) && (
-                <p className="text-[11px] text-[var(--text-faint)] mt-2 pt-2 border-t border-[var(--border-subtle)]">
-                  {renderAccount.holdingCount > (holdings || []).length
-                    ? `Showing ${(holdings || []).length} of ${renderAccount.holdingCount} positions. View full list in account details.`
-                    : `+${hiddenCount} more positions — view full list in account details.`}
-                </p>
-              )}
+              <button
+                onClick={() => navigate(`/accounts/${renderAccount.id}?tab=holdings`)}
+                className="mt-2 pt-2 border-t border-[var(--border-subtle)] w-full flex items-center justify-center gap-1.5 text-[12px] text-[var(--text-faint)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer"
+              >
+                View all holdings
+                <ExternalLinkIcon className="w-3 h-3" />
+              </button>
             </div>
           )}
 
@@ -347,28 +343,37 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
             ) : recentActivity.length === 0 ? (
               <p className="text-[12px] text-[var(--text-faint)]">No recent transactions.</p>
             ) : (
-              recentActivity.map((tx) => {
-                const style = TX_STYLES[tx.type] || TX_STYLES.cash;
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between py-2.5 border-b border-[var(--border-subtle)] last:border-b-0"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className={cn('w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-[9px] font-bold', style.bg, style.text)}>
-                        {style.label}
+              <>
+                {recentActivity.map((tx) => {
+                  const style = TX_STYLES[tx.type] || TX_STYLES.cash;
+                  return (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between py-2.5 border-b border-[var(--border-subtle)] last:border-b-0"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn('w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-[9px] font-bold', style.bg, style.text)}>
+                          {style.label}
+                        </div>
+                        <div>
+                          <div className="text-[13px] font-medium text-[var(--text-primary)]">{txDescription(tx)}</div>
+                          <div className="text-[11px] text-[var(--text-faint)]">{formatDateShort(tx.date)}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-[13px] font-medium text-[var(--text-primary)]">{txDescription(tx)}</div>
-                        <div className="text-[11px] text-[var(--text-faint)]">{formatDateShort(tx.date)}</div>
+                      <div className="text-[13px] font-mono tabular-nums text-[var(--text-secondary)]">
+                        {txAmount(tx, currency)}
                       </div>
                     </div>
-                    <div className="text-[13px] font-mono tabular-nums text-[var(--text-secondary)]">
-                      {txAmount(tx, currency)}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+                <button
+                  onClick={() => navigate(`/accounts/${renderAccount.id}?tab=transactions`)}
+                  className="mt-2 pt-2 border-t border-[var(--border-subtle)] w-full flex items-center justify-center gap-1.5 text-[12px] text-[var(--text-faint)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer"
+                >
+                  View all activity
+                  <ExternalLinkIcon className="w-3 h-3" />
+                </button>
+              </>
             )}
           </div>
 
@@ -376,20 +381,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
           <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
             <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">Manage</h3>
             <div className="flex flex-col gap-2">
-              {brokerConfig?.supportedFormats?.length > 0 && (
-                <ActionButton
-                  icon={<CloudArrowUpIcon className="w-4 h-4" />}
-                  label="Upload Data"
-                  onClick={() => onUpload?.(renderAccount)}
-                />
-              )}
-              {brokerConfig?.hasApi && (
-                <ActionButton
-                  icon={<KeyIcon className="w-4 h-4" />}
-                  label="API Credentials"
-                  onClick={() => onApiCredentials?.(renderAccount)}
-                />
-              )}
               {!showDeleteConfirm ? (
                 <ActionButton
                   icon={<TrashIcon className="w-4 h-4" />}
