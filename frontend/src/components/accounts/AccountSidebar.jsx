@@ -4,7 +4,7 @@ import { cn, formatCurrency, formatPercent, api, transformTrade, transformDivide
 import { ASSET_COLORS } from '../../lib/constants';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
 import { useSlideover } from '../../hooks/useSlideover';
-import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon, TrashIcon } from './icons';
+import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon } from './icons';
 import { TYPE_LABELS } from './constants';
 
 const HOLDINGS_PREVIEW = 5;
@@ -78,7 +78,7 @@ async function fetchRecentActivity(accountId, currency) {
   return all.slice(0, 5);
 }
 
-export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename }) {
+export function AccountSidebar({ account, holdings, currency, onClose, onRename }) {
   const isOpen = !!account;
   const navigate = useNavigate();
   useSlideover(isOpen, onClose);
@@ -86,9 +86,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [renameError, setRenameError] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
@@ -108,9 +105,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
     setEditingName(false);
     setNameValue('');
     setRenameError(null);
-    setShowDeleteConfirm(false);
-    setIsDeleting(false);
-    setDeleteError(null);
     setRecentActivity([]);
   }, [account?.id]);
 
@@ -128,7 +122,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
 
   if (!renderAccount) return null;
 
-  const isShared = (renderAccount.portfolio_ids?.length ?? 0) > 1;
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
@@ -154,19 +147,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
       } catch (err) {
         setRenameError(err.message || 'Failed to rename account');
       }
-    }
-  };
-
-  // Only resets spinner/error on the failure path — success closes the sidebar
-  // naturally via liveSelectedAccount becoming null in the parent.
-  const handleDeleteConfirm = async () => {
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await onDelete?.(renderAccount.id);
-    } catch (err) {
-      setIsDeleting(false);
-      setDeleteError(err.message || 'Failed to delete account');
     }
   };
 
@@ -377,46 +357,6 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
             )}
           </div>
 
-          {/* Management actions */}
-          <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
-            <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">Manage</h3>
-            <div className="flex flex-col gap-2">
-              {!showDeleteConfirm ? (
-                <ActionButton
-                  icon={<TrashIcon className="w-4 h-4" />}
-                  label={isShared ? 'Remove from Portfolio' : 'Delete Account'}
-                  variant="danger"
-                  onClick={() => setShowDeleteConfirm(true)}
-                />
-              ) : (
-                <div className="p-3 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--negative)]/30">
-                  <p className="text-[12px] text-[var(--text-secondary)] mb-2.5">
-                    {isShared
-                      ? 'Remove this account from the current portfolio? It will remain in other portfolios.'
-                      : 'Permanently delete this account and all its data?'}
-                  </p>
-                  {deleteError && (
-                    <p className="text-[11px] text-[var(--negative)] mb-2">{deleteError}</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
-                      className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleDeleteConfirm}
-                      disabled={isDeleting}
-                      className="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-[var(--negative)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
-                    >
-                      {isDeleting ? 'Deleting...' : isShared ? 'Remove' : 'Delete'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </>
@@ -437,23 +377,6 @@ function DetailRow({ label, value, valueClass, isLast }) {
   );
 }
 
-function ActionButton({ icon, label, onClick, variant = 'default' }) {
-  const isDefault = variant === 'default';
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors cursor-pointer text-left',
-        isDefault
-          ? 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-          : 'text-[var(--negative)] hover:bg-[var(--negative)]/10'
-      )}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
 
 function formatQuantity(qty, assetClass) {
   if (qty === null || qty === undefined) return '0';

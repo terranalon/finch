@@ -1,7 +1,7 @@
 import { AccountCard } from './AccountCard';
 import { PlusIcon } from './icons';
 
-export function AccountGrid({ accounts, accountHoldings, currency, onCardClick, onAddAccount }) {
+export function AccountGrid({ accounts, accountHoldings, currency, onCardClick, onDelete, onAddAccount }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
       {accounts.map((account) => (
@@ -11,6 +11,7 @@ export function AccountGrid({ accounts, accountHoldings, currency, onCardClick, 
           holdings={accountHoldings.get(account.id) || []}
           currency={currency}
           onClick={onCardClick}
+          onDelete={onDelete}
         />
       ))}
 

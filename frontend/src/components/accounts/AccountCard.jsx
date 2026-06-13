@@ -1,18 +1,44 @@
+import { useState } from 'react';
 import { cn, formatCurrency } from '../../lib';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
+import { TrashIcon } from './icons';
 import { TYPE_LABELS } from './constants';
 
-export function AccountCard({ account, holdings, currency, onClick }) {
+export function AccountCard({ account, holdings, currency, onClick, onDelete }) {
   const topHoldings = (holdings || []).slice(0, 3);
   const remainingCount = (holdings || []).length - 3;
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const isShared = (account.portfolio_ids?.length ?? 0) > 1;
+
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
+    setShowConfirm(true);
+  };
+
+  const handleCancel = (e) => {
+    e.stopPropagation();
+    setShowConfirm(false);
+  };
+
+  const handleConfirm = async (e) => {
+    e.stopPropagation();
+    setIsDeleting(true);
+    try {
+      await onDelete?.(account.id);
+    } catch {
+      setIsDeleting(false);
+      setShowConfirm(false);
+    }
+  };
 
   return (
     <div
-      onClick={() => onClick(account)}
+      onClick={() => !showConfirm && onClick(account)}
       className={cn(
-        'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl',
+        'relative bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl',
         'p-5 cursor-pointer transition-all flex flex-col gap-3.5',
-        'hover:border-[var(--accent-primary)] hover:shadow-[0_0_0_1px_var(--accent-primary)]'
+        !showConfirm && 'hover:border-[var(--accent-primary)] hover:shadow-[0_0_0_1px_var(--accent-primary)]'
       )}
     >
       {/* Header: logo + name + type */}
@@ -60,13 +86,49 @@ export function AccountCard({ account, holdings, currency, onClick }) {
         </div>
       )}
 
-      {/* Footer: sync status */}
-      <div className="flex items-center pt-2.5 border-t border-[var(--border-subtle)]">
+      {/* Footer: sync status + trash */}
+      <div className="flex items-center justify-between pt-2.5 border-t border-[var(--border-subtle)]">
         <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
           <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', account.syncStatus.color)} />
           Last synced {account.lastSyncFormatted}
         </div>
+        <button
+          onClick={handleDeleteClick}
+          className="w-6 h-6 flex items-center justify-center rounded text-[var(--text-faint)] hover:text-[var(--negative)] hover:bg-[var(--negative)]/10 transition-all cursor-pointer"
+          title={isShared ? 'Remove from portfolio' : 'Delete account'}
+        >
+          <TrashIcon className="w-3.5 h-3.5" />
+        </button>
       </div>
+
+      {/* Delete confirmation overlay */}
+      {showConfirm && (
+        <div
+          className="absolute inset-0 rounded-xl bg-[var(--bg-secondary)]/95 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 p-5 border border-[var(--negative)]/30"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[13px] text-[var(--text-secondary)] text-center">
+            {isShared
+              ? 'Remove this account from the current portfolio?'
+              : 'Permanently delete this account and all its data?'}
+          </p>
+          <div className="flex gap-2 w-full">
+            <button
+              onClick={handleCancel}
+              className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={isDeleting}
+              className="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold bg-[var(--negative)] text-white hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+            >
+              {isDeleting ? 'Deleting...' : isShared ? 'Remove' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

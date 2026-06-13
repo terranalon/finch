@@ -155,6 +155,7 @@ export default function Accounts() {
           accountHoldings={accountHoldings}
           currency={currency}
           onCardClick={handleCardClick}
+          onDelete={handleDelete}
           onAddAccount={handleAddAccount}
         />
       )}
@@ -165,7 +166,6 @@ export default function Accounts() {
         holdings={liveSelectedAccount ? accountHoldings.get(liveSelectedAccount.id) || [] : []}
         currency={currency}
         onClose={handleCloseSidebar}
-        onDelete={handleDelete}
         onRename={handleRename}
       />
 
