@@ -193,6 +193,7 @@ export function AccountSidebar({ account, holdings, currency, onClose, onRename 
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') commitRename();
                     if (e.key === 'Escape') {
+                      e.stopPropagation();
                       cancelRenameRef.current = true;
                       setEditingName(false);
                     }

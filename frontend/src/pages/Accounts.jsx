@@ -7,7 +7,7 @@
  * - GET /api/positions
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib';
 import { usePortfolio } from '../contexts';
 import { useAccountsData } from '../hooks/useAccountsData';
@@ -32,6 +32,15 @@ export default function Accounts() {
   const liveSelectedAccount = selectedAccount
     ? accounts.find((a) => a.id === selectedAccount.id) ?? null
     : null;
+
+  // Preserve the last non-null holdings so they stay visible during the
+  // 200ms sidebar slide-out animation after liveSelectedAccount becomes null.
+  const prevHoldingsRef = useRef([]);
+  const liveHoldings = liveSelectedAccount
+    ? accountHoldings.get(liveSelectedAccount.id) || []
+    : null;
+  if (liveHoldings !== null) prevHoldingsRef.current = liveHoldings;
+  const renderHoldings = liveHoldings ?? prevHoldingsRef.current;
 
   // Fetch linkable accounts when wizard opens
   useEffect(() => {
@@ -163,7 +172,7 @@ export default function Accounts() {
       {/* Account detail sidebar */}
       <AccountSidebar
         account={liveSelectedAccount}
-        holdings={liveSelectedAccount ? accountHoldings.get(liveSelectedAccount.id) || [] : []}
+        holdings={renderHoldings}
         currency={currency}
         onClose={handleCloseSidebar}
         onRename={handleRename}

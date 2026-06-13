@@ -9,26 +9,30 @@ export function AccountCard({ account, holdings, currency, onClick, onDelete }) 
   const remainingCount = (holdings || []).length - 3;
   const [showConfirm, setShowConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const isShared = (account.portfolio_ids?.length ?? 0) > 1;
 
   const handleDeleteClick = (e) => {
     e.stopPropagation();
+    setDeleteError(null);
     setShowConfirm(true);
   };
 
   const handleCancel = (e) => {
     e.stopPropagation();
     setShowConfirm(false);
+    setDeleteError(null);
   };
 
   const handleConfirm = async (e) => {
     e.stopPropagation();
     setIsDeleting(true);
+    setDeleteError(null);
     try {
       await onDelete?.(account.id);
-    } catch {
+    } catch (err) {
       setIsDeleting(false);
-      setShowConfirm(false);
+      setDeleteError(err.message || 'Failed to delete account');
     }
   };
 
@@ -112,6 +116,9 @@ export function AccountCard({ account, holdings, currency, onClick, onDelete }) 
               ? 'Remove this account from the current portfolio?'
               : 'Permanently delete this account and all its data?'}
           </p>
+          {deleteError && (
+            <p className="text-[11px] text-[var(--negative)] text-center">{deleteError}</p>
+          )}
           <div className="flex gap-2 w-full">
             <button
               onClick={handleCancel}
