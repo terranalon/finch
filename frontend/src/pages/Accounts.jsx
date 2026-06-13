@@ -149,7 +149,7 @@ export default function Accounts() {
       {/* Positions truncated warning */}
       {positionsTruncated && (
         <div className="mb-4 px-4 py-2.5 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/30 text-[12px] text-[var(--warning)]">
-          Portfolio has more than 100 positions — holdings data shown here is partial. Open an account to see its full breakdown.
+          Portfolio has more than 100 positions — holdings and allocation shown here are partial. Open an account's full details to see its complete holdings.
         </div>
       )}
 
