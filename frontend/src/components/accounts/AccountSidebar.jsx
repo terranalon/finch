@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cn, formatCurrency, formatPercent } from '../../lib';
+import { cn, formatCurrency, formatPercent, api, transformTrade, transformDividend, transformForex, transformCash } from '../../lib';
 import { ASSET_COLORS } from '../../lib/constants';
 import { BrokerLogo } from '../AccountWizard/BrokerLogo';
 import { getBrokerConfig } from '../AccountWizard/constants/brokerConfig';
 import { useSlideover } from '../../hooks/useSlideover';
 import { ExternalLinkIcon, XMarkIcon, PencilSquareIcon, TrashIcon, CloudArrowUpIcon, KeyIcon } from './icons';
 import { TYPE_LABELS } from './constants';
+
+const HOLDINGS_PREVIEW = 5;
 
 function pnlColor(value) {
   if (value > 0) return 'text-[var(--positive)]';
@@ -32,6 +34,51 @@ function HoldingIcon({ symbol, assetClass }) {
   );
 }
 
+const TX_STYLES = {
+  trade:    { label: 'Trade',    bg: 'bg-[var(--accent-primary)]/10', text: 'text-[var(--accent-primary)]' },
+  dividend: { label: 'Div',      bg: 'bg-[var(--positive)]/10',       text: 'text-[var(--positive)]' },
+  forex:    { label: 'FX',       bg: 'bg-[var(--warning)]/10',        text: 'text-[var(--warning)]' },
+  cash:     { label: 'Cash',     bg: 'bg-[var(--text-faint)]/10',     text: 'text-[var(--text-faint)]' },
+};
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function txDescription(tx) {
+  if (tx.type === 'trade') return `${tx.side === 'BUY' ? 'Buy' : 'Sell'} ${tx.symbol}`;
+  if (tx.type === 'dividend') return `${tx.symbol} dividend`;
+  if (tx.type === 'forex') return 'FX conversion';
+  return tx.subtype || tx.type;
+}
+
+function txAmount(tx, currency) {
+  const value = tx.type === 'trade' ? tx.total : tx.amount;
+  if (value == null) return '-';
+  const prefix = tx.type === 'trade' && tx.side === 'BUY' ? '-' : '+';
+  return `${prefix}${formatCurrency(Math.abs(value), tx.currency || currency, { decimals: 0 })}`;
+}
+
+async function fetchRecentActivity(accountId, currency) {
+  const q = `?account_id=${accountId}&limit=5&display_currency=${currency}`;
+  const [trades, dividends, forex, cash] = await Promise.all([
+    api(`/transactions/trades${q}`).then((r) => r.ok ? r.json() : { items: [] }),
+    api(`/transactions/dividends${q}`).then((r) => r.ok ? r.json() : { items: [] }),
+    api(`/transactions/forex${q}`).then((r) => r.ok ? r.json() : { items: [] }),
+    api(`/transactions/cash${q}`).then((r) => r.ok ? r.json() : { items: [] }),
+  ]);
+  const all = [
+    ...trades.items.map(transformTrade),
+    ...dividends.items.map(transformDividend),
+    ...forex.items.map(transformForex),
+    ...cash.items.map(transformCash),
+  ];
+  all.sort((a, b) => new Date(b.date) - new Date(a.date));
+  return all.slice(0, 5);
+}
+
 export function AccountSidebar({ account, holdings, currency, onClose, onDelete, onRename, onUpload, onApiCredentials }) {
   const isOpen = !!account;
   const navigate = useNavigate();
@@ -43,6 +90,8 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   // Keep the last non-null account in a ref so the sidebar content remains
   // visible during the CSS slide-out animation (200ms) after account becomes null.
@@ -63,7 +112,20 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
     setShowDeleteConfirm(false);
     setIsDeleting(false);
     setDeleteError(null);
+    setRecentActivity([]);
   }, [account?.id]);
+
+  // Fetch recent activity lazily when an account is selected.
+  useEffect(() => {
+    if (!account?.id) return;
+    let cancelled = false;
+    setActivityLoading(true);
+    fetchRecentActivity(account.id, currency)
+      .then((txs) => { if (!cancelled) setRecentActivity(txs); })
+      .catch(() => { if (!cancelled) setRecentActivity([]); })
+      .finally(() => { if (!cancelled) setActivityLoading(false); });
+    return () => { cancelled = true; };
+  }, [account?.id, currency]);
 
   if (!renderAccount) return null;
 
@@ -72,6 +134,8 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
   const totalCost = (holdings || []).reduce((s, h) => s + (h.costBasis || 0), 0);
   const totalPnl = (holdings || []).reduce((s, h) => s + (h.pnl || 0), 0);
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+  const visibleHoldings = (holdings || []).slice(0, HOLDINGS_PREVIEW);
+  const hiddenCount = (holdings || []).length - visibleHoldings.length;
 
   const startRename = () => {
     setNameValue(renderAccount.name);
@@ -130,72 +194,73 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
       >
         {/* Header */}
         <div className="px-6 py-5 border-b border-[var(--border-primary)] sticky top-0 bg-[var(--bg-primary)] z-10">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2.5 mb-1">
-                <BrokerLogo type={renderAccount.broker_type} className="w-9 h-9 rounded-[9px] shrink-0" />
-                {editingName ? (
-                  <input
-                    autoFocus
-                    value={nameValue}
-                    onChange={(e) => setNameValue(e.target.value)}
-                    onBlur={commitRename}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename();
-                      if (e.key === 'Escape') {
-                        cancelRenameRef.current = true;
-                        setEditingName(false);
-                      }
-                    }}
-                    className="text-xl font-semibold bg-transparent border-b border-[var(--accent-primary)] outline-none w-full"
-                  />
-                ) : (
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <h2 className="text-xl font-semibold truncate">{renderAccount.name}</h2>
-                    <button
-                      onClick={startRename}
-                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[var(--text-faint)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
-                      title="Rename account"
-                    >
-                      <PencilSquareIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <p className="text-[13px] text-[var(--text-faint)]">
-                {TYPE_LABELS[renderAccount.account_type] || renderAccount.account_type} Account
-                {' \u00B7 '}
-                {renderAccount.allocationPct.toFixed(1)}% of portfolio
-              </p>
-              {renameError && (
-                <p className="text-[11px] text-[var(--negative)] mt-0.5">{renameError}</p>
+          {/* Close button — absolute so it doesn't compete with the account name */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-5 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-secondary)] transition-all cursor-pointer"
+          >
+            <XMarkIcon className="w-[18px] h-[18px]" />
+          </button>
+
+          {/* Name row — full width minus space for close button */}
+          <div className="pr-10">
+            <div className="flex items-center gap-2.5 mb-1">
+              <BrokerLogo type={renderAccount.broker_type} className="w-9 h-9 rounded-[9px] shrink-0" />
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename();
+                    if (e.key === 'Escape') {
+                      cancelRenameRef.current = true;
+                      setEditingName(false);
+                    }
+                  }}
+                  className="text-xl font-semibold bg-transparent border-b border-[var(--accent-primary)] outline-none w-full"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h2 className="text-xl font-semibold truncate">{renderAccount.name}</h2>
+                  <button
+                    onClick={startRename}
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[var(--text-faint)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-all cursor-pointer"
+                    title="Rename account"
+                  >
+                    <PencilSquareIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => navigate(`/accounts/${renderAccount.id}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--accent-hover)] transition-colors cursor-pointer whitespace-nowrap"
-              >
-                View Details
-                <ExternalLinkIcon className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-secondary)] transition-all cursor-pointer"
-              >
-                <XMarkIcon className="w-[18px] h-[18px]" />
-              </button>
-            </div>
+            <p className="text-[13px] text-[var(--text-faint)]">
+              {TYPE_LABELS[renderAccount.account_type] || renderAccount.account_type} Account
+              {' \u00B7 '}
+              {renderAccount.allocationPct.toFixed(1)}% of portfolio
+            </p>
+            {renameError && (
+              <p className="text-[11px] text-[var(--negative)] mt-0.5">{renameError}</p>
+            )}
           </div>
 
-          {/* Value block */}
-          <div className="mt-3.5">
-            <span className="text-[28px] font-bold font-mono tabular-nums tracking-tight">
-              {formatCurrency(renderAccount.value, currency, { decimals: 0 })}
-            </span>
-            <span className={cn('text-sm font-medium font-mono tabular-nums ml-2.5', pnlColor(totalPnl))}>
-              {formatPnl(totalPnl, currency)} ({formatPercent(totalPnlPct)})
-            </span>
+          {/* Value block + View Details */}
+          <div className="mt-3.5 flex items-end justify-between gap-3">
+            <div>
+              <span className="text-[28px] font-bold font-mono tabular-nums tracking-tight">
+                {formatCurrency(renderAccount.value, currency, { decimals: 0 })}
+              </span>
+              <span className={cn('text-sm font-medium font-mono tabular-nums ml-2.5', pnlColor(totalPnl))}>
+                {formatPnl(totalPnl, currency)} ({formatPercent(totalPnlPct)})
+              </span>
+            </div>
+            <button
+              onClick={() => navigate(`/accounts/${renderAccount.id}`)}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--accent-hover)] transition-colors cursor-pointer whitespace-nowrap"
+            >
+              View Details
+              <ExternalLinkIcon className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
@@ -223,13 +288,13 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
             />
           </div>
 
-          {/* Holdings card */}
-          {(holdings || []).length > 0 && (
+          {/* Holdings card — top 5 */}
+          {visibleHoldings.length > 0 && (
             <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
               <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">
-                Holdings ({holdings.length})
+                Top Holdings ({(holdings || []).length})
               </h3>
-              {holdings.map((h) => (
+              {visibleHoldings.map((h) => (
                 <div
                   key={h.symbol}
                   className="flex items-center justify-between py-2.5 border-b border-[var(--border-subtle)] last:border-b-0"
@@ -253,13 +318,59 @@ export function AccountSidebar({ account, holdings, currency, onClose, onDelete,
                   </div>
                 </div>
               ))}
-              {renderAccount.holdingCount > (holdings || []).length && (
+              {(hiddenCount > 0 || renderAccount.holdingCount > (holdings || []).length) && (
                 <p className="text-[11px] text-[var(--text-faint)] mt-2 pt-2 border-t border-[var(--border-subtle)]">
-                  Showing {(holdings || []).length} of {renderAccount.holdingCount} positions. View full list in account details.
+                  {renderAccount.holdingCount > (holdings || []).length
+                    ? `Showing ${(holdings || []).length} of ${renderAccount.holdingCount} positions. View full list in account details.`
+                    : `+${hiddenCount} more positions — view full list in account details.`}
                 </p>
               )}
             </div>
           )}
+
+          {/* Recent activity card */}
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
+            <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] mb-3">Recent Activity</h3>
+            {activityLoading ? (
+              <div className="flex flex-col gap-2.5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5 py-1">
+                    <div className="w-7 h-7 rounded-md bg-[var(--bg-tertiary)] animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-32 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+                      <div className="h-2.5 w-16 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+                    </div>
+                    <div className="h-3 w-16 rounded bg-[var(--bg-tertiary)] animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <p className="text-[12px] text-[var(--text-faint)]">No recent transactions.</p>
+            ) : (
+              recentActivity.map((tx) => {
+                const style = TX_STYLES[tx.type] || TX_STYLES.cash;
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between py-2.5 border-b border-[var(--border-subtle)] last:border-b-0"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn('w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-[9px] font-bold', style.bg, style.text)}>
+                        {style.label}
+                      </div>
+                      <div>
+                        <div className="text-[13px] font-medium text-[var(--text-primary)]">{txDescription(tx)}</div>
+                        <div className="text-[11px] text-[var(--text-faint)]">{formatDateShort(tx.date)}</div>
+                      </div>
+                    </div>
+                    <div className="text-[13px] font-mono tabular-nums text-[var(--text-secondary)]">
+                      {txAmount(tx, currency)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
 
           {/* Management actions */}
           <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4">
