@@ -1438,12 +1438,13 @@ export default function AccountDetail() {
 
     if (tabParam === 'settings') {
       setActiveTab('settings');
-      // Clear the query params after reading
       setSearchParams({}, { replace: true });
-      // Schedule scroll to API credentials
       if (scrollTo === 'api' || !scrollTo) {
         setShouldScrollToCredentials(true);
       }
+    } else if (tabParam === 'holdings' || tabParam === 'transactions') {
+      setActiveTab(tabParam);
+      setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
