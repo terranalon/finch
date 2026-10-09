@@ -6,7 +6,6 @@ Python 3.11+ | FastAPI | React | PostgreSQL | Airflow 3 | Docker
 ## Critical Rules
 
 - **Never commit directly to main** -- always use feature branches and PRs
-- **Always launch Opus subagents** for complex reasoning tasks
 - Run `ruff check --fix . && ruff format .` in `backend/` before committing
 - Run `uv run ty check` in `backend/` before creating a PR -- type errors block CI
 
@@ -38,17 +37,6 @@ frontend/src/
   hooks/            # Custom React hooks
   lib/              # API client utilities
 ```
-
-## Commands
-
-| Command | Purpose |
-|---------|---------|
-| `/serve` | Start the development server |
-| `/plan` | Create implementation plan |
-| `/tdd` | Test-driven development |
-| `/code-review` | Review code quality |
-| `/commit` | Git commit |
-| `/verify` | Run checks |
 
 ## Docker Operations
 
