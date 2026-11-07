@@ -55,12 +55,14 @@ class BrokerParserRegistry:
         from app.services.brokers.leumi.parser import LeumiParser
         from app.services.brokers.manual.parser import ManualParser
         from app.services.brokers.meitav.parser import MeitavParser
+        from app.services.brokers.mizrahi.parser import MizrahiParser
 
         cls._parsers = {
             "ibkr": IBKRParserAdapter,
             "meitav": MeitavParser,
             "bank_hapoalim": BankHapoalimParser,
             "leumi": LeumiParser,
+            "mizrahi": MizrahiParser,
             "kraken": KrakenParser,
             "bit2c": Bit2CParser,
             "binance": BinanceParser,
